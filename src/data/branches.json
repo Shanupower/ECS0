@@ -1,0 +1,324 @@
+[
+  {
+    "branchCode": 1,
+    "branch": "SECUNDERABAD",
+    "address": "1-7-293/2/A/1, Behind BOI, Paradise, M.G.Road, Secunderabad - 03",
+    "phone": "040-27891497/98,2789",
+    "email": "secunderabad@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 2,
+    "branch": "AMEERPET",
+    "address": "H.NO:7-1-471,472GURU KRUPA COMPLEX,AMEERPET",
+    "phone": "040-23731636,2375633",
+    "email": "ammerpet@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 5,
+    "branch": "REGD -  HEAD OFFICE",
+    "address": "1-7-293/28/A/1, Behind BOI, Paradise, M.G.Road, Secunderabad - 03",
+    "phone": "040-27845814/35, 278",
+    "email": "info@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 9,
+    "branch": "BASHEERBAGH",
+    "address": "3-6-290/C, 106, I Floor, Malik Chambers, Hyderguda Main Road, Hyderabad - 29",
+    "phone": "040-23261396, 667545",
+    "email": "basheerbagh@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 10,
+    "branch": "MALKAJGIRI",
+    "address": "22-103,Beside bank of maharashtra,r k nagar,mkg,47",
+    "phone": "040-27797253",
+    "email": "malkajgiri@ecsconsultants.com"
+  },
+  {
+    "branchCode": 11,
+    "branch": "KUKATPALLY",
+    "address": "2-22-1/92, G-3, Manju Plaza, Bhagyanagar Colony, Kukatpally, Hyderabad - 72",
+    "phone": "040-23060451, 230604",
+    "email": "kukatpally@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 12,
+    "branch": "DILSUKHNAGAR",
+    "address": "New No. 1-7-300, Adj. to SBH, Chaitanyapuri, Dilsukhnagar, Hyderabad - 60",
+    "phone": "040-24042771, 240406",
+    "email": "dsnr@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 13,
+    "branch": "HABSIGUDA",
+    "address": "7-101, Adj. lane to SBH, Scientists Colony, Habsiguda, Hyderabad - 07",
+    "phone": "040-27153748/49",
+    "email": "hguda@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 14,
+    "branch": "VIJAYAWADA",
+    "address": "40-1-48/2, Bandar Road, adj. to  HDFC Bank, Vijayawada - 532002",
+    "phone": "0866-6526203,6626203",
+    "email": "vijayawada@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 15,
+    "branch": "VIZAG",
+    "address": "47-9-17, I Floor, III Lane, Dwarakanagar, Vizag - 530016",
+    "phone": "0891-2591171, 259872",
+    "email": "vizag@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 16,
+    "branch": "RAJAHMUNDRY",
+    "address": "7-27-4, Krishna Complex, Baruvari Street, T. Nagar, Rajahmundry - 105",
+    "phone": "0883-2437124",
+    "email": "rajahmundry@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 17,
+    "branch": "NELLORE",
+    "address": "D.No.16/1102, Moonland Apts, K.V. Agaraharam, Pogathota, Nellore - 524001",
+    "phone": "0861-2303556",
+    "email": "nellore@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 18,
+    "branch": "GUNTUR",
+    "address": "D.No.6-9-28/A, Ground Floor, 9th Lane, Arundelpet, Guntur - 522 002",
+    "phone": "0863-2337929",
+    "email": "guntur@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 19,
+    "branch": "BANGALORE_JAYANAGAR",
+    "address": "96/127,MSP COMPLEX,7TH MAIN,JAYANAGAR,BANG-560011",
+    "phone": "080-26637977/2663897",
+    "email": "banglore@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 20,
+    "branch": "BANGALORE-INDIRA NAGAR",
+    "address": "D.No.83/4-2, LHS to II Cross, 13th Main Road, Indiranagar, Bangalore - 08",
+    "phone": "080-25217258/59",
+    "email": "bangalore@ecsconsultants.co.in "
+  },
+  {
+    "branchCode": 21,
+    "branch": "BANGALORE-MALLESWARAM",
+    "address": "25/2, Above ICICI Bank ATM, I Cross, Sampige Road, Malleswaram, Bangalore - 03",
+    "phone": "080-23568891/92",
+    "email": "bangalore@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 22,
+    "branch": "CHENNAI - R.O.",
+    "address": "Suganthy Complex, New No.30, Rameswaram Road, T-Nagar, Chennai - 102",
+    "phone": "044-24323692, 421287",
+    "email": "chennai@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 23,
+    "branch": "CHENNAI - ANNA NAGAR",
+    "address": "D.No.100, A-Block, Opp. Corpn. Bank, III Avenue, Chennai - 102",
+    "phone": "044-26201292, 262612",
+    "email": "chennai@ecsconsultants.co.in "
+  },
+  {
+    "branchCode": 24,
+    "branch": "CHENNAI - TAMBARAM",
+    "address": "No.325, Velacherry Main Road, East Tambaram, Chennai - 59",
+    "phone": "044-22397231/33",
+    "email": "chennai@ecsconsultants.co.in "
+  },
+  {
+    "branchCode": 25,
+    "branch": "TRIMULGHERRY",
+    "address": "3-5-10,  Brindavan apts., Trimalgherry secunderabad - 500015,  ",
+    "phone": "040-27797252/53",
+    "email": "trimulgherry@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 32,
+    "branch": "MEHDIPATNAM",
+    "address": "Shop No. 5, Ground Floor, Srinivasa Residency, Retibowli, Mehidipatnam, Hyderabad - 500 028",
+    "phone": "040-23510717/18",
+    "email": ""
+  },
+  {
+    "branchCode": 33,
+    "branch": "VANASTHALIPURAM",
+    "address": "B-411,PHASE-II, OPP.RED WATER TANK,V.PURAM,HYD-70",
+    "phone": "040-24025371/72",
+    "email": ""
+  },
+  {
+    "branchCode": 34,
+    "branch": "GAJUWAKA",
+    "address": "D.No.9-7-263,Opp:Mini Mohani Theater,Gajuwaka - 26",
+    "phone": "0891 -2515439/150",
+    "email": ""
+  },
+  {
+    "branchCode": 35,
+    "branch": "VELACHERY",
+    "address": "F-1, No.28, Adj. to IOB, Velachery, Chennai-600042",
+    "phone": "044-22592726,2259174",
+    "email": ""
+  },
+  {
+    "branchCode": 36,
+    "branch": "CHENNAI-ROYAPETTAH",
+    "address": "GroundFloor No.79,Royapettah,Chennai-600042",
+    "phone": "044-28351758/59",
+    "email": "chennai@ecsconsultants.co.in "
+  },
+  {
+    "branchCode": 37,
+    "branch": "KOLKATA",
+    "address": "Premises No.1/13,P.S.Jadavpur,Kolkata-95",
+    "phone": "033-24225488/89",
+    "email": "koltata@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 40,
+    "branch": "TINDIVANAM - TAMIL NADU",
+    "address": "No.54/35, Gandhi Nagar,",
+    "phone": "04147 - 250240 ",
+    "email": "tindivanam@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 46,
+    "branch": "YAPRAL",
+    "address": "H.NO.30-266/2/2,PARVATHI NAGAR,SAINIKPURI.500094",
+    "phone": "040-27797253",
+    "email": "yapral@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 49,
+    "branch": "MADHAPUR",
+    "address": "H.No:1-30,Ground Floor,",
+    "phone": 7036383065,
+    "email": "madhapur@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 50,
+    "branch": "BAGH AMBERPET",
+    "address": "BAGH AMBERPET",
+    "phone": 9948043743,
+    "email": "baghamberpet@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 66,
+    "branch": "MADIPAKKAM ",
+    "address": "3/209, Medavakkam Main Road, adj. KFC, Madipakkam ",
+    "phone": "(044) 22470082",
+    "email": "madipakkam@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 56,
+    "branch": "CHENNAI - T.NAGAR",
+    "address": "Flat no:304,2nd floor,Devi narayanan apts.Tngr,ch.",
+    "phone": "044-24323692",
+    "email": "chennai@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 57,
+    "branch": "HEAD OFFICE Capital Marketing",
+    "address": "ECS FINANCIAL SER.PVT.LTD. PARADISE.",
+    "phone": 9848032339,
+    "email": "jsrinivas@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 60,
+    "branch": "HEAD OFFICE Marketing R.O.T.S.",
+    "address": "ECS FINANCIAL SER.PVT.LTD. PARADISE.",
+    "phone": 9848027443,
+    "email": "rsathish@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 61,
+    "branch": "HEAD OFFICE Mutual Funds",
+    "address": "ECS FINANCIAL SER.PVT.LTD. PARADISE.",
+    "phone": 9948075641,
+    "email": "atchutharao@ecsconsultants.co.in"
+  },
+  {
+    "branchCode": 67,
+    "branch": "WARANGAL",
+    "address": "Door No: 1-7-1105/1,Advocates Colony, Nakkala Gutt",
+    "phone": "(0870) - 2931717",
+    "email": "warangal@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 68,
+    "branch": "SUCHITRA",
+    "address": "Plot No: 58, Sri Durga Estates, Near Suchitra Circ",
+    "phone": "(040) - 46012598",
+    "email": "suchitra@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 69,
+    "branch": "COIMBATORE",
+    "address": "hop No: 18, 2nd floor, Vaishnavi Complex, Marutham",
+    "phone": 8341130969,
+    "email": "coimbatore@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 70,
+    "branch": "CHEMBUR",
+    "address": "Office No: 4A, 1st Floor, Rajshree Building, Near ",
+    "phone": 7032415862,
+    "email": "mumbai@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 75,
+    "branch": "H.O(WFH)",
+    "address": "ECS FINANCIAL SERVICE (I) PVT LTD",
+    "phone": "",
+    "email": ""
+  },
+  {
+    "branchCode": 76,
+    "branch": "JAYANAGAR(WFH)",
+    "address": "BANGALORE",
+    "phone": 9980966112,
+    "email": "bangalore@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 73,
+    "branch": "HEAD-OFFICE",
+    "address": "ECS FINANCIAL SERVICE (I) PVT LTD",
+    "phone": 7032533609,
+    "email": "ckarthik@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 74,
+    "branch": "HEAD-OFFICE(INSURACE)",
+    "address": "ECS FINANCIAL SERVICE (I) PVT LTD",
+    "phone": "98410 01787",
+    "email": " insurance@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 79,
+    "branch": "WFH-(INSURACE)",
+    "address": "ECS FINANCIAL SERVICE (I) PVT LTD",
+    "phone": "98410 01787",
+    "email": "insurance@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 82,
+    "branch": "H.O",
+    "address": "ECS FINANCIAL",
+    "phone": 9848027641,
+    "email": "info@ecsfinancial.co.in"
+  },
+  {
+    "branchCode": 83,
+    "branch": "CHANDA NAGAR",
+    "address": "Polt No: 14, 14/A, 4th Floor, Sri Datta Plaza, Pad",
+    "phone": "044-2784411/12/13/14",
+    "email": "chandanagar@ecsfinancial.co.in"
+  }
+]

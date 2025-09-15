@@ -1,0 +1,6 @@
+/* Import the multistep form styles */
+@import './styles.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

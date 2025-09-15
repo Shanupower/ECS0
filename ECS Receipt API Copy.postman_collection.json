@@ -1,0 +1,559 @@
+{
+	"info": {
+		"_postman_id": "beb06f3a-b8b8-4029-9ad9-1c61f59c93f6",
+		"name": "ECS Receipt API Copy",
+		"description": "Complete Postman collection for ECS Receipt Portal backend (Auth, Users, Receipts, Stats, Health).\nRun a Login request to set {{token}}; all authed requests reuse it.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "15411941",
+		"_collection_link": "https://calcitex.postman.co/workspace/My-Workspace~8a487f59-2304-4fa1-8a07-af1245a75351/collection/15411941-beb06f3a-b8b8-4029-9ad9-1c61f59c93f6?action=share&source=collection_link&creator=15411941"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login (ADMIN)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const json = pm.response.json();",
+									"if (json && json.token) { pm.environment.set('token', json.token); console.log('Token saved'); }",
+									"pm.test('Token present', function(){ pm.expect(json.token).to.exist; });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emp_code\": \"ADMIN\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": "{{base_url}}/api/auth/login"
+					},
+					"response": []
+				},
+				{
+					"name": "Login (EMPLOYEE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const json = pm.response.json();",
+									"if (json && json.token) { pm.environment.set('token', json.token); console.log('Token saved'); }",
+									"pm.test('Token present', function(){ pm.expect(json.token).to.exist; });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emp_code\": \"ECS497\",\n  \"password\": \"pass123\"\n}"
+						},
+						"url": "{{base_url}}/api/auth/login"
+					},
+					"response": []
+				},
+				{
+					"name": "Register (Admin-only) — optional",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emp_code\":\"ECS001\",\n  \"name\":\"Sample User\",\n  \"email\":\"user@ecs.com\",\n  \"branch\":\"HQ\",\n  \"role\":\"employee\",\n  \"password\":\"pass123\"\n}"
+						},
+						"url": "{{base_url}}/api/auth/register",
+						"description": "If you enable /api/auth/register in backend."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Me (profile)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}/api/users/me"
+					},
+					"response": []
+				},
+				{
+					"name": "List Users (admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}/api/users"
+					},
+					"response": []
+				},
+				{
+					"name": "Create User (admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emp_code\":\"ECS002\",\n  \"name\":\"Second User\",\n  \"email\":\"user2@ecs.com\",\n  \"branch\":\"Andheri\",\n  \"role\":\"employee\",\n  \"password\":\"Pass@1234\"\n}"
+						},
+						"url": "{{base_url}}/api/users"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User (admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\":\"Renamed User\",\n  \"branch\":\"Chembur\"\n}"
+						},
+						"url": "{{base_url}}/api/users/{{user_id}}"
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password (self/admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"password\":\"NewStrong@2025\"\n}"
+						},
+						"url": "{{base_url}}/api/users/{{user_id}}/password"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User (admin, soft or hard depending impl)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": "{{base_url}}/api/users/{{user_id}}"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Receipts",
+			"item": [
+				{
+					"name": "Create Receipt",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"receiptNo\":\"ECS-{{today}}-1001\",\n  \"date\":\"{{today}}\",\n  \"branch\":\"CHEMBUR - MUMBAI\",\n  \"employeeName\":\"Deepak Gupta\",\n  \"empCode\":\"ECS497\",\n  \"investorId\":\"INV1001\",\n  \"investorName\":\"Ravi Sharma\",\n  \"investorAddress\":\"Flat 12, ABC Residency, Chembur\",\n  \"pinCode\":\"400071\",\n  \"pan\":\"ABCDE1234F\",\n  \"email\":\"ravi@example.com\",\n  \"product_category\":\"MF\",\n  \"schemeName\":\"ECS Bluechip Fund\",\n  \"schemeOption\":\"Growth\",\n  \"investmentAmount\":15000,\n  \"mode\":\"Lump Sum\",\n  \"txnType\":\"Fresh\",\n  \"instrumentType\":\"Online Ref\",\n  \"instrumentNo\":\"TXN-987654\",\n  \"issuerCompany\":\"ECS AMC\",\n  \"issuerCategory\":\"Mutual Fund\"\n}"
+						},
+						"url": "{{base_url}}/api/receipts"
+					},
+					"response": []
+				},
+				{
+					"name": "List Receipts (filters + sorting + pagination)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/receipts?size=20&sort=created_at:desc&from={{month_start}}&to={{today}}&category=MF&issuer=ECS",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"receipts"
+							],
+							"query": [
+								{
+									"key": "size",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "created_at:desc"
+								},
+								{
+									"key": "from",
+									"value": "{{month_start}}"
+								},
+								{
+									"key": "to",
+									"value": "{{today}}"
+								},
+								{
+									"key": "category",
+									"value": "MF"
+								},
+								{
+									"key": "issuer",
+									"value": "ECS"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Receipt by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}/api/receipts/{{receipt_id}}"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Receipt by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"schemeOption\":\"IDCW\",\n  \"investmentAmount\":20000\n}"
+						},
+						"url": "{{base_url}}/api/receipts/{{receipt_id}}"
+					},
+					"response": []
+				},
+				{
+					"name": "Soft Delete Receipt",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"duplicate\"\n}"
+						},
+						"url": "{{base_url}}/api/receipts/{{receipt_id}}"
+					},
+					"response": []
+				},
+				{
+					"name": "Restore Receipt (admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "POST",
+						"header": [],
+						"url": "{{base_url}}/api/receipts/{{receipt_id}}/restore"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Stats",
+			"item": [
+				{
+					"name": "Summary (mine or org-wide)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stats/summary?from={{month_start}}&to={{today}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"stats",
+								"summary"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "{{month_start}}"
+								},
+								{
+									"key": "to",
+									"value": "{{today}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Summary for specific employee (admin)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stats/summary?from={{month_start}}&to={{today}}&emp_code=ECS497",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"stats",
+								"summary"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "{{month_start}}"
+								},
+								{
+									"key": "to",
+									"value": "{{today}}"
+								},
+								{
+									"key": "emp_code",
+									"value": "ECS497"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "By Category",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stats/by-category?from={{month_start}}&to={{today}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"stats",
+								"by-category"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "{{month_start}}"
+								},
+								{
+									"key": "to",
+									"value": "{{today}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "By Day",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": "{{token}}"
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stats/by-day?from={{month_start}}&to={{today}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"stats",
+								"by-day"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "{{month_start}}"
+								},
+								{
+									"key": "to",
+									"value": "{{today}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Utility",
+			"item": [
+				{
+					"name": "Health",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": "{{base_url}}/health"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"const now = new Date();",
+					"const pad = n => String(n).padStart(2,'0');",
+					"const today = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;",
+					"const monthStart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;",
+					"pm.environment.set('today', today);",
+					"pm.environment.set('month_start', monthStart);"
+				]
+			}
+		}
+	]
+}
