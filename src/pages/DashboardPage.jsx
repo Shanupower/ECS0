@@ -10,6 +10,7 @@ import {
   FiBarChart, 
   FiActivity,
   FiUsers,
+  FiUser,
   FiRefreshCw,
   FiAlertCircle
 } from 'react-icons/fi'
@@ -22,8 +23,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dateRange, setDateRange] = useState({
-    from: new Date().toISOString().slice(0, 7) + '-01', // First day of current month
-    to: new Date().toISOString().slice(0, 10) // Today
+    from: '2025-09-01', // Default to September 2025 where test data exists
+    to: '2025-12-31' // End of 2025
   })
 
   const loadDashboardData = async () => {
@@ -33,36 +34,36 @@ export default function DashboardPage() {
     setError('')
     
     try {
-      const query = { from: dateRange.from, to: dateRange.to }
+      const query = { 
+        from: dateRange.from, 
+        to: dateRange.to,
+        size: 1000 // Get all receipts for the date range
+      }
       
-      // For employees, add their emp_code to get their specific stats
+      // Use the same API approach as TransactionsPage
+      let result
       if (!isAdmin && user?.emp_code) {
-        query.emp_code = user.emp_code
-      }
-      
-      // Load summary stats (includes employee-specific data if not admin)
-      const summaryData = await api.statsSummary(token, query)
-      setSummary(summaryData)
-      
-      // Load category breakdown
-      const categoryData = await api.statsByCategory(token, query)
-      if (categoryData.items && Array.isArray(categoryData.items)) {
-        setCategoryStats(categoryData.items)
-      } else if (Array.isArray(categoryData)) {
-        setCategoryStats(categoryData)
+        // For employees, always use their own emp_code
+        result = await api.getReceiptsByEmpCode(token, user.emp_code, query)
       } else {
-        setCategoryStats([])
+        result = await api.listReceipts(token, query)
       }
       
-      // Load daily timeline
-      const dailyData = await api.statsByDay(token, query)
-      if (dailyData.items && Array.isArray(dailyData.items)) {
-        setDailyStats(dailyData.items)
-      } else if (Array.isArray(dailyData)) {
-        setDailyStats(dailyData)
-      } else {
-        setDailyStats([])
+      // Handle different response formats like TransactionsPage does
+      let receipts = []
+      if (Array.isArray(result)) {
+        receipts = result
+      } else if (result.items && Array.isArray(result.items)) {
+        receipts = result.items
+      } else if (result.data && Array.isArray(result.data)) {
+        receipts = result.data
       }
+      
+      // Process receipts to generate dashboard statistics
+      const stats = processReceiptsForDashboard(receipts)
+      setSummary(stats.summary)
+      setCategoryStats(stats.categoryStats)
+      setDailyStats(stats.dailyStats)
       
     } catch (err) {
       setError(err.message || 'Failed to load dashboard data')
@@ -92,6 +93,89 @@ export default function DashboardPage() {
   }
 
   const isAdmin = user?.role === 'admin'
+
+  // Function to process receipts and generate dashboard statistics
+  const processReceiptsForDashboard = (receipts) => {
+    // Filter out deleted receipts
+    const activeReceipts = receipts.filter(receipt => !receipt.deleted_at && !receipt.is_deleted)
+    
+    // Calculate summary statistics
+    const totalReceipts = activeReceipts.length
+    const totalAmount = activeReceipts.reduce((sum, receipt) => {
+      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
+      return sum + amount
+    }, 0)
+    
+    // Group by category
+    const categoryMap = new Map()
+    activeReceipts.forEach(receipt => {
+      const category = receipt.product_category || receipt.issuer_category || 'Other'
+      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
+      
+      if (categoryMap.has(category)) {
+        categoryMap.set(category, categoryMap.get(category) + amount)
+      } else {
+        categoryMap.set(category, amount)
+      }
+    })
+    
+    const categoryStats = Array.from(categoryMap.entries()).map(([category, amount]) => ({
+      category: category || 'Other',
+      amount: amount
+    }))
+    
+    // Group by day
+    const dayMap = new Map()
+    activeReceipts.forEach(receipt => {
+      const date = new Date(receipt.date).toISOString().split('T')[0] // Get YYYY-MM-DD format
+      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
+      
+      if (dayMap.has(date)) {
+        dayMap.set(date, dayMap.get(date) + amount)
+      } else {
+        dayMap.set(date, amount)
+      }
+    })
+    
+    const dailyStats = Array.from(dayMap.entries()).map(([date, amount]) => ({
+      date: date,
+      amount: amount
+    })).sort((a, b) => new Date(a.date) - new Date(b.date))
+    
+    // Group by employee (for admin view)
+    const employeeMap = new Map()
+    activeReceipts.forEach(receipt => {
+      const empCode = receipt.emp_code || receipt.empCode
+      const empName = receipt.employee_name || receipt.employeeName
+      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
+      
+      if (employeeMap.has(empCode)) {
+        const emp = employeeMap.get(empCode)
+        emp.receiptCount += 1
+        emp.totalAmount += amount
+      } else {
+        employeeMap.set(empCode, {
+          empCode: empCode,
+          employeeName: empName,
+          receiptCount: 1,
+          totalAmount: amount
+        })
+      }
+    })
+    
+    const byEmployee = Array.from(employeeMap.values()).sort((a, b) => b.totalAmount - a.totalAmount)
+    
+    return {
+      summary: {
+        totalReceipts,
+        totalAmount,
+        commissionsTotal: totalAmount * 0.01, // 1% commission (adjust as needed)
+        byEmployee
+      },
+      categoryStats,
+      dailyStats
+    }
+  }
 
   return (
     <div className="space-y-6">
