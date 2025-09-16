@@ -3,7 +3,7 @@
 		"_postman_id": "beb06f3a-b8b8-4029-9ad9-1c61f59c93f6",
 		"name": "ECS Receipt API Copy",
 		"description": "Complete Postman collection for ECS Receipt Portal backend (Auth, Users, Receipts, Stats, Health).\nRun a Login request to set {{token}}; all authed requests reuse it.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "15411941",
 		"_collection_link": "https://calcitex.postman.co/workspace/My-Workspace~8a487f59-2304-4fa1-8a07-af1245a75351/collection/15411941-beb06f3a-b8b8-4029-9ad9-1c61f59c93f6?action=share&source=collection_link&creator=15411941"
 	},
@@ -38,7 +38,17 @@
 							"mode": "raw",
 							"raw": "{\n  \"emp_code\": \"ADMIN\",\n  \"password\": \"admin123\"\n}"
 						},
-						"url": "{{base_url}}/api/auth/login"
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
 					},
 					"response": []
 				},
@@ -69,7 +79,17 @@
 							"mode": "raw",
 							"raw": "{\n  \"emp_code\": \"ECS497\",\n  \"password\": \"pass123\"\n}"
 						},
-						"url": "{{base_url}}/api/auth/login"
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
 					},
 					"response": []
 				},
@@ -87,7 +107,17 @@
 							"mode": "raw",
 							"raw": "{\n  \"emp_code\":\"ECS001\",\n  \"name\":\"Sample User\",\n  \"email\":\"user@ecs.com\",\n  \"branch\":\"HQ\",\n  \"role\":\"employee\",\n  \"password\":\"pass123\"\n}"
 						},
-						"url": "{{base_url}}/api/auth/register",
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						},
 						"description": "If you enable /api/auth/register in backend."
 					},
 					"response": []
@@ -102,13 +132,27 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
-						"url": "{{base_url}}/api/users/me"
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"me"
+							]
+						}
 					},
 					"response": []
 				},
@@ -117,13 +161,26 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
-						"url": "{{base_url}}/api/users"
+						"url": {
+							"raw": "{{base_url}}/api/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						}
 					},
 					"response": []
 				},
@@ -132,9 +189,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "POST",
 						"header": [
@@ -147,7 +208,16 @@
 							"mode": "raw",
 							"raw": "{\n  \"emp_code\":\"ECS002\",\n  \"name\":\"Second User\",\n  \"email\":\"user2@ecs.com\",\n  \"branch\":\"Andheri\",\n  \"role\":\"employee\",\n  \"password\":\"Pass@1234\"\n}"
 						},
-						"url": "{{base_url}}/api/users"
+						"url": {
+							"raw": "{{base_url}}/api/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						}
 					},
 					"response": []
 				},
@@ -156,9 +226,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "PATCH",
 						"header": [
@@ -171,7 +245,17 @@
 							"mode": "raw",
 							"raw": "{\n  \"name\":\"Renamed User\",\n  \"branch\":\"Chembur\"\n}"
 						},
-						"url": "{{base_url}}/api/users/{{user_id}}"
+						"url": {
+							"raw": "{{base_url}}/api/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{user_id}}"
+							]
+						}
 					},
 					"response": []
 				},
@@ -180,9 +264,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "PATCH",
 						"header": [
@@ -195,7 +283,18 @@
 							"mode": "raw",
 							"raw": "{\n  \"password\":\"NewStrong@2025\"\n}"
 						},
-						"url": "{{base_url}}/api/users/{{user_id}}/password"
+						"url": {
+							"raw": "{{base_url}}/api/users/{{user_id}}/password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{user_id}}",
+								"password"
+							]
+						}
 					},
 					"response": []
 				},
@@ -204,13 +303,27 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "DELETE",
 						"header": [],
-						"url": "{{base_url}}/api/users/{{user_id}}"
+						"url": {
+							"raw": "{{base_url}}/api/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{user_id}}"
+							]
+						}
 					},
 					"response": []
 				}
@@ -224,9 +337,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "POST",
 						"header": [
@@ -239,7 +356,16 @@
 							"mode": "raw",
 							"raw": "{\n  \"receiptNo\":\"ECS-{{today}}-1001\",\n  \"date\":\"{{today}}\",\n  \"branch\":\"CHEMBUR - MUMBAI\",\n  \"employeeName\":\"Deepak Gupta\",\n  \"empCode\":\"ECS497\",\n  \"investorId\":\"INV1001\",\n  \"investorName\":\"Ravi Sharma\",\n  \"investorAddress\":\"Flat 12, ABC Residency, Chembur\",\n  \"pinCode\":\"400071\",\n  \"pan\":\"ABCDE1234F\",\n  \"email\":\"ravi@example.com\",\n  \"product_category\":\"MF\",\n  \"schemeName\":\"ECS Bluechip Fund\",\n  \"schemeOption\":\"Growth\",\n  \"investmentAmount\":15000,\n  \"mode\":\"Lump Sum\",\n  \"txnType\":\"Fresh\",\n  \"instrumentType\":\"Online Ref\",\n  \"instrumentNo\":\"TXN-987654\",\n  \"issuerCompany\":\"ECS AMC\",\n  \"issuerCategory\":\"Mutual Fund\"\n}"
 						},
-						"url": "{{base_url}}/api/receipts"
+						"url": {
+							"raw": "{{base_url}}/api/receipts",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"receipts"
+							]
+						}
 					},
 					"response": []
 				},
@@ -248,9 +374,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
@@ -298,13 +428,27 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
-						"url": "{{base_url}}/api/receipts/{{receipt_id}}"
+						"url": {
+							"raw": "{{base_url}}/api/receipts/{{receipt_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"receipts",
+								"{{receipt_id}}"
+							]
+						}
 					},
 					"response": []
 				},
@@ -313,9 +457,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "PATCH",
 						"header": [
@@ -328,7 +476,17 @@
 							"mode": "raw",
 							"raw": "{\n  \"schemeOption\":\"IDCW\",\n  \"investmentAmount\":20000\n}"
 						},
-						"url": "{{base_url}}/api/receipts/{{receipt_id}}"
+						"url": {
+							"raw": "{{base_url}}/api/receipts/{{receipt_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"receipts",
+								"{{receipt_id}}"
+							]
+						}
 					},
 					"response": []
 				},
@@ -337,9 +495,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "DELETE",
 						"header": [
@@ -352,7 +514,17 @@
 							"mode": "raw",
 							"raw": "{\n  \"reason\": \"duplicate\"\n}"
 						},
-						"url": "{{base_url}}/api/receipts/{{receipt_id}}"
+						"url": {
+							"raw": "{{base_url}}/api/receipts/{{receipt_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"receipts",
+								"{{receipt_id}}"
+							]
+						}
 					},
 					"response": []
 				},
@@ -361,13 +533,36 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "POST",
 						"header": [],
-						"url": "{{base_url}}/api/receipts/{{receipt_id}}/restore"
+						"url": {
+							"raw": "{{base_url}}/api/receipts/{{receipt_id}}/restore",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"receipts",
+								"{{receipt_id}}",
+								"restore"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Receipt by Emp Code",
+					"request": {
+						"method": "GET",
+						"header": []
 					},
 					"response": []
 				}
@@ -381,9 +576,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
@@ -416,9 +615,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
@@ -455,9 +658,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
@@ -490,9 +697,13 @@
 					"request": {
 						"auth": {
 							"type": "bearer",
-							"bearer": {
-								"token": "{{token}}"
-							}
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
 						},
 						"method": "GET",
 						"header": [],
@@ -533,11 +744,35 @@
 						},
 						"method": "GET",
 						"header": [],
-						"url": "{{base_url}}/health"
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						}
 					},
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
 		}
 	],
 	"event": [

@@ -35,17 +35,34 @@ export default function DashboardPage() {
     try {
       const query = { from: dateRange.from, to: dateRange.to }
       
-      // Load summary stats
+      // For employees, add their emp_code to get their specific stats
+      if (!isAdmin && user?.emp_code) {
+        query.emp_code = user.emp_code
+      }
+      
+      // Load summary stats (includes employee-specific data if not admin)
       const summaryData = await api.statsSummary(token, query)
       setSummary(summaryData)
       
       // Load category breakdown
       const categoryData = await api.statsByCategory(token, query)
-      setCategoryStats(Array.isArray(categoryData) ? categoryData : [])
+      if (categoryData.items && Array.isArray(categoryData.items)) {
+        setCategoryStats(categoryData.items)
+      } else if (Array.isArray(categoryData)) {
+        setCategoryStats(categoryData)
+      } else {
+        setCategoryStats([])
+      }
       
       // Load daily timeline
       const dailyData = await api.statsByDay(token, query)
-      setDailyStats(Array.isArray(dailyData) ? dailyData : [])
+      if (dailyData.items && Array.isArray(dailyData.items)) {
+        setDailyStats(dailyData.items)
+      } else if (Array.isArray(dailyData)) {
+        setDailyStats(dailyData)
+      } else {
+        setDailyStats([])
+      }
       
     } catch (err) {
       setError(err.message || 'Failed to load dashboard data')

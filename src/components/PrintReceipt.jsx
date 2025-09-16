@@ -56,7 +56,7 @@ export default function PrintReceipt({ data = {} }) {
       <div className="card">
         <h3>Investment Details</h3>
         <div className="two">
-          {line('Type(s)', Array.isArray(data.txnCategory) && data.txnCategory.length ? data.txnCategory.join(', ') : '')}
+          {line('Product Category', data.product_category || (Array.isArray(data.txnCategory) && data.txnCategory.length ? data.txnCategory.join(', ') : ''))}
           {line('Transaction', data.txnType)}
         </div>
         <div className="two">

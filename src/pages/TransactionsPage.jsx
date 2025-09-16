@@ -41,12 +41,32 @@ export default function TransactionsPage() {
     
     try {
       const query = { ...filters, page: pagination.page }
-      const result = await api.listReceipts(token, query)
+      let result
+      
+      // Use employee-specific endpoint if filtering by employee code and user is admin
+      // or if user is employee (show only their own receipts)
+      if (filters.emp_code && isAdmin) {
+        result = await api.getReceiptsByEmpCode(token, filters.emp_code, query)
+      } else if (!isAdmin && user?.emp_code) {
+        // For employees, always use their own emp_code
+        result = await api.getReceiptsByEmpCode(token, user.emp_code, query)
+      } else {
+        result = await api.listReceipts(token, query)
+      }
       
       if (Array.isArray(result)) {
         setReceipts(result)
         setPagination(prev => ({ ...prev, total: result.length, hasMore: result.length === filters.size }))
-      } else if (result.data) {
+      } else if (result.items && Array.isArray(result.items)) {
+        // Handle the new API response structure: {items: [], page: 1, size: 20, total: 2}
+        setReceipts(result.items)
+        setPagination(prev => ({ 
+          ...prev, 
+          total: result.total || result.items.length,
+          hasMore: result.items.length === result.size
+        }))
+      } else if (result.data && Array.isArray(result.data)) {
+        // Handle legacy response structure: {data: [], total: 2}
         setReceipts(result.data)
         setPagination(prev => ({ 
           ...prev, 
@@ -244,9 +264,9 @@ export default function TransactionsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {receipts.map((receipt) => (
-                  <tr key={receipt.id || receipt.receiptNo} className="hover:bg-gray-50">
+                  <tr key={receipt.id || receipt.receipt_no} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {receipt.receiptNo}
+                      {receipt.receipt_no || receipt.receiptNo}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(receipt.date)}
@@ -257,19 +277,19 @@ export default function TransactionsPage() {
                           <FiUser className="w-4 h-4 text-blue-600" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{receipt.investorName}</div>
-                          <div className="text-sm text-gray-500">{receipt.investorId}</div>
+                          <div className="text-sm font-medium text-gray-900">{receipt.investor_name || receipt.investorName}</div>
+                          <div className="text-sm text-gray-500">{receipt.investor_id || receipt.investorId}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{receipt.schemeName}</div>
-                        <div className="text-sm text-gray-500">{receipt.product_category || receipt.issuerCategory}</div>
+                        <div className="text-sm font-medium text-gray-900">{receipt.scheme_name || receipt.schemeName}</div>
+                        <div className="text-sm text-gray-500">{receipt.product_category || receipt.issuer_category || receipt.issuerCategory}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(receipt.investmentAmount)}
+                      {formatCurrency(receipt.investment_amount || receipt.investmentAmount)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -277,8 +297,8 @@ export default function TransactionsPage() {
                           <FiUser className="w-4 h-4 text-red-600" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{receipt.employeeName}</div>
-                          <div className="text-sm text-gray-500">{receipt.empCode}</div>
+                          <div className="text-sm font-medium text-gray-900">{receipt.employee_name || receipt.employeeName}</div>
+                          <div className="text-sm text-gray-500">{receipt.emp_code || receipt.empCode}</div>
                         </div>
                       </div>
                     </td>
@@ -295,29 +315,37 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex space-x-2">
-                        <button
-                          onClick={() => window.open(`/receipts/${receipt.id || receipt.receiptNo}`, '_blank')}
-                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <FiEye className="w-3 h-3 mr-1" />
-                          View
-                        </button>
-                        {receipt.deleted_at ? (
+                        {/* Only show View button if user can access this receipt */}
+                        {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
                           <button
-                            onClick={() => handleRestore(receipt.id || receipt.receiptNo)}
-                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-600 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            onClick={() => window.open(`/receipts/${receipt.id}`, '_blank')}
+                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            <FiRotateCw className="w-3 h-3 mr-1" />
-                            Restore
+                            <FiEye className="w-3 h-3 mr-1" />
+                            View
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => handleDelete(receipt.id || receipt.receiptNo)}
-                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500"
-                          >
-                            <FiTrash2 className="w-3 h-3 mr-1" />
-                            Delete
-                          </button>
+                        )}
+                        {/* Only show Delete/Restore buttons if user can modify this receipt */}
+                        {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
+                          <>
+                            {receipt.deleted_at ? (
+                              <button
+                                onClick={() => handleRestore(receipt.id)}
+                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-600 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                              >
+                                <FiRotateCw className="w-3 h-3 mr-1" />
+                                Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleDelete(receipt.id)}
+                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-600 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+                              >
+                                <FiTrash2 className="w-3 h-3 mr-1" />
+                                Delete
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

@@ -55,8 +55,12 @@ function StepHeader({ step }) {
   )
 }
 
-function StepEmployee({ value, onNext }) {
-  const [code, setCode] = useState(value || '')
+function StepEmployee({ user, onNext }) {
+  // Auto-populate from user context
+  const code = user?.emp_code || ''
+  const employeeName = user?.name || ''
+  const branch = user?.branch || ''
+  
   const index = useMemo(() => {
     const m = new Map()
     ;(empData || []).forEach(e => m.set(String(e.Code || '').trim().toUpperCase(), e))
@@ -72,37 +76,44 @@ function StepEmployee({ value, onNext }) {
           <label style={{ fontSize: 13, color: '#3b3b3c', margin: '8px 0 6px', fontWeight: 600 }}>Employee Code</label>
           <input
             value={code}
-            onChange={e => setCode(e.target.value)}
+            readOnly
             placeholder="e.g., ECS497"
-            style={{ width: '100%', padding: '14px 16px', borderRadius: 14, border: '1px solid rgba(0,0,0,.08)' }}
+            style={{ 
+              width: '100%', 
+              padding: '14px 16px', 
+              borderRadius: 14, 
+              border: '1px solid rgba(0,0,0,.08)',
+              backgroundColor: '#f8f9fa',
+              cursor: 'not-allowed'
+            }}
           />
-          <div className="helper" style={{ fontSize: 12, color: '#6b7280' }}>Auto-fills Employee Name and Branch from emp data.</div>
+          <div className="helper" style={{ fontSize: 12, color: '#6b7280' }}>Auto-filled from your login credentials.</div>
         </div>
       </div>
 
       {code && (
         <div className="card" style={{ marginTop: 16, border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
           <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Employee Preview</h3>
-          {found ? (
-            <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-              <div className="col" style={{ flex: '1 1 320px' }}>
-                <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Name</label>
-                <div>{found.Name || '-'}</div>
-              </div>
-              <div className="col" style={{ flex: '1 1 320px' }}>
-                <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Branch</label>
-                <div>{found.Branch || '-'}</div>
-              </div>
+          <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+            <div className="col" style={{ flex: '1 1 320px' }}>
+              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Name</label>
+              <div>{employeeName || '-'}</div>
             </div>
-          ) : (
-            <div className="helper" style={{ color: '#b91c1c', fontSize: 12 }}>No match for that code.</div>
-          )}
+            <div className="col" style={{ flex: '1 1 320px' }}>
+              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Branch</label>
+              <div>{branch || '-'}</div>
+            </div>
+            <div className="col" style={{ flex: '1 1 320px' }}>
+              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Email</label>
+              <div>{user?.email || '-'}</div>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <button
-          onClick={() => onNext({ empCode: code || '', employeeName: found?.Name || '', branch: found?.Branch || '' })}
+          onClick={() => onNext({ empCode: code || '', employeeName: employeeName || '', branch: branch || '' })}
           disabled={!code}
           style={{ appearance: 'none', border: '1px solid rgba(0,0,0,.08)', borderRadius: 999, padding: '12px 20px', fontWeight: 800, background: 'linear-gradient(180deg,#fff,#f7f7f7)', cursor: 'pointer' }}
         >
@@ -503,16 +514,23 @@ function StepProduct({ onBack, onNext }) {
             let normalized = {}
             if (product === 'MF') {
               normalized = {
+                product_category: 'MF',
                 issuerCompany: mfIssuer,
+                issuerCategory: 'Mutual Fund',
                 schemeName: mfScheme,
                 investmentAmount: parseFloat(mfInvestmentAmount) || 0,
                 folioPolicyNo: mfFolioPolicyNo,
                 txnType: 'Fresh',
-                mode: 'Lump Sum'
+                mode: 'Lump Sum',
+                schemeOption: 'Growth',
+                instrumentType: 'Online Ref',
+                instrumentNo: mfFolioPolicyNo || `MF-${Date.now()}`
               }
             } else if (product === 'FD') {
               normalized = {
+                product_category: 'FD',
                 issuerCompany: fdIssuer,
+                issuerCategory: 'Fixed Deposit',
                 schemeName: fdScheme,
                 investmentAmount: parseFloat(fdInvestmentAmount) || 0,
                 folioPolicyNo: fdApplicationNo,
@@ -520,26 +538,38 @@ function StepProduct({ onBack, onNext }) {
                 depositPeriodYM: fdDepositPeriod,
                 roi: fdRoi,
                 txnType: 'Fresh',
-                mode: 'Lump Sum'
+                mode: 'Lump Sum',
+                schemeOption: 'Cumulative',
+                instrumentType: 'Application',
+                instrumentNo: fdApplicationNo || `FD-${Date.now()}`
               }
             } else if (product === 'INS') {
               normalized = {
+                product_category: 'INS',
                 issuerCompany: insIssuer,
                 issuerCategory: insCategory,
                 schemeName: insProduct,
                 investmentAmount: parseFloat(insPremiumAmount) || 0,
                 folioPolicyNo: insPolicyNo,
                 txnType: 'Fresh',
-                mode: 'Lump Sum'
+                mode: 'Lump Sum',
+                schemeOption: 'Annual',
+                instrumentType: 'Policy',
+                instrumentNo: insPolicyNo || `INS-${Date.now()}`
               }
             } else if (product === 'BOND') {
               normalized = {
+                product_category: 'BOND',
                 issuerCompany: bondIssuer,
+                issuerCategory: 'Bonds',
                 schemeName: bondScheme,
                 investmentAmount: parseFloat(bondInvestmentAmount) || 0,
                 folioPolicyNo: bondApplicationNo,
                 txnType: 'Fresh',
-                mode: 'Lump Sum'
+                mode: 'Lump Sum',
+                schemeOption: 'Cumulative',
+                instrumentType: 'Application',
+                instrumentNo: bondApplicationNo || `BOND-${Date.now()}`
               }
             }
             onNext(product, normalized)
@@ -586,13 +616,24 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError }) {
 }
 
 export default function MultiStepReceipt() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [step, setStep] = useState(1)
   const [empSeed, setEmpSeed] = useState({ empCode: '', employeeName: '', branch: '' })
   const [investorSeed, setInvestorSeed] = useState({ investorId: '', investorInfo: null })
   const [finalData, setFinalData] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+
+  // Auto-populate employee data from user context
+  useEffect(() => {
+    if (user && !empSeed.empCode) {
+      setEmpSeed({
+        empCode: user.emp_code || '',
+        employeeName: user.name || '',
+        branch: user.branch || ''
+      })
+    }
+  }, [user])
 
   const buildBase = () => {
     const base = {
@@ -647,7 +688,7 @@ export default function MultiStepReceipt() {
 
       {step === 1 && (
         <StepEmployee
-          value={empSeed.empCode}
+          user={user}
           onNext={e => { setEmpSeed(e); setStep(2) }}
         />
       )}

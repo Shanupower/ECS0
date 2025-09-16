@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+const BASE = import.meta.env.VITE_API_BASE_URL || 'http://13.201.70.120:8080'
 
 function authHeaders(token){ return token ? { Authorization: `Bearer ${token}` } : {} }
 
@@ -34,6 +34,7 @@ export const api={
   // Receipt endpoints
   listReceipts:(t,q)=>req('/api/receipts',{token:t,query:q}),
   getReceipt:(t,id)=>req(`/api/receipts/${id}`,{token:t}),
+  getReceiptsByEmpCode:(t,empCode,q)=>req(`/api/receipts/emp/${empCode}`,{token:t,query:q}),
   createReceipt:(t,p)=>req('/api/receipts',{method:'POST',token:t,json:p}),
   updateReceipt:(t,id,data)=>req(`/api/receipts/${id}`,{method:'PATCH',token:t,json:data}),
   deleteReceipt:(t,id,r)=>req(`/api/receipts/${id}`,{method:'DELETE',token:t,json:{reason:r}}),

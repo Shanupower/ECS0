@@ -5,6 +5,7 @@ import Layout from './components/Layout.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ReceiptsPage from './pages/ReceiptsPage.jsx'
+import ReceiptViewPage from './pages/ReceiptViewPage.jsx'
 import TransactionsPage from './pages/TransactionsPage.jsx'
 import UserManagementPage from './pages/UserManagementPage.jsx'
 
@@ -25,6 +26,7 @@ export default function App(){
       <Route path="/" element={<PrivateRoute><Layout/></PrivateRoute>}>
         <Route path="dashboard" element={<DashboardPage/>}/>
         <Route path="receipts" element={<ReceiptsPage/>}/>
+        <Route path="receipts/:id" element={<ReceiptViewPage/>}/>
         <Route path="transactions" element={<TransactionsPage/>}/>
         <Route path="users" element={<AdminRoute><UserManagementPage/></AdminRoute>}/>
       </Route>
