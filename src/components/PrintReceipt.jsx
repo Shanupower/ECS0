@@ -22,7 +22,7 @@ export default function PrintReceipt({ data = {} }) {
        <div className="rec-brand">
   <Logo size={42} alt="ECS Financial" />
   <div>
-    <div style={{ fontWeight: 800, fontSize: 18, color: '#e11919' }}>ECS Financial</div>
+    <div className="font-bold text-lg text-red-600 dark:text-red-400">ECS Financial</div>
     <div className="muted" style={{ fontSize: 12 }}>AMFI Registered Mutual Fund Distributor</div>
   </div>
 </div>

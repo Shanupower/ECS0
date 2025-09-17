@@ -124,6 +124,11 @@ hr.div{ border:0; border-top:1px dashed var(--border); margin:20px 0 }
 .two{ display:grid; grid-template-columns:1fr 1fr; gap:8px }
 .muted{ color:var(--muted) }
 
+/* Dark mode styles */
+.dark .rec-label{ color:#9ca3af }
+.dark .rec-value{ border-bottom-color:rgba(255,255,255,.2) }
+.dark .muted{ color:#6b7280 }
+
 /* Responsive breakpoints */
 @media (max-width:1120px){
   .col{ flex-basis:360px }

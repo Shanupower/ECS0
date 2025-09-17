@@ -106,11 +106,11 @@ export default function ReceiptViewPage() {
           <div className="text-red-600 text-xl mb-4">❌ Error</div>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/transactions')}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <FiArrowLeft className="w-4 h-4 mr-2" />
-            Go Back
+            Go Back to Transactions
           </button>
         </div>
       </div>
@@ -124,11 +124,11 @@ export default function ReceiptViewPage() {
           <div className="text-gray-600 text-xl mb-4">📄 Receipt Not Found</div>
           <p className="text-gray-500 mb-4">The receipt you're looking for doesn't exist or has been deleted.</p>
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/transactions')}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <FiArrowLeft className="w-4 h-4 mr-2" />
-            Go Back
+            Go Back to Transactions
           </button>
         </div>
       </div>
@@ -186,11 +186,11 @@ export default function ReceiptViewPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/transactions')}
                 className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 mr-4"
               >
                 <FiArrowLeft className="w-4 h-4 mr-2" />
-                Back
+                Back to Transactions
               </button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">

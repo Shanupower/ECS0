@@ -1,6 +1,7 @@
 import React from 'react'
 import { Routes,Route,Navigate } from 'react-router-dom'
 import { AuthProvider,useAuth } from './context/AuthContext'
+import { DarkModeProvider } from './context/DarkModeContext'
 import Layout from './components/Layout.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
@@ -20,16 +21,18 @@ function AdminRoute({children}){
 }
 
 export default function App(){
-  return <AuthProvider>
-    <Routes>
-      <Route path="/login" element={<LoginPage/>}/>
-      <Route path="/" element={<PrivateRoute><Layout/></PrivateRoute>}>
-        <Route path="dashboard" element={<DashboardPage/>}/>
-        <Route path="receipts" element={<ReceiptsPage/>}/>
-        <Route path="receipts/:id" element={<ReceiptViewPage/>}/>
-        <Route path="transactions" element={<TransactionsPage/>}/>
-        <Route path="users" element={<AdminRoute><UserManagementPage/></AdminRoute>}/>
-      </Route>
-    </Routes>
-  </AuthProvider>
+  return <DarkModeProvider>
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage/>}/>
+        <Route path="/" element={<PrivateRoute><Layout/></PrivateRoute>}>
+          <Route path="dashboard" element={<DashboardPage/>}/>
+          <Route path="receipts" element={<ReceiptsPage/>}/>
+          <Route path="receipts/:id" element={<ReceiptViewPage/>}/>
+          <Route path="transactions" element={<TransactionsPage/>}/>
+          <Route path="users" element={<AdminRoute><UserManagementPage/></AdminRoute>}/>
+        </Route>
+      </Routes>
+    </AuthProvider>
+  </DarkModeProvider>
 }

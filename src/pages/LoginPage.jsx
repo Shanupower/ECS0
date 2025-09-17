@@ -2,6 +2,7 @@ import React,{useState} from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo'
+import DarkModeToggle from '../components/DarkModeToggle'
 import { FiUser, FiLock, FiLogIn, FiAlertCircle } from 'react-icons/fi'
 
 export default function LoginPage(){
@@ -28,30 +29,35 @@ export default function LoginPage(){
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-dark-900 dark:to-dark-800 flex items-center justify-center p-4 transition-colors duration-200">
       <div className="w-full max-w-md">
+        {/* Dark Mode Toggle */}
+        <div className="flex justify-end mb-4">
+          <DarkModeToggle />
+        </div>
+        
         {/* Logo and Brand */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <Logo size={80} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">ECS Receipt Portal</h1>
-          <p className="text-gray-600">Sign in to your account to continue</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">ECS Receipt Portal</h1>
+          <p className="text-gray-600 dark:text-dark-300">Sign in to your account to continue</p>
         </div>
         
         {/* Login Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
+        <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6 sm:p-8 border border-gray-200 dark:border-dark-700">
           <form onSubmit={submit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200 mb-2">
                 Employee Code
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiUser className="h-5 w-5 text-gray-400" />
+                  <FiUser className="h-5 w-5 text-gray-400 dark:text-dark-400" />
                 </div>
                 <input 
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200" 
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200" 
                   value={emp} 
                   onChange={e=>setEmp(e.target.value)}
                   placeholder="e.g., ADMIN or ECS497"
@@ -61,16 +67,16 @@ export default function LoginPage(){
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200 mb-2">
                 Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiLock className="h-5 w-5 text-gray-400" />
+                  <FiLock className="h-5 w-5 text-gray-400 dark:text-dark-400" />
                 </div>
                 <input 
                   type="password" 
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200" 
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200" 
                   value={pass} 
                   onChange={e=>setPass(e.target.value)}
                   placeholder="Enter your password"
@@ -80,7 +86,7 @@ export default function LoginPage(){
             </div>
             
             {err && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
                 <FiAlertCircle className="h-5 w-5 mr-2" />
                 {err}
               </div>
@@ -89,7 +95,7 @@ export default function LoginPage(){
             <button 
               type="submit"
               disabled={loading}
-              className="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
+              className="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
             >
               {loading ? (
                 <>
@@ -106,19 +112,19 @@ export default function LoginPage(){
           </form>
           
           {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Demo Credentials:</h3>
+          <div className="mt-6 p-4 bg-gray-50 dark:bg-dark-700 rounded-lg border border-gray-200 dark:border-dark-600">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-dark-200 mb-3">Demo Credentials:</h3>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Admin:</span>
-                <div className="text-gray-900 font-mono">
-                  <span className="text-red-600">ADMIN</span> / admin123
+                <span className="text-gray-600 dark:text-dark-400">Admin:</span>
+                <div className="text-gray-900 dark:text-white font-mono">
+                  <span className="text-red-600 dark:text-red-400">ADMIN</span> / admin123
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Employee:</span>
-                <div className="text-gray-900 font-mono">
-                  <span className="text-red-600">ECS497</span> / pass123
+                <span className="text-gray-600 dark:text-dark-400">Employee:</span>
+                <div className="text-gray-900 dark:text-white font-mono">
+                  <span className="text-red-600 dark:text-red-400">ECS497</span> / pass123
                 </div>
               </div>
             </div>
@@ -126,7 +132,7 @@ export default function LoginPage(){
         </div>
         
         {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
+        <div className="text-center mt-8 text-sm text-gray-500 dark:text-dark-400">
           <p>&copy; 2024 ECS Financial Services. All rights reserved.</p>
         </div>
       </div>

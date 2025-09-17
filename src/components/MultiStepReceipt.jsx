@@ -33,23 +33,22 @@ function StepHeader({ step }) {
           <React.Fragment key={label}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div
-                style={{
-                  width: 28, height: 28, borderRadius: 999, display: 'grid', placeItems: 'center',
-                  background: step === n ? '#111' : '#fff', color: step === n ? '#fff' : '#111',
-                  border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 14px rgba(0,0,0,.06)',
-                  fontWeight: 800, fontSize: 12,
-                }}
+                className={`w-7 h-7 rounded-full grid place-items-center font-bold text-xs border shadow-sm ${
+                  step === n 
+                    ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 border-transparent' 
+                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700'
+                }`}
               >
                 {n}
               </div>
-              <div style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600, whiteSpace: 'nowrap' }}>{label}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 font-semibold whitespace-nowrap">{label}</div>
             </div>
-            {i < 3 && <div style={{ flex: '1 1 40px', height: 1, background: 'rgba(0,0,0,.08)', minWidth: 24 }} />}
+            {i < 3 && <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700 min-w-6" />}
           </React.Fragment>
         ))}
       </div>
-      <div style={{ position: 'relative', height: 8, width: '100%', borderRadius: 999, background: 'rgba(0,0,0,.06)', overflow: 'hidden', marginTop: 12 }}>
-        <span style={{ display: 'block', height: '100%', width: pct + '%', background: '#111', borderRadius: 999, transition: 'width .28s ease' }} />
+      <div className="relative h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden mt-3">
+        <span className="block h-full bg-gray-900 dark:bg-gray-100 rounded-full transition-all duration-300 ease-out" style={{ width: pct + '%' }} />
       </div>
     </div>
   )
@@ -70,42 +69,35 @@ function StepEmployee({ user, onNext }) {
 
   return (
     <div>
-      <h3 style={{ marginTop: 0 }}>Step 1 — Employee</h3>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 1 — Employee</h3>
       <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         <div className="col" style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column' }}>
-          <label style={{ fontSize: 13, color: '#3b3b3c', margin: '8px 0 6px', fontWeight: 600 }}>Employee Code</label>
+          <label className="text-sm text-gray-600 dark:text-gray-400 my-2 font-semibold">Employee Code</label>
           <input
             value={code}
             readOnly
             placeholder="e.g., ECS497"
-            style={{ 
-              width: '100%', 
-              padding: '14px 16px', 
-              borderRadius: 14, 
-              border: '1px solid rgba(0,0,0,.08)',
-              backgroundColor: '#f8f9fa',
-              cursor: 'not-allowed'
-            }}
+            className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-not-allowed text-gray-900 dark:text-gray-100"
           />
-          <div className="helper" style={{ fontSize: 12, color: '#6b7280' }}>Auto-filled from your login credentials.</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Auto-filled from your login credentials.</div>
         </div>
       </div>
 
       {code && (
-        <div className="card" style={{ marginTop: 16, border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Employee Preview</h3>
+        <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Employee Preview</h3>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Name</label>
-              <div>{employeeName || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Name</label>
+              <div className="text-gray-900 dark:text-gray-100">{employeeName || '-'}</div>
             </div>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Branch</label>
-              <div>{branch || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Branch</label>
+              <div className="text-gray-900 dark:text-gray-100">{branch || '-'}</div>
             </div>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Email</label>
-              <div>{user?.email || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Email</label>
+              <div className="text-gray-900 dark:text-gray-100">{user?.email || '-'}</div>
             </div>
           </div>
         </div>
@@ -115,7 +107,7 @@ function StepEmployee({ user, onNext }) {
         <button
           onClick={() => onNext({ empCode: code || '', employeeName: employeeName || '', branch: branch || '' })}
           disabled={!code}
-          style={{ appearance: 'none', border: '1px solid rgba(0,0,0,.08)', borderRadius: 999, padding: '12px 20px', fontWeight: 800, background: 'linear-gradient(180deg,#fff,#f7f7f7)', cursor: 'pointer' }}
+          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -148,32 +140,32 @@ function StepInvestor({ onBack, onFound }) {
 
   return (
     <div>
-      <h3 style={{ marginTop: 0 }}>Step 2 — Investor</h3>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 2 — Investor</h3>
 
       <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         <div className="col" style={{ flex: '1 1 320px' }}>
-          <label style={{ fontSize: 13, color: '#3b3b3c', margin: '8px 0 6px', fontWeight: 600 }}>
+          <label className="text-sm text-gray-600 dark:text-gray-400 my-2 font-semibold">
             Search Investor (ID / Name / Address / PAN / Email)
           </label>
           <input
             value={q}
             onChange={e => { setQ(e.target.value); setSelected(null) }}
             placeholder="Type any part of ID, name, address, PAN, or email"
-            style={{ width: '100%', padding: '14px 16px', borderRadius: 14, border: '1px solid rgba(0,0,0,.08)' }}
+            className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <div className="helper" style={{ fontSize: 12, color: '#6b7280' }}>Results limited to 50 matches.</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Results limited to 50 matches.</div>
         </div>
       </div>
 
-      <div className="table-wrap" style={{ maxHeight: 260, overflow: 'auto', border: '1px solid rgba(0,0,0,.08)', borderRadius: 12 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+      <div className="max-h-65 overflow-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+        <table className="w-full border-collapse text-sm min-w-160">
           <thead>
-            <tr style={{ background: 'rgba(0,0,0,.03)' }}>
-              <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>ID</th>
-              <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>Name</th>
-              <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>PAN</th>
-              <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>Email</th>
-              <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>PIN</th>
+            <tr className="bg-gray-50 dark:bg-gray-700">
+              <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">ID</th>
+              <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">Name</th>
+              <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">PAN</th>
+              <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">Email</th>
+              <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">PIN</th>
             </tr>
           </thead>
           <tbody>
@@ -183,13 +175,13 @@ function StepInvestor({ onBack, onFound }) {
                 <tr
                   key={`${it.investorId}-${i}`}
                   onClick={() => setSelected(it)}
-                  style={{ cursor: 'pointer', background: isSel ? 'rgba(0,0,0,.05)' : 'transparent' }}
+                  className={`cursor-pointer ${isSel ? 'bg-gray-100 dark:bg-gray-600' : 'bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                 >
-                  <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>{it.investorId ?? ''}</td>
-                  <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>{it.investorName ?? ''}</td>
-                  <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>{it.pan ?? ''}</td>
-                  <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>{it.email ?? ''}</td>
-                  <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>{it.pinCode ?? ''}</td>
+                  <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.investorId ?? ''}</td>
+                  <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.investorName ?? ''}</td>
+                  <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.pan ?? ''}</td>
+                  <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.email ?? ''}</td>
+                  <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.pinCode ?? ''}</td>
                 </tr>
               )
             })}
@@ -198,49 +190,49 @@ function StepInvestor({ onBack, onFound }) {
       </div>
 
       {selected && (
-        <div className="card" style={{ marginTop: 16, border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Investor Preview</h3>
+        <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Investor Preview</h3>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>ID</label>
-              <div>{selected.investorId || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">ID</label>
+              <div className="text-gray-900 dark:text-gray-100">{selected.investorId || '-'}</div>
             </div>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Name</label>
-              <div>{selected.investorName || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Name</label>
+              <div className="text-gray-900 dark:text-gray-100">{selected.investorName || '-'}</div>
             </div>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>PAN</label>
-              <div>{selected.pan || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">PAN</label>
+              <div className="text-gray-900 dark:text-gray-100">{selected.pan || '-'}</div>
             </div>
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Email</label>
-              <div>{selected.email || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Email</label>
+              <div className="text-gray-900 dark:text-gray-100">{selected.email || '-'}</div>
             </div>
             <div className="col" style={{ flex: '1 1 320px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>PIN</label>
-              <div>{selected.pinCode || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">PIN</label>
+              <div className="text-gray-900 dark:text-gray-100">{selected.pinCode || '-'}</div>
             </div>
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex: '1 1 640px' }}>
-              <label style={{ fontSize: 13, color: '#3b3b3c', fontWeight: 600 }}>Address</label>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{selected.investorAddress || '-'}</div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Address</label>
+              <div className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{selected.investorAddress || '-'}</div>
             </div>
           </div>
         </div>
       )}
 
       <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={onBack} style={{ appearance: 'none', border: '1px solid rgba(0,0,0,.08)', borderRadius: 999, padding: '12px 20px', background: 'rgba(255,255,255,.85)', fontWeight: 800 }}>
+        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors">
           Back
         </button>
         <button
           onClick={() => onFound({ investorId: selected ? selected.investorId : '', info: selected || null })}
           disabled={!selected}
-          style={{ appearance: 'none', border: '1px solid rgba(0,0,0,.08)', borderRadius: 999, padding: '12px 20px', fontWeight: 800, background: 'linear-gradient(180deg,#fff,#f7f7f7)', cursor: 'pointer' }}
+          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -312,17 +304,17 @@ function StepProduct({ onBack, onNext }) {
     <button
       type="button"
       onClick={() => setProduct(val)}
-      style={{
-        appearance: 'none', border: '1px solid var(--border, rgba(0,0,0,.08))',
-        borderRadius: 999, padding: '10px 16px', fontWeight: 800,
-        background: product === val ? '#fff' : 'rgba(255,255,255,.85)', cursor: 'pointer'
-      }}
+      className={`appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 font-bold cursor-pointer transition-colors ${
+        product === val 
+          ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100' 
+          : 'bg-white/85 dark:bg-gray-800/85 text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800'
+      }`}
     >{label}</button>
   )
 
   return (
     <div>
-      <h3 style={{ marginTop: 0 }}>Step 3 — Select Product & Fill Details</h3>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 3 — Select Product & Fill Details</h3>
       <div className="actions" style={{ marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {tile('MF', 'Mutual Fund')}
         {tile('FD', 'Fixed Deposit')}
@@ -331,11 +323,11 @@ function StepProduct({ onBack, onNext }) {
       </div>
 
       {product === 'MF' && (
-        <div className="card" style={{ border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Mutual Fund</h3>
+        <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Mutual Fund</h3>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Company (AMC)</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Company (AMC)</label>
               <SearchableSelect
                 options={mfIssuerOptions}
                 value={mfIssuer}
@@ -344,7 +336,7 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Scheme</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Scheme</label>
               <SearchableSelect
                 options={mfSchemeOptions}
                 value={mfScheme}
@@ -354,25 +346,25 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Investment Amount</label>
-              <input type="number" inputMode="decimal" value={mfInvestmentAmount} onChange={e=>setMfInvestmentAmount(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Investment Amount</label>
+              <input type="number" inputMode="decimal" value={mfInvestmentAmount} onChange={e=>setMfInvestmentAmount(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Folio Number</label>
-              <input value={mfFolioPolicyNo} onChange={e=>setMfFolioPolicyNo(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Folio Number</label>
+              <input value={mfFolioPolicyNo} onChange={e=>setMfFolioPolicyNo(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
         </div>
       )}
 
       {product === 'FD' && (
-        <div className="card" style={{ border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Fixed Deposit</h3>
+        <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Fixed Deposit</h3>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Company</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Company</label>
               <SearchableSelect
                 options={nonMfIssuerOptions}
                 value={fdIssuer}
@@ -381,7 +373,7 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Scheme</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Scheme</label>
               <SearchableSelect
                 options={fdSchemeOptions}
                 value={fdScheme}
@@ -391,42 +383,42 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Investment Amount</label>
-              <input type="number" inputMode="decimal" value={fdInvestmentAmount} onChange={e=>setFdInvestmentAmount(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Investment Amount</label>
+              <input type="number" inputMode="decimal" value={fdInvestmentAmount} onChange={e=>setFdInvestmentAmount(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Application Number</label>
-              <input value={fdApplicationNo} onChange={e=>setFdApplicationNo(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Application Number</label>
+              <input value={fdApplicationNo} onChange={e=>setFdApplicationNo(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Client Category</label>
-              <select value={fdClientType} onChange={e=>setFdClientType(e.target.value)}>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Client Category</label>
+              <select value={fdClientType} onChange={e=>setFdClientType(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 <option>Individual</option>
                 <option>Sr. Citizen</option>
               </select>
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Period of Deposit (Y/M)</label>
-              <input value={fdDepositPeriod} onChange={e=>setFdDepositPeriod(e.target.value)} placeholder="e.g., 1Y 6M" />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Period of Deposit (Y/M)</label>
+              <input value={fdDepositPeriod} onChange={e=>setFdDepositPeriod(e.target.value)} placeholder="e.g., 1Y 6M" className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Interest Rate (%)</label>
-              <input type="text" inputMode="decimal" value={fdRoi} onChange={e=>setFdRoi(e.target.value)} placeholder="e.g., 8.25" />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Interest Rate (%)</label>
+              <input type="text" inputMode="decimal" value={fdRoi} onChange={e=>setFdRoi(e.target.value)} placeholder="e.g., 8.25" className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
         </div>
       )}
 
       {product === 'INS' && (
-        <div className="card" style={{ border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Insurance</h3>
+        <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Insurance</h3>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Company</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Company</label>
               <SearchableSelect
                 options={insIssuerOptions}
                 value={insIssuer}
@@ -435,7 +427,7 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Sub-section / Category</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Sub-section / Category</label>
               <SearchableSelect
                 options={insCategoryOptions}
                 value={insCategory}
@@ -445,7 +437,7 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Product</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Product</label>
               <SearchableSelect
                 options={insProductOptions}
                 value={insProduct}
@@ -457,23 +449,23 @@ function StepProduct({ onBack, onNext }) {
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Premium Amount</label>
-              <input type="number" inputMode="decimal" value={insPremiumAmount} onChange={e=>setInsPremiumAmount(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Premium Amount</label>
+              <input type="number" inputMode="decimal" value={insPremiumAmount} onChange={e=>setInsPremiumAmount(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Policy No</label>
-              <input value={insPolicyNo} onChange={e=>setInsPolicyNo(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Policy No</label>
+              <input value={insPolicyNo} onChange={e=>setInsPolicyNo(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
         </div>
       )}
 
       {product === 'BOND' && (
-        <div className="card" style={{ border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Bonds</h3>
+        <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Bonds</h3>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Company</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Company</label>
               <SearchableSelect
                 options={nonMfIssuerOptions}
                 value={bondIssuer}
@@ -482,7 +474,7 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Issuer Scheme</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Issuer Scheme</label>
               <SearchableSelect
                 options={bondSchemeOptions}
                 value={bondScheme}
@@ -492,21 +484,21 @@ function StepProduct({ onBack, onNext }) {
               />
             </div>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Investment Amount</label>
-              <input type="number" inputMode="decimal" value={bondInvestmentAmount} onChange={e=>setBondInvestmentAmount(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Investment Amount</label>
+              <input type="number" inputMode="decimal" value={bondInvestmentAmount} onChange={e=>setBondInvestmentAmount(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
           <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             <div className="col" style={{ flex:'1 1 320px' }}>
-              <label>Application Number</label>
-              <input value={bondApplicationNo} onChange={e=>setBondApplicationNo(e.target.value)} />
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Application Number</label>
+              <input value={bondApplicationNo} onChange={e=>setBondApplicationNo(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
           </div>
         </div>
       )}
 
       <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={onBack} style={{ appearance: 'none', border: '1px solid rgba(0,0,0,.08)', borderRadius: 999, padding: '12px 20px', background: 'rgba(255,255,255,.85)', fontWeight: 800 }}>
+        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors">
           Back
         </button>
         <button
@@ -574,7 +566,7 @@ function StepProduct({ onBack, onNext }) {
             }
             onNext(product, normalized)
           }}
-          style={{ appearance: 'none', border: '1px solid rgba(0,0,0,.08)', borderRadius: 999, padding: '12px 20px', fontWeight: 800, background: 'linear-gradient(180deg,#fff,#f7f7f7)', cursor: 'pointer' }}
+          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow"
         >
           Continue
         </button>
@@ -586,12 +578,12 @@ function StepProduct({ onBack, onNext }) {
 function StepFinal({ data, onBack, onSave, isSaving, saveError }) {
   return (
     <div>
-      <h3 style={{ marginTop: 0 }}>Step 4 — Preview & Finish</h3>
-      <div className="card" style={{ border: '1px solid rgba(0,0,0,.08)', borderRadius: 16, background: '#fff', padding: 16 }}>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Preview & Finish</h3>
+      <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
         <PrintReceipt data={data} />
       </div>
       {saveError && (
-        <div style={{ marginTop: 16, padding: 12, background: '#fee', border: '1px solid #fcc', borderRadius: 8, color: '#c33' }}>
+        <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           Error: {saveError}
         </div>
       )}
@@ -599,14 +591,14 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError }) {
         <button 
           onClick={onBack} 
           disabled={isSaving}
-          style={{ appearance:'none', border:'1px solid rgba(0,0,0,.08)', borderRadius:999, padding:'12px 20px', background:'rgba(255,255,255,.85)', fontWeight:800, opacity: isSaving ? 0.6 : 1 }}
+          className={`appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Back
         </button>
         <button 
           onClick={onSave} 
           disabled={isSaving}
-          style={{ appearance:'none', border:'1px solid rgba(0,0,0,.08)', borderRadius:999, padding:'12px 20px', fontWeight:800, background:'linear-gradient(180deg,#fff,#f7f7f7)', opacity: isSaving ? 0.6 : 1 }}
+          className={`appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 hover:shadow-md transition-shadow ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {isSaving ? 'Saving...' : 'Save to Server'}
         </button>
