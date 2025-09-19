@@ -110,25 +110,6 @@ export default function LoginPage(){
               )}
             </button>
           </form>
-          
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-gray-50 dark:bg-dark-700 rounded-lg border border-gray-200 dark:border-dark-600">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-dark-200 mb-3">Demo Credentials:</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-dark-400">Admin:</span>
-                <div className="text-gray-900 dark:text-white font-mono">
-                  <span className="text-red-600 dark:text-red-400">ADMIN</span> / admin123
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-dark-400">Employee:</span>
-                <div className="text-gray-900 dark:text-white font-mono">
-                  <span className="text-red-600 dark:text-red-400">ECS497</span> / pass123
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
         
         {/* Footer */}

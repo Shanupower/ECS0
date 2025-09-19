@@ -41,6 +41,9 @@ export const api={
   restoreReceipt:(t,id)=>req(`/api/receipts/${id}/restore`,{method:'POST',token:t}),
   updateReceiptStatus:(t,id,status)=>req(`/api/receipts/${id}/status`,{method:'PATCH',token:t,json:{status}}),
   
+  // Customer/Investor endpoints
+  createCustomer:(t,customerData)=>req('/api/customers',{method:'POST',token:t,json:customerData}),
+  
   // Stats endpoints
   statsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
   statsByCategory:(t,q)=>req('/api/stats/by-category',{token:t,query:q}),

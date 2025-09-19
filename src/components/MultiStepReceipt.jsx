@@ -3,6 +3,7 @@ import PrintReceipt from './PrintReceipt.jsx'
 import SearchableSelect from './SearchableSelect.jsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { FiPlus, FiX, FiUpload, FiFile, FiTrash2 } from 'react-icons/fi'
 
 import investorsData from '../data/investors.json'
 import empData from '../data/empdata.json'
@@ -119,13 +120,91 @@ function StepEmployee({ user, onNext }) {
 function StepInvestor({ onBack, onFound }) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [newCustomer, setNewCustomer] = useState({
+    investorName: '',
+    investorAddress: '',
+    pinCode: '',
+    pan: '',
+    email: ''
+  })
+  const [isCreating, setIsCreating] = useState(false)
+
+  const handleCreateCustomer = () => {
+    if (!newCustomer.investorName.trim()) {
+      alert('Customer name is required')
+      return
+    }
+    
+    setIsCreating(true)
+    try {
+      // Check for duplicates
+      const trimmedName = newCustomer.investorName.trim().toLowerCase()
+      const trimmedPan = newCustomer.pan.trim().toLowerCase()
+      const trimmedEmail = newCustomer.email.trim().toLowerCase()
+      
+      const duplicateCheck = investorsData.find(inv => {
+        const existingName = (inv.investorName || '').toLowerCase()
+        const existingPan = (inv.pan || '').toLowerCase()
+        const existingEmail = (inv.email || '').toLowerCase()
+        
+        return (trimmedName && existingName === trimmedName) ||
+               (trimmedPan && existingPan === trimmedPan) ||
+               (trimmedEmail && existingEmail === trimmedEmail)
+      })
+      
+      if (duplicateCheck) {
+        alert('Customer already exists with the same name, PAN, or email!')
+        setIsCreating(false)
+        return
+      }
+      
+      // Generate a new investor ID (simple increment from max existing ID)
+      const maxId = Math.max(...investorsData.map(inv => inv.investorId || 0))
+      const newInvestorId = maxId + 1
+      
+      const customerData = {
+        investorId: newInvestorId,
+        investorName: newCustomer.investorName.trim(),
+        investorAddress: newCustomer.investorAddress.trim(),
+        pinCode: parseInt(newCustomer.pinCode) || 0,
+        pan: newCustomer.pan.trim(),
+        email: newCustomer.email.trim()
+      }
+      
+      // Save to localStorage (since we don't have backend)
+      const existingCustomers = JSON.parse(localStorage.getItem('local_customers') || '[]')
+      existingCustomers.push(customerData)
+      localStorage.setItem('local_customers', JSON.stringify(existingCustomers))
+      
+      // Select the newly created customer
+      setSelected(customerData)
+      setShowCreateForm(false)
+      setNewCustomer({
+        investorName: '',
+        investorAddress: '',
+        pinCode: '',
+        pan: '',
+        email: ''
+      })
+      
+      alert('Customer created successfully!')
+    } catch (err) {
+      alert('Failed to create customer: ' + err.message)
+    } finally {
+      setIsCreating(false)
+    }
+  }
 
   const results = useMemo(() => {
     const data = Array.isArray(investorsData) ? investorsData : []
+    const localCustomers = JSON.parse(localStorage.getItem('local_customers') || '[]')
+    const allData = [...data, ...localCustomers]
+    
     const query = String(q || '').trim().toLowerCase()
-    if (!query) return data.slice(0, 25)
+    if (!query) return allData.slice(0, 25)
     const isNumeric = /^\d+$/.test(query)
-    return data
+    return allData
       .filter(it => {
         const id = String(it.investorId ?? '').toLowerCase()
         const name = String(it.investorName ?? '').toLowerCase()
@@ -156,6 +235,96 @@ function StepInvestor({ onBack, onFound }) {
           <div className="text-xs text-gray-500 dark:text-gray-400">Results limited to 50 matches.</div>
         </div>
       </div>
+
+      {/* Create New Customer Button */}
+      <div className="mt-4 flex justify-end">
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-red-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-red-300 bg-blue-50 dark:bg-red-900/40 hover:bg-blue-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
+        >
+          <FiPlus className="w-4 h-4 mr-2" />
+          {showCreateForm ? 'Cancel' : 'Create New Customer'}
+        </button>
+      </div>
+
+      {/* Create New Customer Form */}
+      {showCreateForm && (
+        <div className="mt-4 border border-blue-200 dark:border-red-700 rounded-2xl bg-blue-50 dark:bg-red-900/20 p-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Create New Customer</h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Customer Name *</label>
+                <input
+                  type="text"
+                  value={newCustomer.investorName}
+                  onChange={e => setNewCustomer(prev => ({ ...prev, investorName: e.target.value }))}
+                  placeholder="Enter customer name"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">PAN Number</label>
+                <input
+                  type="text"
+                  value={newCustomer.pan}
+                  onChange={e => setNewCustomer(prev => ({ ...prev, pan: e.target.value }))}
+                  placeholder="Enter PAN number"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={newCustomer.email}
+                  onChange={e => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="Enter email address"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">PIN Code</label>
+                <input
+                  type="number"
+                  value={newCustomer.pinCode}
+                  onChange={e => setNewCustomer(prev => ({ ...prev, pinCode: e.target.value }))}
+                  placeholder="Enter PIN code"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Address</label>
+              <textarea
+                value={newCustomer.investorAddress}
+                onChange={e => setNewCustomer(prev => ({ ...prev, investorAddress: e.target.value }))}
+                placeholder="Enter complete address"
+                rows={3}
+                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleCreateCustomer}
+                disabled={isCreating || !newCustomer.investorName.trim()}
+                className="inline-flex items-center px-4 py-2 border border-green-300 dark:border-green-600 text-sm font-semibold rounded-lg text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? 'Creating...' : 'Create Customer'}
+              </button>
+              <button
+                onClick={() => setShowCreateForm(false)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
+              >
+                <FiX className="w-4 h-4 mr-2" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-h-65 overflow-auto border border-gray-200 dark:border-gray-700 rounded-xl">
         <table className="w-full border-collapse text-sm min-w-160">
@@ -575,13 +744,88 @@ function StepProduct({ onBack, onNext }) {
   )
 }
 
-function StepFinal({ data, onBack, onSave, isSaving, saveError }) {
+function StepFinal({ data, onBack, onSave, isSaving, saveError, supportingDocument, setSupportingDocument }) {
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0]
+    if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB')
+        return
+      }
+      
+      // Check file type (images and PDFs)
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please upload an image (JPEG, PNG, GIF) or PDF file')
+        return
+      }
+      
+      setSupportingDocument(file)
+    }
+  }
+
+  const removeDocument = () => {
+    setSupportingDocument(null)
+  }
+
   return (
     <div>
       <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Preview & Finish</h3>
+      
+      {/* Supporting Document Section */}
+      <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
+        <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-3">Supporting Document</h4>
+        
+        {!supportingDocument ? (
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-blue-400 dark:hover:border-red-400 transition-colors">
+            <FiUpload className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              Upload photo proof or supporting document
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mb-4">
+              Supported formats: JPEG, PNG, GIF, PDF (Max 5MB)
+            </p>
+            <label className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-red-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-red-300 bg-blue-50 dark:bg-red-900/40 hover:bg-blue-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer">
+              <FiUpload className="w-4 h-4 mr-2" />
+              Choose File
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="flex items-center">
+              <FiFile className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3" />
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {supportingDocument.name}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {(supportingDocument.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={removeDocument}
+              className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200"
+            >
+              <FiTrash2 className="w-3 h-3 mr-1" />
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Receipt Preview */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
         <PrintReceipt data={data} />
       </div>
+      
       {saveError && (
         <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           Error: {saveError}
@@ -613,6 +857,7 @@ export default function MultiStepReceipt() {
   const [empSeed, setEmpSeed] = useState({ empCode: '', employeeName: '', branch: '' })
   const [investorSeed, setInvestorSeed] = useState({ investorId: '', investorInfo: null })
   const [finalData, setFinalData] = useState(null)
+  const [supportingDocument, setSupportingDocument] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
@@ -711,6 +956,8 @@ export default function MultiStepReceipt() {
           onSave={saveToServer}
           isSaving={isSaving}
           saveError={saveError}
+          supportingDocument={supportingDocument}
+          setSupportingDocument={setSupportingDocument}
         />
       )}
     </div>
