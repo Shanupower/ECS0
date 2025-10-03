@@ -44,9 +44,13 @@ export default function TransactionsPage() {
       const query = { ...filters, page: pagination.page }
       let result
       
+      // Handle branch users - they should use branch receipts endpoint
+      if (user?.role === 'branch' && user?.branch_code) {
+        result = await api.getBranchReceipts(token, user.branch_code, query)
+      }
       // Use employee-specific endpoint if filtering by employee code and user is admin
       // or if user is employee (show only their own receipts)
-      if (filters.emp_code && isAdmin) {
+      else if (filters.emp_code && isAdmin) {
         result = await api.getReceiptsByEmpCode(token, filters.emp_code, query)
       } else if (!isAdmin && user?.emp_code) {
         // For employees, always use their own emp_code
@@ -150,33 +154,33 @@ export default function TransactionsPage() {
   const isAdmin = user?.role === 'admin'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center">
-          <FiClock className="w-6 h-6 text-red-600 dark:text-red-400 mr-3" />
+          <FiClock className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400 mr-2 sm:mr-3" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Transaction History</h1>
-            <p className="text-gray-600 dark:text-dark-300 mt-1">View and manage all receipts</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Transaction History</h1>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 mt-1">View and manage all receipts</p>
           </div>
         </div>
         <button
           onClick={loadReceipts}
           disabled={loading}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
+          className="inline-flex items-center px-3 py-2 sm:px-4 border border-gray-300 dark:border-dark-600 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
         >
-          <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          <FiRefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
       
       {/* Filters */}
       <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-        <div className="flex items-center mb-4">
-          <FiFilter className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
+        <div className="flex items-center mb-3 sm:mb-4">
+          <FiFilter className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 mr-2" />
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">From Date</label>
             <div className="relative">
@@ -268,112 +272,147 @@ export default function TransactionsPage() {
 
       {!loading && !error && (
         <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="block sm:hidden">
+            <div className="divide-y divide-gray-200 dark:divide-dark-700">
+              {receipts.map((receipt) => (
+                <div key={receipt._key || receipt.id || receipt.receipt_no} className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {receipt.receipt_no || receipt.receiptNo}
+                        </h4>
+                        {getStatusBadge(receipt)}
+                      </div>
+                      <div className="space-y-1 text-xs text-gray-600 dark:text-dark-300">
+                        <div><span className="font-medium">Date:</span> {formatDate(receipt.date)}</div>
+                        <div><span className="font-medium">Investor:</span> {receipt.investor_name || receipt.investorName}</div>
+                        <div><span className="font-medium">Product:</span> {receipt.scheme_name || receipt.schemeName}</div>
+                        <div><span className="font-medium">Amount:</span> {formatCurrency(receipt.investment_amount || receipt.investmentAmount)}</div>
+                        <div><span className="font-medium">Employee:</span> {receipt.employee_name || receipt.employeeName}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col space-y-2 ml-4">
+                      <button
+                        onClick={() => window.open(`/receipts/${receipt._key || receipt.id}`, '_blank')}
+                        className="inline-flex items-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-xs font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60"
+                      >
+                        <FiEye className="w-4 h-4 mr-1.5" />
+                        View
+                      </button>
+                      {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
+                        <button
+                          onClick={() => handleDelete(receipt._key || receipt.id)}
+                          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60"
+                        >
+                          <FiTrash2 className="w-4 h-4 mr-1.5" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden sm:block overflow-x-auto max-h-[60vh] overflow-y-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-dark-700">
+              <thead className="bg-gray-50 dark:bg-dark-700 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Receipt No</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Date</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Investor</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Product</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Amount</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Employee</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Status</th>
-                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Receipt No</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Date</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Investor</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Product</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Amount</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Employee</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-dark-700">
                 {receipts.map((receipt) => (
-                  <tr key={receipt.id || receipt.receipt_no} className="hover:bg-gray-50 dark:hover:bg-dark-700">
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                  <tr key={receipt._key || receipt.id || receipt.receipt_no} className="hover:bg-gray-50 dark:hover:bg-dark-700">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm font-medium text-gray-900 dark:text-white truncate">
                       {receipt.receipt_no || receipt.receiptNo}
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-dark-400">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-dark-400">
                       {formatDate(receipt.date)}
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div className="flex items-center">
-                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mr-3">
-                          <FiUser className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <div className="w-6 h-6 lg:w-8 lg:h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mr-2 lg:mr-3">
+                          <FiUser className="w-3 h-3 lg:w-4 lg:h-4 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{receipt.investor_name || receipt.investorName}</div>
-                          <div className="text-sm text-gray-500 dark:text-dark-400">{receipt.investor_id || receipt.investorId}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.investor_name || receipt.investorName}</div>
+                          <div className="text-xs text-gray-500 dark:text-dark-400">{receipt.investor_id || receipt.investorId}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{receipt.scheme_name || receipt.schemeName}</div>
-                        <div className="text-sm text-gray-500 dark:text-dark-400">{receipt.product_category || receipt.issuer_category || receipt.issuerCategory}</div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.scheme_name || receipt.schemeName}</div>
+                        <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.product_category || receipt.issuer_category || receipt.issuerCategory}</div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm font-medium text-gray-900 dark:text-white">
                       {formatCurrency(receipt.investment_amount || receipt.investmentAmount)}
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div className="flex items-center">
-                        <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-3">
-                          <FiUser className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        <div className="w-6 h-6 lg:w-8 lg:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-2 lg:mr-3">
+                          <FiUser className="w-3 h-3 lg:w-4 lg:h-4 text-red-600 dark:text-red-400" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{receipt.employee_name || receipt.employeeName}</div>
-                          <div className="text-sm text-gray-500 dark:text-dark-400">{receipt.emp_code || receipt.empCode}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.employee_name || receipt.employeeName}</div>
+                          <div className="text-xs text-gray-500 dark:text-dark-400">{receipt.emp_code || receipt.empCode}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
                       {getStatusBadge(receipt)}
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        {/* Debug: Log the conditions */}
-                        {console.log('Button Debug:', {
-                          isAdmin,
-                          userRole: user?.role,
-                          userEmpCode: user?.emp_code,
-                          receiptEmpCode: receipt.emp_code || receipt.empCode,
-                          receiptId: receipt.id,
-                          canView: isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code
-                        })}
-                        {/* Always show View button for debugging - will fix conditions later */}
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm">
+                      <div className="flex flex-col lg:flex-row gap-1 lg:gap-2">
+                        {/* View button */}
                         <button
-                          onClick={() => window.open(`/receipts/${receipt.id}`, '_blank')}
-                          className="inline-flex items-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-xs font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
+                          onClick={() => window.open(`/receipts/${receipt._key || receipt.id}`, '_blank')}
+                          className="inline-flex items-center px-2 py-1 lg:px-3 lg:py-2 border border-blue-300 dark:border-blue-600 text-xs font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60"
                         >
-                          <FiEye className="w-4 h-4 mr-1.5" />
-                          View
+                          <FiEye className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-1.5" />
+                          <span className="hidden lg:inline">View</span>
                         </button>
-                        {/* Status change button for admin - only show for Pending transactions */}
+                        {/* Status change button for admin */}
                         {isAdmin && !receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
                           <button
-                            onClick={() => handleStatusChange(receipt.id, 'Completed')}
-                            className="inline-flex items-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-xs font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
+                            onClick={() => handleStatusChange(receipt._key || receipt.id, 'Completed')}
+                            className="inline-flex items-center px-2 py-1 lg:px-3 lg:py-2 border border-green-300 dark:border-green-600 text-xs font-semibold rounded-lg text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60"
                           >
-                            <FiCheck className="w-4 h-4 mr-1.5" />
-                            Mark Complete
+                            <FiCheck className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-1.5" />
+                            <span className="hidden lg:inline">Complete</span>
                           </button>
                         )}
-                        {/* Always show Delete/Restore buttons for debugging - will fix conditions later */}
-                        <>
-                          {receipt.deleted_at ? (
-                            <button
-                              onClick={() => handleRestore(receipt.id)}
-                              className="inline-flex items-center px-3 py-2 border border-green-300 dark:border-green-600 text-xs font-semibold rounded-lg text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
-                            >
-                              <FiRotateCw className="w-4 h-4 mr-1.5" />
-                              Restore
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleDelete(receipt.id)}
-                              className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
-                            >
-                              <FiTrash2 className="w-4 h-4 mr-1.5" />
-                              Delete
-                            </button>
-                          )}
-                        </>
+                        {/* Delete/Restore buttons */}
+                        {receipt.deleted_at ? (
+                          <button
+                            onClick={() => handleRestore(receipt._key || receipt.id)}
+                            className="inline-flex items-center px-2 py-1 lg:px-3 lg:py-2 border border-green-300 dark:border-green-600 text-xs font-semibold rounded-lg text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60"
+                          >
+                            <FiRotateCw className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-1.5" />
+                            <span className="hidden lg:inline">Restore</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDelete(receipt._key || receipt.id)}
+                            className="inline-flex items-center px-2 py-1 lg:px-3 lg:py-2 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60"
+                          >
+                            <FiTrash2 className="w-3 h-3 lg:w-4 lg:h-4 mr-1 lg:mr-1.5" />
+                            <span className="hidden lg:inline">Delete</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -391,10 +430,10 @@ export default function TransactionsPage() {
           
           {/* Pagination */}
           {pagination.hasMore && (
-            <div className="px-6 py-4 border-t border-gray-200">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-dark-700">
               <button
                 onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                className="w-full py-3 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
+                className="w-full py-2 sm:py-3 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
               >
                 Load More
               </button>

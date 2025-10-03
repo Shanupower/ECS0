@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Logo from './Logo'
 import DarkModeToggle from './DarkModeToggle'
+import ReportIssueModal from './ReportIssueModal'
 import { 
   FiHome, 
   FiFileText, 
@@ -13,7 +14,11 @@ import {
   FiShield,
   FiChevronDown,
   FiMenu,
-  FiX
+  FiX,
+  FiMapPin,
+  FiBarChart,
+  FiUserCheck,
+  FiAlertTriangle
 } from 'react-icons/fi'
 
 export default function Layout(){
@@ -21,6 +26,7 @@ export default function Layout(){
   const navigate=useNavigate()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isReportIssueModalOpen, setIsReportIssueModalOpen] = useState(false)
   const dropdownRef = useRef(null)
   
   const handleLogout=()=>{logout();navigate('/login')}
@@ -40,12 +46,25 @@ export default function Layout(){
   }, [])
   
   const isAdmin = user?.role === 'admin'
+  const isBranchManager = user?.role === 'manager'
   
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: FiHome },
     { to: "/receipts", label: "Create Receipt", icon: FiFileText },
     { to: "/transactions", label: "Transaction History", icon: FiClock },
-    ...(isAdmin ? [{ to: "/users", label: "User Management", icon: FiUsers }] : [])
+    ...(isAdmin ? [
+      { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
+      { to: "/admin/branches", label: "Branch Management", icon: FiShield },
+      { to: "/users", label: "User Management", icon: FiUsers },
+      { to: "/customers", label: "Customer Management", icon: FiUserCheck }
+    ] : []),
+    ...(isBranchManager ? [
+      { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
+      { to: "/customers", label: "Customer Management", icon: FiUserCheck }
+    ] : []),
+    ...(user?.role === 'employee' ? [
+      { to: "/customers", label: "Customer Management", icon: FiUserCheck }
+    ] : [])
   ]
   
   return (
@@ -131,6 +150,16 @@ export default function Layout(){
             
             {/* Right side controls */}
             <div className="flex items-center space-x-4">
+              {/* Report Issue Button */}
+              <button
+                onClick={() => setIsReportIssueModalOpen(true)}
+                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors duration-200"
+                title="Report an Issue"
+              >
+                <FiAlertTriangle size={16} />
+                <span className="hidden sm:inline">Report Issue</span>
+              </button>
+              
               {/* Dark Mode Toggle */}
               <DarkModeToggle className="hidden sm:block" />
               
@@ -192,6 +221,12 @@ export default function Layout(){
           </div>
         </main>
       </div>
+      
+      {/* Report Issue Modal */}
+      <ReportIssueModal 
+        isOpen={isReportIssueModalOpen} 
+        onClose={() => setIsReportIssueModalOpen(false)} 
+      />
     </div>
   )
 }

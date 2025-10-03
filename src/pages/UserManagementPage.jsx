@@ -144,31 +144,32 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center">
-          <FiUsers className="w-6 h-6 text-red-600 mr-3" />
+          <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 mr-2 sm:mr-3" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">User Management</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">Manage system users and permissions</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">User Management</h1>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">Manage system users and permissions</p>
           </div>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
           <button
             onClick={loadUsers}
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+            className="inline-flex items-center px-3 py-2 sm:px-4 border border-gray-300 dark:border-gray-600 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
           >
-            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <FiRefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            className="inline-flex items-center px-3 py-2 sm:px-4 border border-transparent text-xs sm:text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
           >
-            <FiPlus className="w-4 h-4 mr-2" />
-            Create User
+            <FiPlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Create User</span>
+            <span className="sm:hidden">Create</span>
           </button>
         </div>
       </div>
@@ -322,43 +323,96 @@ export default function UserManagementPage() {
       {/* Users Table */}
       {!loading && !error && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="block sm:hidden">
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {users.map((user) => (
+                <div key={user.id} className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                          <FiUser className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        </div>
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {user.name}
+                        </h4>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          user.role === 'admin' 
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' 
+                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                        }`}>
+                          {user.role === 'admin' && <FiShield className="w-3 h-3 mr-1" />}
+                          {user.role}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                        <div><span className="font-medium">Code:</span> {user.emp_code}</div>
+                        <div><span className="font-medium">Email:</span> {user.email}</div>
+                        <div><span className="font-medium">Branch:</span> {user.branch}</div>
+                        <div><span className="font-medium">Created:</span> {formatDate(user.created_at)}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col space-y-2 ml-4">
+                      <button
+                        onClick={() => startEdit(user)}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                      >
+                        <FiEdit className="w-4 h-4 mr-1.5" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
+                      >
+                        <FiTrash2 className="w-4 h-4 mr-1.5" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Employee Code</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Branch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Employee Code</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Branch</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {users.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div className="flex items-center">
-                        <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-3">
-                          <FiUser className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        <div className="w-6 h-6 lg:w-8 lg:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-2 lg:mr-3">
+                          <FiUser className="w-3 h-3 lg:w-4 lg:h-4 text-red-600 dark:text-red-400" />
                         </div>
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {user.emp_code}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-900 dark:text-gray-100 truncate">
                       {user.name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400 truncate">
                       {user.email}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400 truncate">
                       {user.branch}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         user.role === 'admin' 
                           ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' 
                           : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
@@ -367,17 +421,17 @@ export default function UserManagementPage() {
                         {user.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400">
                       {formatDate(user.created_at)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex space-x-2">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm">
+                      <div className="flex flex-col lg:flex-row gap-1 lg:gap-2">
                         <button
                           onClick={() => startEdit(user)}
-                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50"
                         >
                           <FiEdit className="w-3 h-3 mr-1" />
-                          Edit
+                          <span className="hidden lg:inline">Edit</span>
                         </button>
                         <button
                           onClick={() => {
@@ -386,18 +440,18 @@ export default function UserManagementPage() {
                               handleChangePassword(user.id, newPassword)
                             }
                           }}
-                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50"
                         >
                           <FiKey className="w-3 h-3 mr-1" />
-                          Password
+                          <span className="hidden lg:inline">Password</span>
                         </button>
                         {user.id !== user.id && ( // Don't allow deleting self
                           <button
                             onClick={() => handleDeleteUser(user.id)}
-                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
                           >
                             <FiTrash2 className="w-3 h-3 mr-1" />
-                            Delete
+                            <span className="hidden lg:inline">Delete</span>
                           </button>
                         )}
                       </div>

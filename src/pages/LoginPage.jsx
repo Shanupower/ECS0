@@ -3,14 +3,15 @@ import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo'
 import DarkModeToggle from '../components/DarkModeToggle'
-import { FiUser, FiLock, FiLogIn, FiAlertCircle } from 'react-icons/fi'
+import { FiUser, FiLock, FiLogIn, FiAlertCircle, FiMapPin, FiShield } from 'react-icons/fi'
 
 export default function LoginPage(){
-  const { login }=useAuth()
+  const { login, branchLogin }=useAuth()
   const [emp,setEmp]=useState('')
   const [pass,setPass]=useState('')
   const [err,setErr]=useState('')
   const [loading,setLoading]=useState(false)
+  const [loginType, setLoginType] = useState('employee') // 'employee' or 'branch'
   const navigate=useNavigate()
   
   const submit=async e=>{
@@ -19,8 +20,15 @@ export default function LoginPage(){
     setLoading(true)
     
     try{
-      await login(emp,pass)
-      navigate('/dashboard')
+      if (loginType === 'branch') {
+        // Branch login - navigate directly to branch dashboard
+        await branchLogin(emp, pass)
+        navigate('/branches')
+      } else {
+        // Employee login - navigate to main dashboard
+        await login(emp, pass)
+        navigate('/dashboard')
+      }
     }catch(ex){
       setErr(ex.message || 'Login failed')
     }finally{
@@ -47,23 +55,62 @@ export default function LoginPage(){
         
         {/* Login Form */}
         <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6 sm:p-8 border border-gray-200 dark:border-dark-700">
+          {/* Login Type Selection */}
+          <div className="mb-6">
+            <div className="flex bg-gray-100 dark:bg-dark-700 rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => setLoginType('employee')}
+                className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  loginType === 'employee'
+                    ? 'bg-white dark:bg-dark-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200'
+                }`}
+              >
+                <FiUser className="w-4 h-4 mr-2" />
+                Employee Login
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginType('branch')}
+                className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  loginType === 'branch'
+                    ? 'bg-white dark:bg-dark-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200'
+                }`}
+              >
+                <FiMapPin className="w-4 h-4 mr-2" />
+                Branch Login
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={submit} className="space-y-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200 mb-2">
-                Employee Code
+                {loginType === 'branch' ? 'Branch Name/Code' : 'Employee Code'}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiUser className="h-5 w-5 text-gray-400 dark:text-dark-400" />
+                  {loginType === 'branch' ? (
+                    <FiMapPin className="h-5 w-5 text-gray-400 dark:text-dark-400" />
+                  ) : (
+                    <FiUser className="h-5 w-5 text-gray-400 dark:text-dark-400" />
+                  )}
                 </div>
                 <input 
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200" 
                   value={emp} 
                   onChange={e=>setEmp(e.target.value)}
-                  placeholder="e.g., ADMIN or ECS497"
+                  placeholder={loginType === 'branch' ? 'e.g., MEDAK or medak' : 'e.g., ADMIN or ECS497'}
                   required
                 />
               </div>
+              {loginType === 'branch' && (
+                <p className="text-xs text-gray-500 dark:text-dark-400 mt-1">
+                  Enter branch name (case-insensitive) or branch code
+                </p>
+              )}
             </div>
             
             <div>
@@ -104,12 +151,31 @@ export default function LoginPage(){
                 </>
               ) : (
                 <>
-                  <FiLogIn className="h-5 w-5 mr-2" />
-                  Sign In
+                  {loginType === 'branch' ? (
+                    <FiMapPin className="h-5 w-5 mr-2" />
+                  ) : (
+                    <FiLogIn className="h-5 w-5 mr-2" />
+                  )}
+                  {loginType === 'branch' ? 'Access Branch Dashboard' : 'Sign In'}
                 </>
               )}
             </button>
           </form>
+          
+          {/* Login Help */}
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-700">
+            <div className="text-sm text-gray-600 dark:text-dark-400">
+              <div className="flex items-center mb-2">
+                <FiShield className="w-4 h-4 mr-2" />
+                <span className="font-medium">Quick Access:</span>
+              </div>
+              <div className="space-y-1 text-xs">
+                <div>• <strong>Admin:</strong> emp_code=ADMIN, password=password123</div>
+                <div>• <strong>Employee:</strong> emp_code=ECS1591, password=password123</div>
+                <div>• <strong>Branch:</strong> Use branch name (e.g., "MEDAK") with password=password123</div>
+              </div>
+            </div>
+          </div>
         </div>
         
         {/* Footer */}

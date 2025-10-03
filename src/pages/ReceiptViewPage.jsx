@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { FiArrowLeft, FiPrinter, FiDownload } from 'react-icons/fi'
+import { FiArrowLeft, FiPrinter, FiDownload, FiFile, FiImage, FiEye } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import PrintReceipt from '../components/PrintReceipt'
@@ -12,10 +12,18 @@ export default function ReceiptViewPage() {
   const [receipt, setReceipt] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mediaFiles, setMediaFiles] = useState([])
+  const [loadingMedia, setLoadingMedia] = useState(false)
 
   useEffect(() => {
     loadReceipt()
   }, [id, token])
+
+  useEffect(() => {
+    if (receipt && receipt.media_count > 0) {
+      loadMediaFiles()
+    }
+  }, [receipt])
 
   const loadReceipt = async () => {
     if (!token) return
@@ -46,6 +54,21 @@ export default function ReceiptViewPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMediaFiles = async () => {
+    if (!token || !id) return
+
+    setLoadingMedia(true)
+    try {
+      const mediaFiles = await api.getReceiptMedia(token, id)
+      setMediaFiles(mediaFiles)
+    } catch (err) {
+      console.error('Error loading media files:', err)
+      setMediaFiles([])
+    } finally {
+      setLoadingMedia(false)
     }
   }
 
@@ -227,6 +250,78 @@ export default function ReceiptViewPage() {
         <div className="receipt-view">
           <PrintReceipt data={transformedReceipt} />
         </div>
+        
+        {/* Attached Documents */}
+        {receipt && receipt.media_count > 0 && (
+          <div className="mt-8 bg-white rounded-lg shadow-sm border p-6">
+            <div className="flex items-center mb-4">
+              <FiFile className="w-5 h-5 text-gray-600 mr-2" />
+              <h3 className="text-lg font-semibold text-gray-900">Attached Documents</h3>
+              <span className="ml-2 text-sm text-gray-500">({receipt.media_count} file{receipt.media_count !== 1 ? 's' : ''})</span>
+            </div>
+            
+            {loadingMedia ? (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <p className="text-sm text-gray-500 mt-2">Loading documents...</p>
+              </div>
+            ) : mediaFiles.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {mediaFiles.map((file) => (
+                  <div key={file.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center flex-1 min-w-0">
+                        {file.mime_type?.startsWith('image/') ? (
+                          <FiImage className="w-5 h-5 text-blue-600 mr-3 flex-shrink-0" />
+                        ) : (
+                          <FiFile className="w-5 h-5 text-gray-600 mr-3 flex-shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate" title={file.original_name}>
+                            {file.original_name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {(file.file_size / 1024).toFixed(1)} KB
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Uploaded by {file.uploaded_by_name || 'Unknown'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-3 flex space-x-2">
+                      <button
+                        onClick={() => window.open(`/uploads/${file.filename}`, '_blank')}
+                        className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                      >
+                        <FiEye className="w-3 h-3 mr-1" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a')
+                          link.href = `/uploads/${file.filename}`
+                          link.download = file.original_name
+                          link.click()
+                        }}
+                        className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                      >
+                        <FiDownload className="w-3 h-3 mr-1" />
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <FiFile className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No documents found</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

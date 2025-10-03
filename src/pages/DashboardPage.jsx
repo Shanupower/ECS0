@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import CSVExport from '../components/CSVExport'
 import { 
   FiTrendingUp, 
   FiFileText, 
@@ -11,7 +12,10 @@ import {
   FiUsers,
   FiUser,
   FiRefreshCw,
-  FiAlertCircle
+  FiAlertCircle,
+  FiMapPin,
+  FiDollarSign,
+  FiAward
 } from 'react-icons/fi'
 
 export default function DashboardPage() {
@@ -19,11 +23,13 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState(null)
   const [categoryStats, setCategoryStats] = useState([])
   const [dailyStats, setDailyStats] = useState([])
+  const [branchStats, setBranchStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const currentYear = new Date().getFullYear()
   const [dateRange, setDateRange] = useState({
-    from: '2025-09-01', // Default to September 2025 where test data exists
-    to: '2025-12-31' // End of 2025
+    from: `${currentYear}-01-01`, // Default to current year
+    to: `${currentYear}-12-31` // End of current year
   })
 
   const loadDashboardData = async () => {
@@ -33,39 +39,47 @@ export default function DashboardPage() {
     setError('')
     
     try {
-      const query = { 
-        from: dateRange.from, 
-        to: dateRange.to,
-        size: 1000 // Get all receipts for the date range
-      }
+      // Load summary statistics from backend
+      const summaryData = await api.statsSummary(token, {
+        from: dateRange.from,
+        to: dateRange.to
+      })
+      setSummary(summaryData)
       
-      // Use the same API approach as TransactionsPage
-      let result
-      if (!isAdmin && user?.emp_code) {
-        // For employees, always use their own emp_code
-        result = await api.getReceiptsByEmpCode(token, user.emp_code, query)
-      } else {
-        result = await api.listReceipts(token, query)
-      }
+      // Load category statistics
+      const categoryData = await api.statsByCategory(token, {
+        from: dateRange.from,
+        to: dateRange.to
+      })
+      setCategoryStats(categoryData)
       
-      // Handle different response formats like TransactionsPage does
-      let receipts = []
-      if (Array.isArray(result)) {
-        receipts = result
-      } else if (result.items && Array.isArray(result.items)) {
-        receipts = result.items
-      } else if (result.data && Array.isArray(result.data)) {
-        receipts = result.data
-      }
+      // Load daily statistics
+      const dailyData = await api.statsByDay(token, {
+        from: dateRange.from,
+        to: dateRange.to
+      })
+      setDailyStats(dailyData)
       
-      // Process receipts to generate dashboard statistics
-      const stats = processReceiptsForDashboard(receipts)
-      setSummary(stats.summary)
-      setCategoryStats(stats.categoryStats)
-      setDailyStats(stats.dailyStats)
+      // Load branch statistics if admin
+      if (isAdmin) {
+        const branchData = await api.getGlobalBranchStats(token)
+        setBranchStats(branchData)
+      } else if (user?.role === 'branch' && user?.branch_code) {
+        // For branch users, get their branch stats
+        const branchData = await api.getBranchStats(token, user.branch_code)
+        setBranchStats(branchData)
+      }
+      // For regular employees, we don't load branch-specific stats
       
     } catch (err) {
-      setError(err.message || 'Failed to load dashboard data')
+      console.error('Dashboard load error:', err)
+      if (err.response?.data?.detail) {
+        setError(`Server error: ${err.response.data.detail}`)
+      } else if (err.message) {
+        setError(`Error: ${err.message}`)
+      } else {
+        setError('Failed to load dashboard data. Please check your connection and try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -93,87 +107,8 @@ export default function DashboardPage() {
 
   const isAdmin = user?.role === 'admin'
 
-  // Function to process receipts and generate dashboard statistics
-  const processReceiptsForDashboard = (receipts) => {
-    // Filter out deleted receipts
-    const activeReceipts = receipts.filter(receipt => !receipt.deleted_at && !receipt.is_deleted)
-    
-    // Calculate summary statistics
-    const totalReceipts = activeReceipts.length
-    const totalAmount = activeReceipts.reduce((sum, receipt) => {
-      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
-      return sum + amount
-    }, 0)
-    
-    // Group by category
-    const categoryMap = new Map()
-    activeReceipts.forEach(receipt => {
-      const category = receipt.product_category || receipt.issuer_category || 'Other'
-      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
-      
-      if (categoryMap.has(category)) {
-        categoryMap.set(category, categoryMap.get(category) + amount)
-      } else {
-        categoryMap.set(category, amount)
-      }
-    })
-    
-    const categoryStats = Array.from(categoryMap.entries()).map(([category, amount]) => ({
-      category: category || 'Other',
-      amount: amount
-    }))
-    
-    // Group by day
-    const dayMap = new Map()
-    activeReceipts.forEach(receipt => {
-      const date = new Date(receipt.date).toISOString().split('T')[0] // Get YYYY-MM-DD format
-      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
-      
-      if (dayMap.has(date)) {
-        dayMap.set(date, dayMap.get(date) + amount)
-      } else {
-        dayMap.set(date, amount)
-      }
-    })
-    
-    const dailyStats = Array.from(dayMap.entries()).map(([date, amount]) => ({
-      date: date,
-      amount: amount
-    })).sort((a, b) => new Date(a.date) - new Date(b.date))
-    
-    // Group by employee (for admin view)
-    const employeeMap = new Map()
-    activeReceipts.forEach(receipt => {
-      const empCode = receipt.emp_code || receipt.empCode
-      const empName = receipt.employee_name || receipt.employeeName
-      const amount = parseFloat(receipt.investment_amount || receipt.investmentAmount || 0)
-      
-      if (employeeMap.has(empCode)) {
-        const emp = employeeMap.get(empCode)
-        emp.receiptCount += 1
-        emp.totalAmount += amount
-      } else {
-        employeeMap.set(empCode, {
-          empCode: empCode,
-          employeeName: empName,
-          receiptCount: 1,
-          totalAmount: amount
-        })
-      }
-    })
-    
-    const byEmployee = Array.from(employeeMap.values()).sort((a, b) => b.totalAmount - a.totalAmount)
-    
-    return {
-      summary: {
-        totalReceipts,
-        totalAmount,
-        commissionsTotal: totalAmount * 0.01, // 1% commission (adjust as needed)
-        byEmployee
-      },
-      categoryStats,
-      dailyStats
-    }
+  const calculateCommission = (amount) => {
+    return amount * 0.01 // 1% commission
   }
 
   return (
@@ -241,14 +176,14 @@ export default function DashboardPage() {
       {!loading && !error && summary && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{summary.totalReceipts || 0}</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{summary.total_receipts || 0}</div>
                   <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
-                    {isAdmin ? 'All employees' : 'Your receipts'}
+                    {isAdmin ? 'All branches' : 'Your branch'}
                   </div>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
@@ -260,32 +195,46 @@ export default function DashboardPage() {
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Collections</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(summary.totalAmount || 0)}</div>
+                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Investments</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(summary.total_investments || 0)}</div>
                   <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
                     Investment amount
                   </div>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                  <span className="text-lg sm:text-xl font-bold text-green-600 dark:text-green-400">₹</span>
+                  <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold">₹</span>
                 </div>
               </div>
             </div>
             
-            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200 sm:col-span-2 lg:col-span-1">
+            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Average per Receipt</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrency(summary.totalAmount && summary.totalReceipts ? 
-                      summary.totalAmount / summary.totalReceipts : 0)}
-                  </div>
+                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Customers</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{summary.total_customers || 0}</div>
                   <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
-                    Per transaction
+                    Active customers
                   </div>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                  <FiTrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+                  <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Commission Earned</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                    {formatCurrency(calculateCommission(summary.total_investments || 0))}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
+                    1% of investments
+                  </div>
+                </div>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
                 </div>
               </div>
             </div>
@@ -370,48 +319,81 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Additional Stats */}
-          {summary.byEmployee && summary.byEmployee.length > 0 && isAdmin && (
+          {/* CSV Export Section */}
+          <CSVExport token={token} user={user} />
+
+          {/* Branch Performance Section */}
+          {branchStats && (
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
               <div className="flex items-center mb-6">
-                <FiUsers className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">By Employee</h3>
+                <FiMapPin className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {isAdmin ? 'Branch Performance Overview' : `${user?.branch || 'Your Branch'} Performance`}
+                </h3>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-dark-700">
-                    <tr>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Employee</th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Receipts</th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Amount</th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Average</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-dark-700">
-                    {summary.byEmployee.map((emp, index) => (
-                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-dark-700">
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-3">
-                              <FiUser className="w-4 h-4 text-red-600 dark:text-red-400" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{emp.employeeName}</div>
-                              <div className="text-sm text-gray-500 dark:text-dark-400">{emp.empCode}</div>
-                            </div>
+              
+              {isAdmin ? (
+                // Admin view - show all branches
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {branchStats.branches && branchStats.branches.slice(0, 6).map((branch, index) => (
+                    <div key={branch.branch_code} className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-3">
+                            <span className="text-sm font-bold text-red-600 dark:text-red-400">#{index + 1}</span>
                           </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{emp.receiptCount || 0}</td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{formatCurrency(emp.totalAmount || 0)}</td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                          {formatCurrency(emp.totalAmount && emp.receiptCount ? 
-                            emp.totalAmount / emp.receiptCount : 0)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{branch.branch_name}</div>
+                            <div className="text-xs text-gray-500 dark:text-dark-400">{branch.branch_code}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500 dark:text-dark-400">Investments:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(branch.total_investments || 0)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500 dark:text-dark-400">Receipts:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{branch.total_receipts || 0}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500 dark:text-dark-400">Commission:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(calculateCommission(branch.total_investments || 0))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                // Employee view - show their branch stats
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Investments</div>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatCurrency(branchStats.total_investments || 0)}
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {branchStats.total_receipts || 0}
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Users</div>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {branchStats.total_users || 0}
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Commission Earned</div>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatCurrency(calculateCommission(branchStats.total_investments || 0))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
