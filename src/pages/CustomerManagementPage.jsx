@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { normalizeBranchForDB, getAllValidBranches } from '../utils/branchMapping'
+import SearchableSelect from '../components/SearchableSelect'
 import { 
   FiUsers, 
   FiPlus, 
@@ -46,7 +48,8 @@ export default function CustomerManagementPage() {
     state: '',
     pin: '',
     country: 'India',
-    date_of_birth: ''
+    date_of_birth: '',
+    branch: ''
   })
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [pincodeSuggestions, setPincodeSuggestions] = useState([])
@@ -200,9 +203,31 @@ export default function CustomerManagementPage() {
   // Handle search
   const handleSearch = (e) => {
     e.preventDefault()
-    setCurrentPage(1)
-    fetchCustomers(1, searchTerm)
+    if (searchTerm.trim()) {
+      setCurrentPage(1)
+      fetchCustomers(1, searchTerm)
+    } else {
+      // If search is empty, load all customers
+      setCurrentPage(1)
+      fetchCustomers(1, '')
+    }
   }
+
+  // Handle search input change with debouncing
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (searchTerm.trim()) {
+        setCurrentPage(1)
+        fetchCustomers(1, searchTerm)
+      } else if (searchTerm === '') {
+        // Only fetch when search is completely cleared
+        setCurrentPage(1)
+        fetchCustomers(1, '')
+      }
+    }, 500) // 500ms debounce
+
+    return () => clearTimeout(debounceTimer)
+  }, [searchTerm])
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -231,8 +256,10 @@ export default function CustomerManagementPage() {
         formDataToSend.append('media', file)
       })
       
-      // Add metadata
-      formDataToSend.append('relationship_manager', user?.branch || 'UNASSIGNED')
+      // Add metadata with normalized branch name
+      const selectedBranch = formData.branch || user?.branch || 'UNASSIGNED'
+      const normalizedBranch = normalizeBranchForDB(selectedBranch)
+      formDataToSend.append('relationship_manager', normalizedBranch)
       formDataToSend.append('created_by', user?.emp_code || user?.username)
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/customers`, {
@@ -315,7 +342,8 @@ export default function CustomerManagementPage() {
       state: '',
       pin: '',
       country: 'India',
-      date_of_birth: ''
+      date_of_birth: '',
+      branch: ''
     })
     setPincodeSuggestions([])
     setShowPincodeDropdown(false)
@@ -338,7 +366,8 @@ export default function CustomerManagementPage() {
       state: customer.state || '',
       pin: customer.pin || '',
       country: customer.country || 'India',
-      date_of_birth: customer.date_of_birth || ''
+      date_of_birth: customer.date_of_birth || '',
+      branch: customer.relationship_manager || ''
     })
     setShowEditModal(true)
   }
@@ -434,7 +463,7 @@ export default function CustomerManagementPage() {
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-dark-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search customers..."
+                placeholder="Search by name, PAN, email, mobile..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-dark-400 focus:ring-2 focus:ring-red-500 focus:border-red-500"
@@ -1010,6 +1039,18 @@ function CustomerModal({
                 onChange={handleChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+                Branch *
+              </label>
+              <SearchableSelect
+                options={getAllValidBranches().map(branch => ({ label: branch, value: branch }))}
+                value={formData.branch}
+                onChange={(value) => setFormData(prev => ({ ...prev, branch: value }))}
+                placeholder="Select branch"
               />
             </div>
           </div>

@@ -21,7 +21,7 @@ function genReceiptNo() {
   return `ECS-${y}${m}${day}-${rand}`
 }
 
-// Load investors from backend API
+// Load investors from backend API with pagination
 let cachedInvestorsData = null
 async function loadInvestorsFromAPI(token) {
   if (cachedInvestorsData) {
@@ -30,22 +30,22 @@ async function loadInvestorsFromAPI(token) {
   
   try {
     if (token) {
-      // Fetch all customers/investors from backend API
-      const customersResponse = await api.listCustomers(token)
+      // Fetch all customers/investors from backend API with large page size
+      const customersResponse = await api.listCustomers(token, { page: 1, size: 10000 })
       const investors = Array.isArray(customersResponse) ? customersResponse : (customersResponse.items || [])
       
       // Transform API data to match expected format
       const transformedInvestors = investors.map(customer => ({
         investorId: customer.investor_id,
-        investorName: customer.investor_name || 'Unknown',
-        investorAddress: customer.investor_address || '',
-        pinCode: customer.pin_code || '',
+        investorName: customer.name || customer.investor_name || 'Unknown',
+        investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
+        pinCode: customer.pin || customer.pin_code || '',
         pan: customer.pan || '',
         email: customer.email || ''
       }))
       
       cachedInvestorsData = transformedInvestors
-      console.log(`Loaded ${cachedInvestorsData.length} investors from API`)
+      console.log(`Loaded ${cachedInvestorsData.length} investors from API (all available customers)`)
       return cachedInvestorsData
     } else {
       console.log('No token available for loading investors')
@@ -58,18 +58,103 @@ async function loadInvestorsFromAPI(token) {
   }
 }
 
-// Search investors using API data
-async function searchInvestorsFromAPI(token, query, limit = 50) {
+// Load investors with pagination for better performance
+async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50) {
   try {
-    // Load all investors from API
-    const allInvestors = await loadInvestorsFromAPI(token)
+    if (token) {
+      // Fetch paginated customers/investors from backend API
+      const customersResponse = await api.listCustomers(token, { page: page, size: limit })
+      
+      const investors = Array.isArray(customersResponse) ? customersResponse : (customersResponse.items || [])
+      const total = customersResponse.total || investors.length
+      
+      // Transform API data to match expected format
+      const transformedInvestors = investors.map(customer => ({
+        investorId: customer.investor_id,
+        investorName: customer.name || customer.investor_name || 'Unknown',
+        investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
+        pinCode: customer.pin || customer.pin_code || '',
+        pan: customer.pan || '',
+        email: customer.email || ''
+      }))
+      
+      console.log(`Loaded ${transformedInvestors.length} investors from API (page ${page}, limit ${limit})`)
+      
+      return {
+        results: transformedInvestors,
+        total: total,
+        hasMore: (page * limit) < total
+      }
+    } else {
+      console.log('No token available for loading investors')
+      return {
+        results: [],
+        total: 0,
+        hasMore: false
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load paginated investors from API:', error)
+    return {
+      results: [],
+      total: 0,
+      hasMore: false
+    }
+  }
+}
+
+// Search investors using API data with pagination
+async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
+  try {
+    // Try to use the search API endpoint first for better performance
+    if (query && query.length >= 2) {
+      try {
+        const searchResults = await api.searchInvestors(token, { 
+          q: query, 
+          limit: limit.toString(),
+          page: page.toString()
+        })
+        
+        if (searchResults && Array.isArray(searchResults)) {
+          return {
+            results: searchResults.map(customer => ({
+              investorId: customer.investor_id,
+              investorName: customer.name,
+              investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim(),
+              pinCode: customer.pin || '',
+              pan: customer.pan || '',
+              email: customer.email || ''
+            })),
+            pagination: {
+              page: page,
+              limit: limit,
+              total: searchResults.length,
+              hasMore: searchResults.length === limit
+            }
+          }
+        }
+      } catch (searchError) {
+        console.warn('Search API failed, falling back to local search:', searchError)
+      }
+    }
+    
+    // Fallback: Load paginated investors from API and search locally
+    const paginatedInvestors = await loadInvestorsFromAPIPaginated(token, page, limit)
     
     // Get local customers from localStorage as fallback
     const localCustomers = JSON.parse(localStorage.getItem('local_customers') || '[]')
-    const allData = [...allInvestors, ...localCustomers]
+    const allData = [...paginatedInvestors.results, ...localCustomers]
     
     if (!query || query.length < 2) {
-      return allData.slice(0, limit) // Return first 50 if no query
+      return {
+        results: allData.slice(0, limit),
+        pagination: {
+          page: page,
+          limit: limit,
+          total: paginatedInvestors.total,
+          hasMore: paginatedInvestors.hasMore
+        }
+      }
     }
     
     const searchTerm = query.toLowerCase()
@@ -87,10 +172,26 @@ async function searchInvestorsFromAPI(token, query, limit = 50) {
              address.includes(searchTerm)
     })
     
-    return filtered.slice(0, limit)
+    return {
+      results: filtered.slice(0, limit),
+      pagination: {
+        page: page,
+        limit: limit,
+        total: filtered.length,
+        hasMore: filtered.length === limit
+      }
+    }
   } catch (error) {
     console.error('Search error:', error)
-    return []
+    return {
+      results: [],
+      pagination: {
+        page: 1,
+        limit: limit,
+        total: 0,
+        hasMore: false
+      }
+    }
   }
 }
 
@@ -486,8 +587,10 @@ function StepInvestor({ onBack, onFound, token }) {
       
       // Refresh the search results to include the new customer
       if (q && q.length >= 2) {
-        const searchResults = await searchInvestorsFromAPI(token, q, 50)
-        setResults(searchResults)
+        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1)
+        setResults(searchResponse.results)
+        setAllResults(searchResponse.results)
+        setPagination(searchResponse.pagination)
       }
       
     } catch (err) {
@@ -499,30 +602,71 @@ function StepInvestor({ onBack, onFound, token }) {
 
   const [results, setResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    hasMore: false
+  })
+  const [allResults, setAllResults] = useState([]) // For accumulating results
 
-  // Use useEffect to handle async search
+  // Use useEffect to handle async search with debouncing
   useEffect(() => {
     const performSearch = async () => {
       if (!q || q.length < 2) {
         setResults([])
+        setAllResults([])
+        setPagination({
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false
+        })
         return
       }
       
       setIsSearching(true)
       try {
-        const searchResults = await searchInvestorsFromAPI(token, q, 50)
-        setResults(searchResults)
+        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1)
+        setResults(searchResponse.results)
+        setAllResults(searchResponse.results)
+        setPagination(searchResponse.pagination)
       } catch (error) {
         console.error('Search error:', error)
         setResults([])
+        setAllResults([])
+        setPagination({
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false
+        })
       } finally {
         setIsSearching(false)
       }
     }
 
-    const debounceTimer = setTimeout(performSearch, 300) // Debounce search
+    const debounceTimer = setTimeout(performSearch, 300) // 300ms debounce
     return () => clearTimeout(debounceTimer)
   }, [q, token])
+
+  // Load more results for pagination
+  const loadMoreResults = async () => {
+    if (!pagination.hasMore || isSearching) return
+    
+    setIsSearching(true)
+    try {
+      const nextPage = pagination.page + 1
+      const searchResponse = await searchInvestorsFromAPI(token, q, 50, nextPage)
+      
+      setAllResults(prev => [...prev, ...searchResponse.results])
+      setPagination(searchResponse.pagination)
+    } catch (error) {
+      console.error('Load more error:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
 
   return (
     <div>
@@ -539,7 +683,11 @@ function StepInvestor({ onBack, onFound, token }) {
             placeholder="Type any part of ID, name, address, PAN, or email"
             className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <div className="text-xs text-gray-500 dark:text-gray-400">Results limited to 50 matches.</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Showing {allResults.length} results
+            {pagination.total > 0 && ` of ${pagination.total}`}
+            {pagination.hasMore && ' (scroll for more)'}
+          </div>
         </div>
       </div>
 
@@ -830,11 +978,12 @@ function StepInvestor({ onBack, onFound, token }) {
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Searching investors...</p>
           </div>
-        ) : results.length === 0 && q && q.length >= 2 ? (
+        ) : allResults.length === 0 && q && q.length >= 2 ? (
           <div className="p-8 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">No investors found matching your search.</p>
           </div>
         ) : (
+          <>
           <table className="w-full border-collapse text-sm min-w-160">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700">
@@ -846,7 +995,7 @@ function StepInvestor({ onBack, onFound, token }) {
               </tr>
             </thead>
             <tbody>
-              {results.map((it, i) => {
+              {allResults.map((it, i) => {
                 const isSel = selected && String(selected.investorId) === String(it.investorId)
                 return (
                   <tr
@@ -864,6 +1013,27 @@ function StepInvestor({ onBack, onFound, token }) {
               })}
             </tbody>
           </table>
+          
+          {/* Load More Button */}
+          {pagination.hasMore && (
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 text-center">
+              <button
+                onClick={loadMoreResults}
+                disabled={isSearching}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center justify-center mx-auto"
+              >
+                {isSearching ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Loading...
+                  </>
+                ) : (
+                  'Load More Results'
+                )}
+              </button>
+            </div>
+          )}
+          </>
         )}
       </div>
 
@@ -1586,7 +1756,7 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
   )
 }
 
-function StepFinal({ data, onBack, onSave, isSaving, saveError, supportingDocument, setSupportingDocument }) {
+function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument }) {
   const [transactionType, setTransactionType] = useState('')
   const [offlineDetails, setOfflineDetails] = useState({
     bankName: '',
@@ -2125,6 +2295,16 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, supportingDocume
         </div>
       </div>
       
+      {saveSuccess && (
+        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400">
+          <div className="flex items-center">
+            <FiCheck className="w-5 h-5 mr-2" />
+            <span className="font-medium">Success:</span>
+            <span className="ml-1">{saveSuccess}</span>
+          </div>
+        </div>
+      )}
+      
       {saveError && (
         <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           <div className="flex items-center">
@@ -2174,6 +2354,7 @@ export default function MultiStepReceipt() {
   const [supportingDocument, setSupportingDocument] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState('')
 
   // Auto-populate employee data from user context
   useEffect(() => {
@@ -2248,7 +2429,14 @@ export default function MultiStepReceipt() {
         result = await api.createReceipt(token, sanitizedData, files)
       }
       
-      alert(`Receipt saved successfully! Receipt ID: ${result.id || result.receiptNo}`)
+      // Show success message and store in localStorage for toast
+      const receiptId = result.id || result.receiptNo || result.receipt_id || 'Unknown'
+      const successMessage = `Receipt saved successfully! Receipt ID: ${receiptId}`
+      
+      // Store success message in localStorage for toast notification
+      localStorage.setItem('receipt_success_message', successMessage)
+      localStorage.setItem('receipt_success_timestamp', Date.now().toString())
+      localStorage.setItem('receipt_force_refresh', 'true')
       
       // Reset form after successful save
       setStep(1)
@@ -2258,11 +2446,21 @@ export default function MultiStepReceipt() {
       setInvestmentTypeSeed('')
       setFinalData(null)
       setSupportingDocument(null)
+      setSaveError('')
       
-      // Navigate to dashboard after successful receipt creation
-      navigate('/dashboard')
+      // Navigate to transactions page immediately
+      navigate('/transactions')
     } catch (err) {
       console.error('Save error:', err)
+      
+      // Store error message in localStorage for toast notification
+      const errorMessage = err.message || 'Failed to save receipt'
+      localStorage.setItem('receipt_error_message', errorMessage)
+      localStorage.setItem('receipt_error_timestamp', Date.now().toString())
+      localStorage.setItem('receipt_force_refresh', 'true')
+      
+      // Show error message to user
+      setSaveSuccess('')
       
       // Handle specific error types
       if (err.message && err.message.includes('WARN_DATA_TRUNCATED')) {
@@ -2272,6 +2470,9 @@ export default function MultiStepReceipt() {
       } else {
         setSaveError(err.message || 'Failed to save receipt')
       }
+      
+      // Navigate to transactions page even on error to show error toast
+      navigate('/transactions')
     } finally {
       setIsSaving(false)
     }
@@ -2339,6 +2540,7 @@ export default function MultiStepReceipt() {
           onSave={saveToServer}
           isSaving={isSaving}
           saveError={saveError}
+          saveSuccess={saveSuccess}
           supportingDocument={supportingDocument}
           setSupportingDocument={setSupportingDocument}
         />

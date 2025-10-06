@@ -91,6 +91,7 @@ export const api={
   updateCustomer:(t,id,data)=>req(`/api/customers/${id}`,{method:'PATCH',token:t,json:data}),
   deleteCustomer:(t,id)=>req(`/api/customers/${id}`,{method:'DELETE',token:t}),
   searchCustomers:(t,q)=>req('/api/customers/search',{token:t,query:q}),
+  searchInvestors:(t,q)=>req('/api/customers/search',{token:t,query:q}),
   
   // Stats endpoints
   statsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
@@ -107,6 +108,12 @@ export const api={
   
   // Branch management endpoints (admin only)
   createBranch:(t,data)=>req('/api/branches',{method:'POST',token:t,json:data}),
+  
+  // Issues endpoints
+  createIssue:(t,data,files)=>files && files.length > 0 ? reqWithFiles('/api/issues',{method:'POST',token:t,formData:createFormData(data,files)}) : req('/api/issues',{method:'POST',token:t,json:data}),
+  listIssues:(t,q)=>req('/api/issues',{token:t,query:q}),
+  getIssue:(t,id)=>req(`/api/issues/${id}`,{token:t}),
+  updateIssueStatus:(t,id,status)=>req(`/api/issues/${id}/status`,{method:'PATCH',token:t,json:{status}}),
   updateBranch:(t,code,data)=>req(`/api/branches/${code}`,{method:'PUT',token:t,json:data}),
   deleteBranch:(t,code)=>req(`/api/branches/${code}`,{method:'DELETE',token:t}),
   assignUsersToBranch:(t,code,userIds)=>req(`/api/branches/${code}/users`,{method:'POST',token:t,json:{user_ids:userIds}}),

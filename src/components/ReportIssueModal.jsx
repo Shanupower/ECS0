@@ -1,12 +1,15 @@
 import React, { useState } from 'react'
 import { X, Upload, AlertCircle } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { api } from '../api'
 
 const ReportIssueModal = ({ isOpen, onClose }) => {
+  const { token, user } = useAuth()
   const [formData, setFormData] = useState({
-    issue: '',
+    title: '',
     description: ''
   })
-  const [screenshot, setScreenshot] = useState(null)
+  const [photo, setPhoto] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -24,7 +27,7 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        setError('Please select an image file for the screenshot')
+        setError('Please select an image file for the photo')
         return
       }
       // Validate file size (max 10MB)
@@ -32,7 +35,7 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
         setError('File size must be less than 10MB')
         return
       }
-      setScreenshot(file)
+      setPhoto(file)
       setError('')
     }
   }
@@ -40,7 +43,12 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!formData.issue.trim() || !formData.description.trim()) {
+    if (!token) {
+      setError('You must be logged in to report an issue')
+      return
+    }
+    
+    if (!formData.title.trim() || !formData.description.trim()) {
       setError('Please fill in all required fields')
       return
     }
@@ -49,48 +57,42 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
     setError('')
 
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append('issue', formData.issue.trim())
-      formDataToSend.append('description', formData.description.trim())
+      // Prepare issue data
+      const issueData = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        created_by: user?.id || user?.emp_code || 'unknown'
+      }
+
+      // Create issue with or without photo
+      const files = photo ? [photo] : []
+      const result = await api.createIssue(token, issueData, files)
+
+      setSuccess(`Issue reported successfully! Issue ID: ${result.id || 'N/A'}`)
+      setFormData({ title: '', description: '' })
+      setPhoto(null)
       
-      if (screenshot) {
-        formDataToSend.append('screenshot', screenshot)
-      }
-
-      const response = await fetch('/api/issues', {
-        method: 'POST',
-        body: formDataToSend
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        setSuccess('Issue reported successfully! Thank you for your feedback.')
-        setFormData({ issue: '', description: '' })
-        setScreenshot(null)
-        // Reset file input
-        const fileInput = document.getElementById('screenshot')
-        if (fileInput) fileInput.value = ''
-        
-        // Close modal after 2 seconds
-        setTimeout(() => {
-          onClose()
-          setSuccess('')
-        }, 2000)
-      } else {
-        setError(result.detail || 'Failed to submit issue report')
-      }
+      // Reset file input
+      const fileInput = document.getElementById('photo')
+      if (fileInput) fileInput.value = ''
+      
+      // Close modal after 3 seconds
+      setTimeout(() => {
+        onClose()
+        setSuccess('')
+      }, 3000)
+      
     } catch (err) {
-      setError('Network error. Please try again.')
       console.error('Error submitting issue:', err)
+      setError(err.message || 'Failed to submit issue report. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleClose = () => {
-    setFormData({ issue: '', description: '' })
-    setScreenshot(null)
+    setFormData({ title: '', description: '' })
+    setPhoto(null)
     setError('')
     setSuccess('')
     onClose()
@@ -127,14 +129,14 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
           )}
 
           <div>
-            <label htmlFor="issue" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
               Issue Title <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              id="issue"
-              name="issue"
-              value={formData.issue}
+              id="title"
+              name="title"
+              value={formData.title}
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Brief description of the issue"
@@ -161,12 +163,12 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
           </div>
 
           <div>
-            <label htmlFor="screenshot" className="block text-sm font-medium text-gray-700 mb-1">
-              Screenshot (Optional)
+            <label htmlFor="photo" className="block text-sm font-medium text-gray-700 mb-1">
+              Photo (Optional)
             </label>
             <div className="flex items-center space-x-3">
               <label
-                htmlFor="screenshot"
+                htmlFor="photo"
                 className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
               >
                 <Upload size={16} className="text-gray-500" />
@@ -174,20 +176,20 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
               </label>
               <input
                 type="file"
-                id="screenshot"
+                id="photo"
                 accept="image/*"
                 onChange={handleFileChange}
                 className="hidden"
                 disabled={isSubmitting}
               />
-              {screenshot && (
+              {photo && (
                 <span className="text-sm text-gray-600 truncate max-w-32">
-                  {screenshot.name}
+                  {photo.name}
                 </span>
               )}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Upload a screenshot to help us understand the issue better (max 10MB)
+              Upload a photo to help us understand the issue better (max 10MB)
             </p>
           </div>
 

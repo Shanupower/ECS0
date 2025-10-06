@@ -33,6 +33,12 @@ export default function TransactionsPage() {
     total: 0,
     hasMore: false
   })
+  const [successMessage, setSuccessMessage] = useState('')
+  const [showSuccessToast, setShowSuccessToast] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [showErrorToast, setShowErrorToast] = useState(false)
+
+  const isAdmin = user?.role === 'admin'
 
   const loadReceipts = async () => {
     if (!token) return
@@ -82,6 +88,7 @@ export default function TransactionsPage() {
         setReceipts([])
       }
     } catch (err) {
+      console.error('Error loading receipts:', err)
       setError(err.message || 'Failed to load receipts')
       setReceipts([])
     } finally {
@@ -91,7 +98,87 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     loadReceipts()
-  }, [token, filters, pagination.page])
+  }, [token, filters])
+
+  // Separate effect for pagination changes
+  useEffect(() => {
+    if (pagination.page > 1) {
+      loadReceipts()
+    }
+  }, [pagination.page])
+
+  // Check for success/error messages from receipt creation
+  useEffect(() => {
+    const checkForMessages = () => {
+      const forceRefresh = localStorage.getItem('receipt_force_refresh')
+      
+      if (forceRefresh === 'true') {
+        // Force refresh the receipts list
+        loadReceipts()
+        localStorage.removeItem('receipt_force_refresh')
+      }
+      
+      // Check for success message
+      const successMsg = localStorage.getItem('receipt_success_message')
+      const successTimestamp = localStorage.getItem('receipt_success_timestamp')
+      
+      if (successMsg && successTimestamp) {
+        const messageTime = parseInt(successTimestamp)
+        const currentTime = Date.now()
+        
+        // Show message if it's less than 5 seconds old
+        if (currentTime - messageTime < 5000) {
+          setSuccessMessage(successMsg)
+          setShowSuccessToast(true)
+          
+          // Clear the message from localStorage
+          localStorage.removeItem('receipt_success_message')
+          localStorage.removeItem('receipt_success_timestamp')
+          
+          // Auto-hide toast after 5 seconds
+          setTimeout(() => {
+            setShowSuccessToast(false)
+            setSuccessMessage('')
+          }, 5000)
+        } else {
+          // Clean up old messages
+          localStorage.removeItem('receipt_success_message')
+          localStorage.removeItem('receipt_success_timestamp')
+        }
+      }
+      
+      // Check for error message
+      const errorMsg = localStorage.getItem('receipt_error_message')
+      const errorTimestamp = localStorage.getItem('receipt_error_timestamp')
+      
+      if (errorMsg && errorTimestamp) {
+        const messageTime = parseInt(errorTimestamp)
+        const currentTime = Date.now()
+        
+        // Show message if it's less than 5 seconds old
+        if (currentTime - messageTime < 5000) {
+          setErrorMessage(errorMsg)
+          setShowErrorToast(true)
+          
+          // Clear the message from localStorage
+          localStorage.removeItem('receipt_error_message')
+          localStorage.removeItem('receipt_error_timestamp')
+          
+          // Auto-hide toast after 5 seconds
+          setTimeout(() => {
+            setShowErrorToast(false)
+            setErrorMessage('')
+          }, 5000)
+        } else {
+          // Clean up old messages
+          localStorage.removeItem('receipt_error_message')
+          localStorage.removeItem('receipt_error_timestamp')
+        }
+      }
+    }
+    
+    checkForMessages()
+  }, [])
 
   const handleDelete = async (receiptId, reason = 'deleted by user') => {
     if (!confirm('Are you sure you want to delete this receipt?')) return
@@ -151,10 +238,36 @@ export default function TransactionsPage() {
     }
   }
 
-  const isAdmin = user?.role === 'admin'
-
   return (
     <div className="space-y-4 lg:space-y-6">
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center">
+          <FiCheck className="w-5 h-5 mr-2" />
+          <span>{successMessage}</span>
+          <button
+            onClick={() => setShowSuccessToast(false)}
+            className="ml-4 text-white hover:text-gray-200"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      
+      {/* Error Toast */}
+      {showErrorToast && (
+        <div className="fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center">
+          <FiAlertCircle className="w-5 h-5 mr-2" />
+          <span>{errorMessage}</span>
+          <button
+            onClick={() => setShowErrorToast(false)}
+            className="ml-4 text-white hover:text-gray-200"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center">
