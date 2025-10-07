@@ -4,6 +4,7 @@ import PrintReceipt from './PrintReceipt.jsx'
 import SearchableSelect from './SearchableSelect.jsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { normalizeBranchForAPI } from '../utils/branchMapping'
 import { FiPlus, FiX, FiUpload, FiFile, FiTrash2 } from 'react-icons/fi'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
@@ -59,17 +60,42 @@ async function loadInvestorsFromAPI(token) {
 }
 
 // Load investors with pagination for better performance
-async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50) {
+async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50, userBranch = null) {
   try {
     if (token) {
+      // Prepare query parameters
+      const queryParams = { page: page, size: limit }
+      
+      // Backend filtering by relationship_manager is not implemented
+      // Using frontend filtering as the primary solution
+      // if (userBranch) {
+      //   const normalizedBranch = normalizeBranchForAPI(userBranch)
+      //   queryParams.relationship_manager = normalizedBranch
+      // }
+      
       // Fetch paginated customers/investors from backend API
-      const customersResponse = await api.listCustomers(token, { page: page, size: limit })
+      const customersResponse = await api.listCustomers(token, queryParams)
       
       const investors = Array.isArray(customersResponse) ? customersResponse : (customersResponse.items || [])
       const total = customersResponse.total || investors.length
       
+      // Filter by user's branch on the frontend (backend filtering not implemented)
+      let filteredInvestors = investors
+      if (userBranch) {
+        const normalizedBranch = normalizeBranchForAPI(userBranch)
+        filteredInvestors = investors.filter(customer => {
+          const customerRM = customer.relationship_manager
+          if (!customerRM) return false
+          
+          // Check for exact match or partial match
+          return customerRM === normalizedBranch || 
+                 customerRM.includes(normalizedBranch) ||
+                 normalizedBranch.includes(customerRM)
+        })
+      }
+      
       // Transform API data to match expected format
-      const transformedInvestors = investors.map(customer => ({
+      const transformedInvestors = filteredInvestors.map(customer => ({
         investorId: customer.investor_id,
         investorName: customer.name || customer.investor_name || 'Unknown',
         investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
@@ -104,20 +130,45 @@ async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50) {
 }
 
 // Search investors using API data with pagination
-async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
+async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBranch = null) {
   try {
     // Try to use the search API endpoint first for better performance
     if (query && query.length >= 2) {
       try {
-        const searchResults = await api.searchInvestors(token, { 
+        // Prepare search parameters
+        const searchParams = { 
           q: query, 
           limit: limit.toString(),
           page: page.toString()
-        })
+        }
+        
+        // Backend filtering by relationship_manager is not implemented
+        // Using frontend filtering as the primary solution
+        // if (userBranch) {
+        //   const normalizedBranch = normalizeBranchForAPI(userBranch)
+        //   searchParams.relationship_manager = normalizedBranch
+        // }
+        
+        const searchResults = await api.searchInvestors(token, searchParams)
         
         if (searchResults && Array.isArray(searchResults)) {
+          // Filter results by user's branch on the frontend (backend filtering not implemented)
+          let filteredResults = searchResults
+          if (userBranch) {
+            const normalizedBranch = normalizeBranchForAPI(userBranch)
+            filteredResults = searchResults.filter(customer => {
+              const customerRM = customer.relationship_manager
+              if (!customerRM) return false
+              
+              // Check for exact match or partial match
+              return customerRM === normalizedBranch || 
+                     customerRM.includes(normalizedBranch) ||
+                     normalizedBranch.includes(customerRM)
+            })
+          }
+          
           return {
-            results: searchResults.map(customer => ({
+            results: filteredResults.map(customer => ({
               investorId: customer.investor_id,
               investorName: customer.name,
               investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim(),
@@ -128,8 +179,8 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
             pagination: {
               page: page,
               limit: limit,
-              total: searchResults.length,
-              hasMore: searchResults.length === limit
+              total: filteredResults.length,
+              hasMore: filteredResults.length === limit
             }
           }
         }
@@ -139,7 +190,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
     }
     
     // Fallback: Load paginated investors from API and search locally
-    const paginatedInvestors = await loadInvestorsFromAPIPaginated(token, page, limit)
+    const paginatedInvestors = await loadInvestorsFromAPIPaginated(token, page, limit, userBranch)
     
     // Get local customers from localStorage as fallback
     const localCustomers = JSON.parse(localStorage.getItem('local_customers') || '[]')
@@ -365,7 +416,7 @@ function StepEmployee({ user, onNext }) {
   )
 }
 
-function StepInvestor({ onBack, onFound, token }) {
+function StepInvestor({ onBack, onFound, token, user }) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -587,7 +638,7 @@ function StepInvestor({ onBack, onFound, token }) {
       
       // Refresh the search results to include the new customer
       if (q && q.length >= 2) {
-        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1)
+        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1, user?.branch)
         setResults(searchResponse.results)
         setAllResults(searchResponse.results)
         setPagination(searchResponse.pagination)
@@ -627,7 +678,7 @@ function StepInvestor({ onBack, onFound, token }) {
       
       setIsSearching(true)
       try {
-        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1)
+        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1, user?.branch)
         setResults(searchResponse.results)
         setAllResults(searchResponse.results)
         setPagination(searchResponse.pagination)
@@ -657,7 +708,7 @@ function StepInvestor({ onBack, onFound, token }) {
     setIsSearching(true)
     try {
       const nextPage = pagination.page + 1
-      const searchResponse = await searchInvestorsFromAPI(token, q, 50, nextPage)
+      const searchResponse = await searchInvestorsFromAPI(token, q, 50, nextPage, user?.branch)
       
       setAllResults(prev => [...prev, ...searchResponse.results])
       setPagination(searchResponse.pagination)
@@ -2493,6 +2544,7 @@ export default function MultiStepReceipt() {
           onBack={() => setStep(1)}
           onFound={r => { setInvestorSeed({ investorId: r.investorId, investorInfo: r.info }); setStep(3) }}
           token={token}
+          user={user}
         />
       )}
 

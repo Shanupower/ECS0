@@ -92,6 +92,7 @@ export const api={
   deleteCustomer:(t,id)=>req(`/api/customers/${id}`,{method:'DELETE',token:t}),
   searchCustomers:(t,q)=>req('/api/customers/search',{token:t,query:q}),
   searchInvestors:(t,q)=>req('/api/customers/search',{token:t,query:q}),
+  searchInvestorsByBranch:(t,q,branch)=>req('/api/customers/search',{token:t,query:{...q,relationship_manager:branch}}),
   
   // Stats endpoints
   statsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
