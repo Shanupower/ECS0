@@ -90,6 +90,7 @@ export const API_BRANCH_MAPPINGS = {
   // Handle specific user input variations
   'madipakkam chennai branch': 'MADIPAKKAM',
   'madipakkam chennai': 'MADIPAKKAM',
+  'MADIPAKKAM CHENNAI': 'MADIPAKKAM',
   'chennai madipakkam': 'MADIPAKKAM',
   'main branch': 'HO',
   'head office': 'HO',

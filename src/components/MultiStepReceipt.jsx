@@ -79,20 +79,26 @@ async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50, userBr
       const investors = Array.isArray(customersResponse) ? customersResponse : (customersResponse.items || [])
       const total = customersResponse.total || investors.length
       
-      // Filter by user's branch on the frontend (backend filtering not implemented)
+      // Branch filtering disabled to show all customers (like Customer Management)
       let filteredInvestors = investors
-      if (userBranch) {
-        const normalizedBranch = normalizeBranchForAPI(userBranch)
-        filteredInvestors = investors.filter(customer => {
-          const customerRM = customer.relationship_manager
-          if (!customerRM) return false
-          
-          // Check for exact match or partial match
-          return customerRM === normalizedBranch || 
-                 customerRM.includes(normalizedBranch) ||
-                 normalizedBranch.includes(customerRM)
-        })
-      }
+      
+      // Optional: Enable branch filtering if needed in the future
+      // if (userBranch) {
+      //   const normalizedBranch = normalizeBranchForAPI(userBranch)
+      //   filteredInvestors = investors.filter(customer => {
+      //     const customerRM = customer.relationship_manager
+      //     if (!customerRM) return false
+      //     
+      //     // Normalize customer RM for comparison
+      //     const normalizedCustomerRM = normalizeBranchForAPI(customerRM)
+      //     
+      //     // Check for exact match or partial match
+      //     return customerRM === normalizedBranch || 
+      //            normalizedCustomerRM === normalizedBranch ||
+      //            customerRM.includes(normalizedBranch) ||
+      //            normalizedBranch.includes(customerRM)
+      //   })
+      // }
       
       // Transform API data to match expected format
       const transformedInvestors = filteredInvestors.map(customer => ({
@@ -151,38 +157,70 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
         
         const searchResults = await api.searchInvestors(token, searchParams)
         
-        if (searchResults && Array.isArray(searchResults)) {
-          // Filter results by user's branch on the frontend (backend filtering not implemented)
-          let filteredResults = searchResults
-          if (userBranch) {
-            const normalizedBranch = normalizeBranchForAPI(userBranch)
-            filteredResults = searchResults.filter(customer => {
-              const customerRM = customer.relationship_manager
-              if (!customerRM) return false
-              
-              // Check for exact match or partial match
-              return customerRM === normalizedBranch || 
-                     customerRM.includes(normalizedBranch) ||
-                     normalizedBranch.includes(customerRM)
-            })
-          }
+        // Handle various response structures from the search API
+        let customers = []
+        console.log('Search API response structure:', searchResults)
+        
+        // Check for nested customers array (as seen in the network response)
+        if (searchResults && searchResults.customers && Array.isArray(searchResults.customers)) {
+          customers = searchResults.customers
+          console.log('Found customers in searchResults.customers:', customers.length)
+        } 
+        // Check for direct array response
+        else if (searchResults && Array.isArray(searchResults)) {
+          customers = searchResults
+          console.log('Found customers as direct array:', customers.length)
+        }
+        // Check for other possible structures
+        else if (searchResults && searchResults.data && Array.isArray(searchResults.data)) {
+          customers = searchResults.data
+          console.log('Found customers in searchResults.data:', customers.length)
+        }
+        // Check for results property
+        else if (searchResults && searchResults.results && Array.isArray(searchResults.results)) {
+          customers = searchResults.results
+          console.log('Found customers in searchResults.results:', customers.length)
+        }
+        else {
+          console.log('No customers found in response structure')
+          console.log('Available properties:', Object.keys(searchResults || {}))
+        }
+        
+        if (customers.length > 0) {
+          console.log(`Search API returned ${customers.length} customers`)
+          console.log('First customer:', customers[0])
           
-          return {
-            results: filteredResults.map(customer => ({
+          // Branch filtering disabled to show all customers (like Customer Management)
+          // Users can search for any customer across all branches
+          let filteredResults = customers
+          
+          // Transform customers to expected format
+          const transformedResults = filteredResults.map(customer => {
+            const transformed = {
               investorId: customer.investor_id,
               investorName: customer.name,
               investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim(),
               pinCode: customer.pin || '',
               pan: customer.pan || '',
               email: customer.email || ''
-            })),
+            }
+            console.log('Transformed customer:', transformed)
+            return transformed
+          })
+          
+          console.log(`Returning ${transformedResults.length} transformed results`)
+          
+          return {
+            results: transformedResults,
             pagination: {
               page: page,
               limit: limit,
-              total: filteredResults.length,
-              hasMore: filteredResults.length === limit
+              total: searchResults.pagination?.total || filteredResults.length,
+              hasMore: searchResults.pagination?.hasNext || false
             }
           }
+        } else {
+          console.log('No customers found - returning empty results')
         }
       } catch (searchError) {
         console.warn('Search API failed, falling back to local search:', searchError)
@@ -678,10 +716,16 @@ function StepInvestor({ onBack, onFound, token, user }) {
       
       setIsSearching(true)
       try {
+        console.log(`Starting search for: "${q}"`)
         const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1, user?.branch)
+        console.log('Search response received:', searchResponse)
+        console.log('Results count:', searchResponse.results?.length || 0)
+        
         setResults(searchResponse.results)
         setAllResults(searchResponse.results)
         setPagination(searchResponse.pagination)
+        
+        console.log('State updated with results:', searchResponse.results?.length || 0)
       } catch (error) {
         console.error('Search error:', error)
         setResults([])
