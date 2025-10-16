@@ -199,8 +199,8 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
             const transformed = {
               investorId: customer.investor_id,
               investorName: customer.name,
-              investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim(),
-              pinCode: customer.pin || '',
+              investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
+              pinCode: customer.pin || customer.pin_code || '',
               pan: customer.pan || '',
               email: customer.email || ''
             }
@@ -458,6 +458,7 @@ function StepInvestor({ onBack, onFound, token, user }) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [isLoadingCustomer, setIsLoadingCustomer] = useState(false)
   const [newCustomer, setNewCustomer] = useState({
     title: '',
     name: '',
@@ -617,6 +618,37 @@ function StepInvestor({ onBack, onFound, token, user }) {
     setPincodeSuggestions([])
     setShowPincodeDropdown(false)
     setMediaFiles([])
+  }
+
+  // Fetch full customer details when clicked
+  const handleSelectCustomer = async (customer) => {
+    setIsLoadingCustomer(true)
+    try {
+      // Fetch full customer details from the API
+      const fullCustomerData = await api.getCustomer(token, customer.investorId)
+      
+      console.log('Full customer data fetched:', fullCustomerData)
+      
+      // Transform the full customer data to match expected format
+      const transformedCustomer = {
+        investorId: fullCustomerData.investor_id,
+        investorName: fullCustomerData.name || fullCustomerData.investor_name || 'Unknown',
+        investorAddress: `${fullCustomerData.address1 || ''} ${fullCustomerData.address2 || ''} ${fullCustomerData.address3 || ''}`.trim() || fullCustomerData.investor_address || '',
+        pinCode: fullCustomerData.pin || fullCustomerData.pin_code || '',
+        pan: fullCustomerData.pan || '',
+        email: fullCustomerData.email || ''
+      }
+      
+      console.log('Transformed selected customer:', transformedCustomer)
+      setSelected(transformedCustomer)
+    } catch (error) {
+      console.error('Error fetching customer details:', error)
+      // Fallback to using the search result data if API call fails
+      setSelected(customer)
+      alert('Could not fetch complete customer details. Using available data.')
+    } finally {
+      setIsLoadingCustomer(false)
+    }
   }
 
   const handleCreateCustomer = async () => {
@@ -1067,7 +1099,15 @@ function StepInvestor({ onBack, onFound, token, user }) {
         </div>
       )}
 
-      <div className="max-h-65 overflow-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+      <div className="max-h-65 overflow-auto border border-gray-200 dark:border-gray-700 rounded-xl relative">
+        {isLoadingCustomer && (
+          <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center z-10 rounded-xl">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading customer details...</p>
+            </div>
+          </div>
+        )}
         {isSearching ? (
           <div className="p-8 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -1095,7 +1135,7 @@ function StepInvestor({ onBack, onFound, token, user }) {
                 return (
                   <tr
                     key={`${it.investorId}-${i}`}
-                    onClick={() => setSelected(it)}
+                    onClick={() => handleSelectCustomer(it)}
                     className={`cursor-pointer ${isSel ? 'bg-gray-100 dark:bg-gray-600' : 'bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                   >
                     <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.investorId ?? ''}</td>
