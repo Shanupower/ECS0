@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { normalizeBranchForAPI } from '../utils/branchMapping'
 import { FiPlus, FiX, FiUpload, FiFile, FiTrash2 } from 'react-icons/fi'
+import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
 // import empData from '../data/empdata.json' // Removed - using backend API instead
@@ -66,12 +67,8 @@ async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50, userBr
       // Prepare query parameters
       const queryParams = { page: page, size: limit }
       
-      // Backend filtering by relationship_manager is not implemented
-      // Using frontend filtering as the primary solution
-      // if (userBranch) {
-      //   const normalizedBranch = normalizeBranchForAPI(userBranch)
-      //   queryParams.relationship_manager = normalizedBranch
-      // }
+      // Note: Backend automatically filters by user's branch via JWT authentication
+      // Non-admin users only see customers from their assigned branch
       
       // Fetch paginated customers/investors from backend API
       const customersResponse = await api.listCustomers(token, queryParams)
@@ -79,29 +76,10 @@ async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50, userBr
       const investors = Array.isArray(customersResponse) ? customersResponse : (customersResponse.items || [])
       const total = customersResponse.total || investors.length
       
-      // Branch filtering disabled to show all customers (like Customer Management)
-      let filteredInvestors = investors
-      
-      // Optional: Enable branch filtering if needed in the future
-      // if (userBranch) {
-      //   const normalizedBranch = normalizeBranchForAPI(userBranch)
-      //   filteredInvestors = investors.filter(customer => {
-      //     const customerRM = customer.relationship_manager
-      //     if (!customerRM) return false
-      //     
-      //     // Normalize customer RM for comparison
-      //     const normalizedCustomerRM = normalizeBranchForAPI(customerRM)
-      //     
-      //     // Check for exact match or partial match
-      //     return customerRM === normalizedBranch || 
-      //            normalizedCustomerRM === normalizedBranch ||
-      //            customerRM.includes(normalizedBranch) ||
-      //            normalizedBranch.includes(customerRM)
-      //   })
-      // }
+      // Backend handles branch filtering automatically via JWT authentication
       
       // Transform API data to match expected format
-      const transformedInvestors = filteredInvestors.map(customer => ({
+      const transformedInvestors = investors.map(customer => ({
         investorId: customer.investor_id,
         investorName: customer.name || customer.investor_name || 'Unknown',
         investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
@@ -148,12 +126,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
           page: page.toString()
         }
         
-        // Backend filtering by relationship_manager is not implemented
-        // Using frontend filtering as the primary solution
-        // if (userBranch) {
-        //   const normalizedBranch = normalizeBranchForAPI(userBranch)
-        //   searchParams.relationship_manager = normalizedBranch
-        // }
+        // Note: Backend automatically filters by user's branch via JWT authentication
         
         const searchResults = await api.searchInvestors(token, searchParams)
         
@@ -190,12 +163,10 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
           console.log(`Search API returned ${customers.length} customers`)
           console.log('First customer:', customers[0])
           
-          // Branch filtering disabled to show all customers (like Customer Management)
-          // Users can search for any customer across all branches
-          let filteredResults = customers
+          // Backend has already applied branch filtering via JWT authentication
           
           // Transform customers to expected format
-          const transformedResults = filteredResults.map(customer => {
+          const transformedResults = customers.map(customer => {
             const transformed = {
               investorId: customer.investor_id,
               investorName: customer.name,
@@ -227,16 +198,12 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
       }
     }
     
-    // Fallback: Load paginated investors from API and search locally
+    // Fallback: Load paginated investors from API
     const paginatedInvestors = await loadInvestorsFromAPIPaginated(token, page, limit, userBranch)
-    
-    // Get local customers from localStorage as fallback
-    const localCustomers = JSON.parse(localStorage.getItem('local_customers') || '[]')
-    const allData = [...paginatedInvestors.results, ...localCustomers]
     
     if (!query || query.length < 2) {
       return {
-        results: allData.slice(0, limit),
+        results: paginatedInvestors.results.slice(0, limit),
         pagination: {
           page: page,
           limit: limit,
@@ -247,7 +214,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
     }
     
     const searchTerm = query.toLowerCase()
-    const filtered = allData.filter(inv => {
+    const filtered = paginatedInvestors.results.filter(inv => {
       const name = (inv.investorName || '').toLowerCase()
       const id = String(inv.investorId || '').toLowerCase()
       const pan = (inv.pan || '').toLowerCase()
@@ -652,8 +619,10 @@ function StepInvestor({ onBack, onFound, token, user }) {
   }
 
   const handleCreateCustomer = async () => {
-    if (!newCustomer.name.trim()) {
-      alert('Customer name is required')
+    // Validate form
+    const validation = validateCustomerForm(newCustomer)
+    if (!validation.valid) {
+      alert('Please fix the following errors:\n\n' + validation.errors.join('\n'))
       return
     }
     
@@ -868,8 +837,12 @@ function StepInvestor({ onBack, onFound, token, user }) {
                 <input
                   type="text"
                   value={newCustomer.pan}
-                  onChange={e => setNewCustomer(prev => ({ ...prev, pan: e.target.value }))}
-                  placeholder="Enter PAN number"
+                  onChange={e => setNewCustomer(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))}
+                  placeholder="ABCDE1234F"
+                  pattern={getPattern('pan')}
+                  maxLength="10"
+                  title={getTitle('pan')}
+                  required
                   className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
                 />
               </div>
@@ -879,7 +852,8 @@ function StepInvestor({ onBack, onFound, token, user }) {
                   type="email"
                   value={newCustomer.email}
                   onChange={e => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="Enter email address"
+                  placeholder="user@example.com"
+                  required
                   className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
                 />
               </div>
@@ -891,13 +865,17 @@ function StepInvestor({ onBack, onFound, token, user }) {
                 <input
                   type="tel"
                   value={newCustomer.mobile}
-                  onChange={e => setNewCustomer(prev => ({ ...prev, mobile: e.target.value }))}
-                  placeholder="Enter mobile number"
+                  onChange={e => setNewCustomer(prev => ({ ...prev, mobile: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="9876543210"
+                  pattern={getPattern('mobile')}
+                  maxLength="10"
+                  title={getTitle('mobile')}
+                  required
                   className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Date of Birth *</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Date of Birth</label>
                 <input
                   type="date"
                   value={newCustomer.date_of_birth}
@@ -909,12 +887,15 @@ function StepInvestor({ onBack, onFound, token, user }) {
 
             {/* PIN Code with lookup */}
             <div className="relative">
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">PIN Code * (Enter to auto-fill location)</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">PIN Code (Enter to auto-fill location)</label>
               <input
                 type="text"
                 value={newCustomer.pin}
-                onChange={e => handlePincodeChange(e.target.value)}
-                placeholder="Enter PIN code to auto-fill location"
+                onChange={e => handlePincodeChange(e.target.value.replace(/\D/g, ''))}
+                placeholder="110001"
+                pattern={getPattern('pin')}
+                maxLength="6"
+                title={getTitle('pin')}
                 className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
               />
               
@@ -956,7 +937,7 @@ function StepInvestor({ onBack, onFound, token, user }) {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Address Line 1 *</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Address Line 1</label>
                 <input
                   type="text"
                   value={newCustomer.address1}
@@ -1820,7 +1801,22 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
         <button
           onClick={() => {
             let normalized = {}
+            
+            // Validate required fields based on product type
             if (product === 'MF') {
+              if (!mfIssuer) {
+                alert('Please select an issuer company (AMC)')
+                return
+              }
+              if (!mfScheme) {
+                alert('Please select a scheme')
+                return
+              }
+              if (!mfInvestmentAmount || parseFloat(mfInvestmentAmount) <= 0) {
+                alert('Please enter a valid investment amount')
+                return
+              }
+              
               normalized = {
                 product_category: 'MF',
                 issuerCompany: mfIssuer,
@@ -1835,6 +1831,27 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
                 instrumentNo: mfFolioPolicyNo || `MF-${Date.now()}`
               }
             } else if (product === 'FD') {
+              if (!fdIssuer) {
+                alert('Please select a company')
+                return
+              }
+              if (!fdScheme) {
+                alert('Please select a scheme')
+                return
+              }
+              if (!fdInvestmentAmount || parseFloat(fdInvestmentAmount) <= 0) {
+                alert('Please enter a valid deposit amount')
+                return
+              }
+              if (!fdDepositPeriod) {
+                alert('Please enter deposit period')
+                return
+              }
+              if (!fdRoi || parseFloat(fdRoi) <= 0) {
+                alert('Please enter a valid interest rate')
+                return
+              }
+              
               normalized = {
                 product_category: 'FD',
                 issuerCompany: fdIssuer,
@@ -1852,6 +1869,23 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
                 instrumentNo: fdApplicationNo || `FD-${Date.now()}`
               }
             } else if (product === 'INS') {
+              if (!insIssuer) {
+                alert('Please select an insurance company')
+                return
+              }
+              if (!insCategory) {
+                alert('Please select an insurance category')
+                return
+              }
+              if (!insProduct) {
+                alert('Please select an insurance product')
+                return
+              }
+              if (!insPremiumAmount || parseFloat(insPremiumAmount) <= 0) {
+                alert('Please enter a valid premium amount')
+                return
+              }
+              
               normalized = {
                 product_category: 'INS',
                 issuerCompany: insIssuer,
@@ -1866,6 +1900,19 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
                 instrumentNo: insPolicyNo || `INS-${Date.now()}`
               }
             } else if (product === 'BOND') {
+              if (!bondIssuer) {
+                alert('Please select an issuer company')
+                return
+              }
+              if (!bondScheme) {
+                alert('Please select a bond scheme')
+                return
+              }
+              if (!bondInvestmentAmount || parseFloat(bondInvestmentAmount) <= 0) {
+                alert('Please enter a valid investment amount')
+                return
+              }
+              
               normalized = {
                 product_category: 'BOND',
                 issuerCompany: bondIssuer,
@@ -1880,6 +1927,7 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
                 instrumentNo: bondApplicationNo || `BOND-${Date.now()}`
               }
             }
+            
             onNext(product, normalized)
           }}
           className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow text-sm sm:text-base"
@@ -1935,34 +1983,75 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
   }
 
   const handleSave = () => {
-    // Validation
+    // Validate transaction type
     if (!transactionType) {
       alert('Please select transaction type (Online/Offline)')
       return
     }
     
+    // Validate transaction details
     if (transactionType === 'Offline') {
       if (!offlineDetails.bankName || !offlineDetails.chequeNumber || !offlineDetails.chequeDate || !offlineDetails.branch) {
-        alert('Please fill all offline transaction details')
+        alert('Please fill all offline transaction details (Bank Name, Cheque Number, Cheque Date, Branch)')
         return
       }
     } else if (transactionType === 'Online') {
-      if (!onlineTransactionNumber) {
+      if (!onlineTransactionNumber || onlineTransactionNumber.trim() === '') {
         alert('Please enter transaction number')
         return
       }
     }
     
+    // Validate product-specific details
     if (data.productType === 'FD') {
       if (!fdDetails.companyName || !fdDetails.clientCategory || !fdDetails.investAmount || 
           !fdDetails.period || !fdDetails.interestRate || !fdDetails.interestPayable) {
         alert('Please fill all Fixed Deposit details')
         return
       }
+      if (parseFloat(fdDetails.investAmount) <= 0) {
+        alert('Deposit amount must be a positive number')
+        return
+      }
+      if (parseFloat(fdDetails.interestRate) <= 0) {
+        alert('Interest rate must be a positive number')
+        return
+      }
+    } else if (data.productType === 'MF') {
+      // Validate Mutual Fund required fields from data
+      if (!data.schemeName) {
+        alert('Scheme name is required for Mutual Funds')
+        return
+      }
+      if (!data.investmentAmount || parseFloat(data.investmentAmount) <= 0) {
+        alert('Investment amount must be a positive number')
+        return
+      }
+    } else if (data.productType === 'INS') {
+      // Validate Insurance required fields from data
+      if (!data.issuerCompany) {
+        alert('Insurance company is required')
+        return
+      }
+      if (!data.investmentAmount || parseFloat(data.investmentAmount) <= 0) {
+        alert('Premium amount must be a positive number')
+        return
+      }
+    } else if (data.productType === 'BOND') {
+      // Validate Bonds required fields from data
+      if (!data.issuerCompany) {
+        alert('Issuer company is required for Bonds')
+        return
+      }
+      if (!data.investmentAmount || parseFloat(data.investmentAmount) <= 0) {
+        alert('Investment amount must be a positive number')
+        return
+      }
     }
     
+    // Validate supporting document
     if (!supportingDocument) {
-      alert('Please upload a supporting document')
+      alert('Please upload a supporting document (screenshot or PDF)')
       return
     }
     
@@ -2497,7 +2586,7 @@ export default function MultiStepReceipt() {
       setEmpSeed({
         empCode: user.emp_code || '',
         employeeName: user.name || '',
-        branch: user.branch || ''
+        branch: user.branch || user.branch_name || ''
       })
     }
   }, [user])

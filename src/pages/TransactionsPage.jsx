@@ -11,7 +11,9 @@ import {
   FiAlertCircle,
   FiUser,
   FiCalendar,
-  FiCheck
+  FiCheck,
+  FiFile,
+  FiDownload
 } from 'react-icons/fi'
 
 export default function TransactionsPage() {
@@ -65,12 +67,13 @@ export default function TransactionsPage() {
         result = await api.listReceipts(token, query)
       }
       
+      let receiptsData = []
       if (Array.isArray(result)) {
-        setReceipts(result)
+        receiptsData = result
         setPagination(prev => ({ ...prev, total: result.length, hasMore: result.length === filters.size }))
       } else if (result.items && Array.isArray(result.items)) {
         // Handle the new API response structure: {items: [], page: 1, size: 20, total: 2}
-        setReceipts(result.items)
+        receiptsData = result.items
         setPagination(prev => ({ 
           ...prev, 
           total: result.total || result.items.length,
@@ -78,15 +81,40 @@ export default function TransactionsPage() {
         }))
       } else if (result.data && Array.isArray(result.data)) {
         // Handle legacy response structure: {data: [], total: 2}
-        setReceipts(result.data)
+        receiptsData = result.data
         setPagination(prev => ({ 
           ...prev, 
           total: result.total || result.data.length,
           hasMore: result.hasMore || false
         }))
-      } else {
-        setReceipts([])
       }
+
+      // Load media files for each receipt
+      const receiptsWithMedia = await Promise.all(
+        receiptsData.map(async (receipt) => {
+          try {
+            const receiptId = receipt._key || receipt.id
+            if (!receiptId) return receipt
+            
+            // Fetch media files for this receipt
+            const mediaResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/receipts/${receiptId}/media`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            })
+            
+            if (mediaResponse.ok) {
+              const mediaFiles = await mediaResponse.json()
+              return { ...receipt, media_files: mediaFiles }
+            }
+          } catch (err) {
+            console.warn(`Failed to load media for receipt ${receipt._key || receipt.id}:`, err)
+          }
+          return receipt
+        })
+      )
+      
+      setReceipts(receiptsWithMedia)
     } catch (err) {
       console.error('Error loading receipts:', err)
       setError(err.message || 'Failed to load receipts')
@@ -208,6 +236,61 @@ export default function TransactionsPage() {
       await loadReceipts() // Reload the list
     } catch (err) {
       alert('Failed to update status: ' + err.message)
+    }
+  }
+
+  const handleViewDocument = async (receiptId, mediaId, filename) => {
+    try {
+      // Use the proper API endpoint to get the media file
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/receipts/${receiptId}/media/${mediaId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch document')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      
+      // Clean up the URL after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      alert('Failed to view document: ' + err.message)
+    }
+  }
+
+  const handleDownloadDocument = async (receiptId, mediaId, originalName) => {
+    try {
+      // Use the proper API endpoint to get the media file
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/receipts/${receiptId}/media/${mediaId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to download document')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      
+      // Create download link
+      const link = document.createElement('a')
+      link.href = url
+      link.download = originalName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Clean up the URL after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      alert('Failed to download document: ' + err.message)
     }
   }
 
@@ -404,6 +487,32 @@ export default function TransactionsPage() {
                         <div><span className="font-medium">Product:</span> {receipt.scheme_name || receipt.schemeName}</div>
                         <div><span className="font-medium">Amount:</span> {formatCurrency(receipt.investment_amount || receipt.investmentAmount)}</div>
                         <div><span className="font-medium">Employee:</span> {receipt.employee_name || receipt.employeeName}</div>
+                        {/* Supporting Documents */}
+                        {receipt.media_files && receipt.media_files.length > 0 && (
+                          <div className="mt-2">
+                            <span className="font-medium">Documents:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {receipt.media_files.map((file, idx) => (
+                                <div key={idx} className="flex items-center space-x-1">
+                                  <button
+                                    onClick={() => handleViewDocument(receipt._key || receipt.id, file.id, file.filename)}
+                                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                  >
+                                    <FiEye className="w-3 h-3 mr-1" />
+                                    View
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadDocument(receipt._key || receipt.id, file.id, file.original_name)}
+                                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                                  >
+                                    <FiDownload className="w-3 h-3 mr-1" />
+                                    Download
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col space-y-2 ml-4">
@@ -442,6 +551,7 @@ export default function TransactionsPage() {
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Amount</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Employee</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Documents</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -487,6 +597,37 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4">
                       {getStatusBadge(receipt)}
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4">
+                      {receipt.media_files && receipt.media_files.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {receipt.media_files.slice(0, 2).map((file, idx) => (
+                            <div key={idx} className="flex items-center space-x-1">
+                              <button
+                                onClick={() => handleViewDocument(receipt._key || receipt.id, file.id, file.filename)}
+                                className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                title={`View ${file.original_name}`}
+                              >
+                                <FiEye className="w-3 h-3 mr-1" />
+                                View
+                              </button>
+                              <button
+                                onClick={() => handleDownloadDocument(receipt._key || receipt.id, file.id, file.original_name)}
+                                className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                                title={`Download ${file.original_name}`}
+                              >
+                                <FiDownload className="w-3 h-3 mr-1" />
+                                Download
+                              </button>
+                            </div>
+                          ))}
+                          {receipt.media_files.length > 2 && (
+                            <span className="text-xs text-gray-500">+{receipt.media_files.length - 2} more</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">No documents</span>
+                      )}
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm">
                       <div className="flex flex-col lg:flex-row gap-1 lg:gap-2">

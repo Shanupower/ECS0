@@ -82,6 +82,11 @@ export default function CSVExport({ token, user, onExport }) {
 
   const isAdmin = user?.role === 'admin'
 
+  // If not admin, don't render the component
+  if (!isAdmin) {
+    return null
+  }
+
   return (
     <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
       <div className="flex items-center mb-4">

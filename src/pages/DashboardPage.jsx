@@ -319,8 +319,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* CSV Export Section */}
-          <CSVExport token={token} user={user} />
+          {/* CSV Export Section - Admin Only */}
+          {isAdmin && <CSVExport token={token} user={user} />}
 
           {/* Branch Performance Section */}
           {branchStats && (

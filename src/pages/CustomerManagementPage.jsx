@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { normalizeBranchForDB, getAllValidBranches } from '../utils/branchMapping'
 import SearchableSelect from '../components/SearchableSelect'
+import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 import { 
   FiUsers, 
   FiPlus, 
@@ -56,7 +57,17 @@ export default function CustomerManagementPage() {
   const [showPincodeDropdown, setShowPincodeDropdown] = useState(false)
   const [mediaFiles, setMediaFiles] = useState([])
 
-  const pageSize = 10
+  const pageSize = 50 // Increased from 10 to show more customers per page
+
+  // Auto-populate branch from user context
+  useEffect(() => {
+    if (user && !formData.branch) {
+      setFormData(prev => ({
+        ...prev,
+        branch: user.branch || user.branch_name || ''
+      }))
+    }
+  }, [user])
 
   // Pincode lookup function
   const lookupPincode = async (pincode) => {
@@ -237,6 +248,14 @@ export default function CustomerManagementPage() {
   // Handle add customer
   const handleAddCustomer = async (e) => {
     e.preventDefault()
+    
+    // Validate form
+    const validation = validateCustomerForm(formData)
+    if (!validation.valid) {
+      setError(validation.errors.join('. '))
+      return
+    }
+    
     setLoading(true)
     try {
       const token = localStorage.getItem('ecs_token')
@@ -291,6 +310,14 @@ export default function CustomerManagementPage() {
   // Handle edit customer
   const handleEditCustomer = async (e) => {
     e.preventDefault()
+    
+    // Validate form (for update, only validate filled fields)
+    const validation = validateCustomerForm(formData)
+    if (!validation.valid) {
+      setError(validation.errors.join('. '))
+      return
+    }
+    
     setLoading(true)
     try {
       const token = localStorage.getItem('ecs_token')
@@ -862,7 +889,11 @@ function CustomerModal({
                 type="text"
                 name="pan"
                 value={formData.pan}
-                onChange={handleChange}
+                onChange={(e) => setFormData(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))}
+                pattern={getPattern('pan')}
+                maxLength="10"
+                title={getTitle('pan')}
+                placeholder="ABCDE1234F"
                 required
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
               />
@@ -877,6 +908,7 @@ function CustomerModal({
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                placeholder="user@example.com"
                 required
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
               />
@@ -890,7 +922,11 @@ function CustomerModal({
                 type="tel"
                 name="mobile"
                 value={formData.mobile}
-                onChange={handleChange}
+                onChange={(e) => setFormData(prev => ({ ...prev, mobile: e.target.value.replace(/\D/g, '') }))}
+                pattern={getPattern('mobile')}
+                maxLength="10"
+                title={getTitle('mobile')}
+                placeholder="9876543210"
                 required
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
               />
