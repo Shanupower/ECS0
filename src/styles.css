@@ -148,3 +148,82 @@ hr.div{ border:0; border-top:1px dashed var(--border); margin:20px 0 }
   .rec-grid,.two{ grid-template-columns:1fr }
   .rec-meta{ min-width:unset }
 }
+
+/* Print styles */
+@media print {
+  @page {
+    margin: 10mm;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  html, body {
+    background: white !important;
+  }
+  
+  /* Hide navigation, buttons, and non-essential elements */
+  .no-print,
+  button,
+  nav,
+  header {
+    display: none !important;
+  }
+  
+  /* Make receipt content print-friendly */
+  .receipt-content {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    max-width: 100% !important;
+    background: white !important;
+  }
+  
+  /* Force dark backgrounds to white for printing */
+  .bg-gray-800,
+  .bg-gray-700,
+  .bg-gray-900,
+  .bg-dark-800,
+  .bg-dark-700 {
+    background: white !important;
+  }
+  
+  /* Force all text to black for printing */
+  .text-white,
+  .text-gray-100,
+  .text-gray-200,
+  .text-gray-300,
+  .text-gray-400,
+  .dark .text-gray-100,
+  .dark .text-gray-200 {
+    color: black !important;
+  }
+  
+  /* Keep gradients in print for header */
+  .bg-gradient-to-r {
+    background: #dc2626 !important;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  /* Ensure card backgrounds print as white */
+  .bg-gray-50,
+  .bg-white,
+  .bg-blue-50,
+  .bg-indigo-50 {
+    background: white !important;
+    border: 1px solid #ddd !important;
+  }
+  
+  /* Ensure border visibility in print */
+  .border-gray-200,
+  .border-gray-300,
+  .border-blue-200,
+  .border-blue-100,
+  .border-dark-600,
+  .border-dark-700 {
+    border-color: #ddd !important;
+  }
+}

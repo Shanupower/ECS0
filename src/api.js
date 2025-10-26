@@ -83,6 +83,7 @@ export const api={
   updateReceiptStatus:(t,id,status)=>req(`/api/receipts/${id}/status`,{method:'PATCH',token:t,json:{status}}),
   getReceiptMedia:(t,id)=>req(`/api/receipts/${id}/media`,{token:t}),
   downloadReceiptMedia:(t,id,mediaId)=>req(`/api/receipts/${id}/media/${mediaId}`,{token:t}),
+  downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
   
   // Customer/Investor endpoints
   listCustomers:(t,q)=>req('/api/customers',{token:t,query:q}),
