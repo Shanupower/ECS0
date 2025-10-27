@@ -1944,11 +1944,14 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       }
     } else if (data.productType === 'MF') {
       // Validate Mutual Fund required fields from data
-      if (!data.schemeName) {
+      // Check both snake_case (new MF flow) and camelCase (legacy)
+      if (!data.scheme_name && !data.schemeName) {
         alert('Scheme name is required for Mutual Funds')
         return
       }
-      if (!data.investmentAmount || parseFloat(data.investmentAmount) <= 0) {
+      // Check both camelCase and snake_case for investment amount
+      const investmentAmt = data.investmentAmount || data.investment_amount
+      if (!investmentAmt || parseFloat(investmentAmt) <= 0) {
         alert('Investment amount must be a positive number')
         return
       }
@@ -1958,7 +1961,8 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
         alert('Insurance company is required')
         return
       }
-      if (!data.investmentAmount || parseFloat(data.investmentAmount) <= 0) {
+      const premiumAmt = data.investmentAmount || data.investment_amount
+      if (!premiumAmt || parseFloat(premiumAmt) <= 0) {
         alert('Premium amount must be a positive number')
         return
       }
@@ -1968,7 +1972,8 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
         alert('Issuer company is required for Bonds')
         return
       }
-      if (!data.investmentAmount || parseFloat(data.investmentAmount) <= 0) {
+      const bondAmt = data.investmentAmount || data.investment_amount
+      if (!bondAmt || parseFloat(bondAmt) <= 0) {
         alert('Investment amount must be a positive number')
         return
       }
@@ -2931,6 +2936,7 @@ export default function MultiStepReceipt() {
               amc_name: mfSchemeSeed.selectedAmc.amc_name,
               scheme_code: mfSchemeSeed.selectedScheme.scheme_code,
               scheme_name: mfSchemeSeed.selectedScheme.scheme_name,
+              schemeName: mfSchemeSeed.selectedScheme.scheme_name, // camelCase for compatibility
               scheme_category: mfSchemeSeed.selectedScheme.category,
               scheme_sub_category: mfSchemeSeed.selectedScheme.sub_category,
               scheme_plan: mfSchemeSeed.selectedScheme.plan,

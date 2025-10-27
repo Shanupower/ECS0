@@ -33,7 +33,10 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
   }
 
   const handleNext = () => {
-    const transactionData = { investment_amount: amount }
+    const transactionData = { 
+      investment_amount: amount,
+      investmentAmount: amount // Also add camelCase for validation compatibility
+    }
 
     if (investmentType === 'SIP') {
       transactionData.sip_frequency = frequency
