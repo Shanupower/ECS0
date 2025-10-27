@@ -1,0 +1,361 @@
+import React, { useState, useEffect } from 'react'
+import { api } from '../../api'
+
+export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, token }) {
+  const [amount, setAmount] = useState('')
+  const [frequency, setFrequency] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [isPerpetual, setIsPerpetual] = useState(false)
+  const [schemes, setSchemes] = useState([])
+  const [targetScheme, setTargetScheme] = useState('')
+  const [switchType, setSwitchType] = useState('Amount')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if ((investmentType === 'STP' || investmentType === 'Switch Over') && token && selectedAmc) {
+      loadSchemes()
+    }
+  }, [investmentType, token, selectedAmc])
+
+  const loadSchemes = async () => {
+    if (!token || !selectedAmc?.amc_code) return
+    setLoading(true)
+    try {
+      const result = await api.getSchemesByAMC(token, selectedAmc.amc_code)
+      const filtered = Array.isArray(result) ? result.filter(s => s.scheme_code !== selectedScheme.scheme_code) : []
+      setSchemes(filtered)
+    } catch (error) {
+      console.error('Failed to load schemes:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleNext = () => {
+    const transactionData = { investment_amount: amount }
+
+    if (investmentType === 'SIP') {
+      transactionData.sip_frequency = frequency
+      transactionData.sip_start_date = startDate
+      transactionData.sip_end_date = isPerpetual ? null : endDate
+      transactionData.sip_is_perpetual = isPerpetual
+    } else if (investmentType === 'SWP') {
+      transactionData.swp_frequency = frequency
+      transactionData.swp_start_date = startDate
+      transactionData.swp_amount = amount
+    } else if (investmentType === 'STP') {
+      const target = schemes.find(s => s.scheme_code === targetScheme)
+      transactionData.stp_target_scheme_code = target?.scheme_code
+      transactionData.stp_target_scheme_name = target?.scheme_name
+      transactionData.stp_frequency = frequency
+      transactionData.stp_start_date = startDate
+      transactionData.stp_amount = amount
+    } else if (investmentType === 'Switch Over') {
+      const target = schemes.find(s => s.scheme_code === targetScheme)
+      transactionData.switch_from_scheme_code = selectedScheme.scheme_code
+      transactionData.switch_from_scheme_name = selectedScheme.scheme_name
+      transactionData.switch_to_scheme_code = target?.scheme_code
+      transactionData.switch_to_scheme_name = target?.scheme_name
+      transactionData.switch_type = switchType
+      transactionData.switch_value = amount
+    }
+
+    onNext(transactionData)
+  }
+
+  const canProceed = () => {
+    if (!amount) return false
+    if (investmentType === 'SIP' && (!amount || !frequency || !startDate || (!isPerpetual && !endDate))) return false
+    if (investmentType === 'SWP' && (!frequency || !startDate)) return false
+    if (investmentType === 'STP' && (!targetScheme || !frequency || !startDate)) return false
+    if (investmentType === 'Switch Over' && (!targetScheme)) return false
+    return true
+  }
+
+  return (
+    <div>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 6 — Transaction Details</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Fill in the details for your {investmentType} transaction</p>
+      
+      {investmentType === 'Lumpsum' && (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Investment Amount (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter amount"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+        </div>
+      )}
+
+      {investmentType === 'SIP' && (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              SIP Amount (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter SIP amount"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Frequency <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            >
+              <option value="">Select frequency</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Quarterly">Quarterly</option>
+              <option value="Annual">Annual</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Start Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="flex items-center space-x-2 mb-2">
+              <input
+                type="checkbox"
+                checked={isPerpetual}
+                onChange={(e) => setIsPerpetual(e.target.checked)}
+                className="w-4 h-4 text-red-600"
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Perpetual (30 years)</span>
+            </label>
+            {!isPerpetual && (
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  End Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  max={startDate ? (() => {
+                    const maxDate = new Date(startDate)
+                    maxDate.setFullYear(maxDate.getFullYear() + 30)
+                    return maxDate.toISOString().split('T')[0]
+                  })() : undefined}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {investmentType === 'SWP' && (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Frequency <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            >
+              <option value="">Select frequency</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Quarterly">Quarterly</option>
+              <option value="Annual">Annual</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Start Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Withdrawal Amount (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter withdrawal amount"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+        </div>
+      )}
+
+      {investmentType === 'STP' && (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Transfer to Scheme <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={targetScheme}
+              onChange={(e) => setTargetScheme(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              disabled={loading || !schemes.length}
+            >
+              <option value="">Select scheme...</option>
+              {schemes.map(scheme => (
+                <option key={scheme.scheme_code} value={scheme.scheme_code}>
+                  {scheme.scheme_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Frequency <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            >
+              <option value="">Select frequency</option>
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Quarterly">Quarterly</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Start Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Transfer Amount (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter transfer amount"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+        </div>
+      )}
+
+      {investmentType === 'Switch Over' && (
+        <div className="space-y-6">
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Scheme:</div>
+            <div className="text-sm text-gray-900 dark:text-gray-100 font-bold">{selectedScheme.scheme_name}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">{selectedAmc.amc_name}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Switch to Scheme <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={targetScheme}
+              onChange={(e) => setTargetScheme(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              disabled={loading || !schemes.length}
+            >
+              <option value="">Select scheme...</option>
+              {schemes.map(scheme => (
+                <option key={scheme.scheme_code} value={scheme.scheme_code}>
+                  {scheme.scheme_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Type <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="switchType"
+                  value="Amount"
+                  checked={switchType === 'Amount'}
+                  onChange={(e) => setSwitchType(e.target.value)}
+                  className="mr-2 w-4 h-4 text-red-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Amount</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="switchType"
+                  value="Units"
+                  checked={switchType === 'Units'}
+                  onChange={(e) => setSwitchType(e.target.value)}
+                  className="mr-2 w-4 h-4 text-red-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Units</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Value {switchType === 'Amount' ? '(₹)' : '(Units)'} <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              step={switchType === 'Units' ? '0.01' : '1'}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={`Enter ${switchType === 'Amount' ? 'amount in rupees' : 'number of units'}`}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">
+          Back
+        </button>
+        <button
+          onClick={handleNext}
+          disabled={!canProceed()}
+          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  )
+}
+

@@ -127,5 +127,34 @@ export const api={
   exportBranches:(t)=>req('/api/export/branches',{token:t}),
   
   // Utility endpoints
-  health:()=>req('/health')
+  health:()=>req('/health'),
+  
+  // MF Schemes endpoints
+  listAMCs:(t)=>req('/api/schemes/amcs',{token:t}),
+  getSchemesByAMC:(t,amc_code)=>req(`/api/schemes/amc/${amc_code}`,{token:t}),
+  getScheme:(t,scheme_code)=>req(`/api/schemes/${scheme_code}`,{token:t}),
+  createAMC:(t,data)=>req('/api/schemes/amc',{method:'POST',token:t,json:data}),
+  updateAMC:(t,amc_code,data)=>req(`/api/schemes/amc/${amc_code}`,{method:'PUT',token:t,json:data}),
+  deleteAMC:(t,amc_code)=>req(`/api/schemes/amc/${amc_code}`,{method:'DELETE',token:t}),
+  createScheme:(t,data)=>req('/api/schemes',{method:'POST',token:t,json:data}),
+  updateScheme:(t,scheme_code,data)=>req(`/api/schemes/${scheme_code}`,{method:'PUT',token:t,json:data}),
+  deleteScheme:(t,scheme_code)=>req(`/api/schemes/${scheme_code}`,{method:'DELETE',token:t}),
+  checkNfoValidity:(t)=>req('/api/schemes/check-nfo-validity',{method:'POST',token:t}),
+  
+  // FD Schemes endpoints (nested structure)
+  listFDIssuers:(t)=>req('/api/fd-schemes/issuers',{token:t}),
+  getFDIssuer:(t,issuer_key)=>req(`/api/fd-schemes/issuer/${issuer_key}`,{token:t}),
+  getFDSchemesByIssuer:(t,issuer_key)=>req(`/api/fd-schemes/issuer/${issuer_key}/schemes`,{token:t}),
+  getFDScheme:(t,issuer_key,scheme_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{token:t}),
+  getFDRateSlabs:(t,issuer_key,scheme_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slabs`,{token:t}),
+  calculateFDRate:(t,data)=>req('/api/fd-schemes/calculate-rate',{method:'POST',token:t,json:data}),
+  createFDIssuer:(t,data)=>req('/api/fd-schemes/issuer',{method:'POST',token:t,json:data}),
+  updateFDIssuer:(t,issuer_key,data)=>req(`/api/fd-schemes/issuer/${issuer_key}`,{method:'PUT',token:t,json:data}),
+  deleteFDIssuer:(t,issuer_key)=>req(`/api/fd-schemes/issuer/${issuer_key}`,{method:'DELETE',token:t}),
+  createFDScheme:(t,issuer_key,schemeData)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme`,{method:'POST',token:t,json:schemeData}),
+  updateFDScheme:(t,issuer_key,scheme_id,data)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'PUT',token:t,json:data}),
+  deleteFDScheme:(t,issuer_key,scheme_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'DELETE',token:t}),
+  createFDRateSlab:(t,issuer_key,scheme_id,slabData)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab`,{method:'POST',token:t,json:slabData}),
+  updateFDRateSlab:(t,issuer_key,scheme_id,slab_id,data)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab/${slab_id}`,{method:'PUT',token:t,json:data}),
+  deleteFDRateSlab:(t,issuer_key,scheme_id,slab_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab/${slab_id}`,{method:'DELETE',token:t})
 }

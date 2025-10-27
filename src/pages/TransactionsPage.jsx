@@ -413,21 +413,21 @@ export default function TransactionsPage() {
       )}
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center">
-          <FiClock className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400 mr-2 sm:mr-3" />
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Transaction History</h1>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 mt-1">View and manage all receipts</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center flex-1 min-w-0">
+          <FiClock className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400 mr-2 sm:mr-3 flex-shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">Transaction History</h1>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 mt-0.5 hidden sm:block">View and manage all receipts</p>
           </div>
         </div>
         <button
           onClick={loadReceipts}
           disabled={loading}
-          className="inline-flex items-center px-3 py-2 sm:px-4 border border-gray-300 dark:border-dark-600 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
+          className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
         >
-          <FiRefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">Refresh</span>
+          <FiRefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline ml-2">Refresh</span>
         </button>
       </div>
       
@@ -536,62 +536,84 @@ export default function TransactionsPage() {
             <div className="divide-y divide-gray-200 dark:divide-dark-700">
               {receipts.map((receipt) => (
                 <div key={receipt._key || receipt.id || receipt.receipt_no} className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {receipt.receipt_no || receipt.receiptNo}
-                        </h4>
-                        {getStatusBadge(receipt)}
+                  <div className="space-y-3">
+                    {/* Header with Receipt # and Status */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                            {receipt.receipt_no || receipt.receiptNo}
+                          </h4>
+                          {getStatusBadge(receipt)}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(receipt.date)}</p>
                       </div>
-                      <div className="space-y-1 text-xs text-gray-600 dark:text-dark-300">
-                        <div><span className="font-medium">Date:</span> {formatDate(receipt.date)}</div>
-                        <div><span className="font-medium">Investor:</span> {receipt.investor_name || receipt.investorName}</div>
-                        <div><span className="font-medium">Product:</span> {receipt.scheme_name || receipt.schemeName}</div>
-                        <div><span className="font-medium">Amount:</span> {formatCurrency(receipt.investment_amount || receipt.investmentAmount)}</div>
-                        <div><span className="font-medium">Employee:</span> {receipt.employee_name || receipt.employeeName}</div>
-                        {/* Supporting Documents */}
-                        {receipt.media_files && receipt.media_files.length > 0 && (
-                          <div className="mt-2">
-                            <span className="font-medium">Documents:</span>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {receipt.media_files.map((file, idx) => (
-                                <div key={idx} className="flex items-center space-x-1">
-                                  <button
-                                    onClick={() => handleViewDocument(receipt._key || receipt.id, file.id, file.filename)}
-                                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
-                                  >
-                                    <FiEye className="w-3 h-3 mr-1" />
-                                    View
-                                  </button>
-                                  <button
-                                    onClick={() => handleDownloadDocument(receipt._key || receipt.id, file.id, file.original_name)}
-                                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
-                                  >
-                                    <FiDownload className="w-3 h-3 mr-1" />
-                                    Download
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col space-y-2 ml-4">
                       <button
                         onClick={() => window.open(`/receipts/${receipt._key || receipt.id}`, '_blank')}
-                        className="inline-flex items-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-xs font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60"
+                        className="flex-shrink-0 inline-flex items-center px-2.5 py-1.5 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60"
                       >
-                        <FiEye className="w-4 h-4 mr-1.5" />
+                        <FiEye className="w-3.5 h-3.5 mr-1" />
                         View
+                      </button>
+                    </div>
+
+                    {/* Key Info Grid */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Amount</span>
+                        <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(receipt.investment_amount || receipt.investmentAmount)}</p>
+                      </div>
+                      {isAdmin && (
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Employee</span>
+                          <p className="font-medium text-gray-900 dark:text-white truncate">{receipt.employee_name || receipt.employeeName}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Investor Info */}
+                    <div className="border-t border-gray-200 dark:border-dark-700 pt-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Investor</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.investor_name || receipt.investorName}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">{receipt.investor_id || receipt.investorId}</p>
+                    </div>
+
+                    {/* Product Info */}
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{receipt.product_category || 'N/A'}</p>
+                    </div>
+
+                    {/* Documents */}
+                    {receipt.media_count > 0 && (
+                      <div className="pt-2 border-t border-gray-200 dark:border-dark-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Documents ({receipt.media_count})</p>
+                        <button
+                          onClick={() => handleViewDocument(receipt._key || receipt.id, 'all')}
+                          className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60"
+                        >
+                          <FiFile className="w-3.5 h-3.5 mr-1.5" />
+                          View Documents
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-dark-700">
+                      <button
+                        onClick={() => window.open(`/receipts/${receipt._key || receipt.id}`, '_blank')}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      >
+                        <FiEye className="w-3.5 h-3.5 mr-1.5" />
+                        View Details
                       </button>
                       {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
                         <button
                           onClick={() => handleDelete(receipt._key || receipt.id)}
-                          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60"
+                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-medium rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60"
                         >
-                          <FiTrash2 className="w-4 h-4 mr-1.5" />
+                          <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
                           Delete
                         </button>
                       )}

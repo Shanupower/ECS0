@@ -7,6 +7,12 @@ import { api } from '../api'
 import { normalizeBranchForAPI } from '../utils/branchMapping'
 import { FiPlus, FiX, FiUpload, FiFile, FiTrash2 } from 'react-icons/fi'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
+import StepMFScheme from './receipt-steps/StepMFScheme.jsx'
+import StepInvestmentType from './receipt-steps/StepInvestmentType.jsx'
+import StepTransactionDetails from './receipt-steps/StepTransactionDetails.jsx'
+import StepFDIssuer from './receipt-steps/StepFDIssuer.jsx'
+import StepFDScheme from './receipt-steps/StepFDScheme.jsx'
+import StepFDDetails from './receipt-steps/StepFDDetails.jsx'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
 // import empData from '../data/empdata.json' // Removed - using backend API instead
@@ -1213,25 +1219,29 @@ function StepProductType({ onBack, onNext }) {
       value: 'MF', 
       label: 'Mutual Funds', 
       icon: '📈',
-      description: 'Invest in diversified portfolios managed by professionals'
+      description: 'Invest in diversified portfolios managed by professionals',
+      enabled: true
     },
     { 
       value: 'INS', 
       label: 'Insurance', 
       icon: '🛡️',
-      description: 'Protect your future with life and health insurance'
+      description: 'Protect your future with life and health insurance',
+      enabled: false
     },
     { 
       value: 'FD', 
       label: 'Fixed Deposit', 
       icon: '🏦',
-      description: 'Secure fixed returns with guaranteed interest rates'
+      description: 'Secure fixed returns with guaranteed interest rates (Coming Soon)',
+      enabled: false
     },
     { 
       value: 'BOND', 
       label: 'Bonds', 
       icon: '📊',
-      description: 'Government and corporate bonds for stable returns'
+      description: 'Government and corporate bonds for stable returns',
+      enabled: false
     }
   ]
 
@@ -1245,13 +1255,21 @@ function StepProductType({ onBack, onNext }) {
           <button
             key={type.value}
             type="button"
-            onClick={() => setProductType(type.value)}
-            className={`p-6 rounded-2xl border-2 transition-all duration-200 hover:shadow-lg ${
-              productType === type.value 
-                ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
-                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+            onClick={() => type.enabled && setProductType(type.value)}
+            disabled={!type.enabled}
+            className={`relative p-6 rounded-2xl border-2 transition-all duration-200 ${
+              !type.enabled 
+                ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 opacity-60 cursor-not-allowed'
+                : productType === type.value 
+                  ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-md hover:shadow-lg' 
+                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg'
             }`}
           >
+            {!type.enabled && (
+              <div className="absolute top-3 right-3 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+                Coming Soon
+              </div>
+            )}
             <div className="text-center">
               <div className="text-4xl mb-3">{type.icon}</div>
               <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{type.label}</h4>
@@ -1277,100 +1295,7 @@ function StepProductType({ onBack, onNext }) {
   )
 }
 
-function StepInvestmentType({ onBack, onNext, productType }) {
-  const [investmentType, setInvestmentType] = useState('')
-
-  const investmentTypes = [
-    { 
-      value: 'Lumpsum', 
-      label: 'Lumpsum', 
-      icon: '💰',
-      description: 'One-time investment with immediate allocation'
-    },
-    { 
-      value: 'SIP', 
-      label: 'SIP (Systematic Investment Plan)', 
-      icon: '📅',
-      description: 'Regular monthly investments for long-term wealth building'
-    },
-    { 
-      value: 'SWP', 
-      label: 'SWP (Systematic Withdrawal Plan)', 
-      icon: '💸',
-      description: 'Regular withdrawals from existing investments'
-    },
-    { 
-      value: 'STP', 
-      label: 'STP (Systematic Transfer Plan)', 
-      icon: '🔄',
-      description: 'Transfer funds between different schemes systematically'
-    },
-    { 
-      value: 'NFO', 
-      label: 'NFO (New Fund Offer)', 
-      icon: '🆕',
-      description: 'Invest in newly launched mutual fund schemes'
-    },
-    { 
-      value: 'Additional Purchase', 
-      label: 'Additional Purchase', 
-      icon: '➕',
-      description: 'Add more units to your existing investment'
-    },
-    { 
-      value: 'Switch Over', 
-      label: 'Switch Over', 
-      icon: '🔄',
-      description: 'Move from one scheme to another within the same AMC'
-    }
-  ]
-
-  return (
-    <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Select Investment Type</h3>
-      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <p className="text-sm text-blue-800 dark:text-blue-200">
-          <strong>Product Type:</strong> {productType === 'MF' ? 'Mutual Funds' : productType === 'INS' ? 'Insurance' : productType === 'FD' ? 'Fixed Deposit' : 'Bonds'}
-        </p>
-      </div>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose how you want to invest in this product</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {investmentTypes.map(type => (
-          <button
-            key={type.value}
-            type="button"
-            onClick={() => setInvestmentType(type.value)}
-            className={`p-4 rounded-2xl border-2 transition-all duration-200 hover:shadow-lg ${
-              investmentType === type.value 
-                ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20 shadow-md' 
-                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-            }`}
-          >
-            <div className="text-center">
-              <div className="text-3xl mb-2">{type.icon}</div>
-              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">{type.label}</h4>
-              <p className="text-xs text-gray-600 dark:text-gray-400 leading-tight">{type.description}</p>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">
-          Back
-        </button>
-        <button
-          onClick={() => onNext(investmentType)}
-          disabled={!investmentType}
-          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-        >
-          Continue
-        </button>
-      </div>
-    </div>
-  )
-}
+// StepMFScheme, StepInvestmentType, and StepTransactionDetails components have been moved to separate files in receipt-steps/ folder
 
 function StepProduct({ onBack, onNext, investmentType, productType }) {
   const [product, setProduct] = useState(productType)
@@ -2212,32 +2137,218 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
 
             {/* Product-specific details */}
             {data.productType === 'MF' && (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {data.issuerCompany && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">AMC</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">{data.issuerCompany}</div>
+              <>
+                {/* New MF Scheme Details */}
+                {(data.amc_name || data.scheme_name) && (
+                  <div className="mt-4 p-4 bg-blue-100 dark:bg-blue-900/30 rounded-lg border border-blue-300 dark:border-blue-800">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                      <span className="w-2 h-2 bg-blue-600 rounded-full mr-2"></span>
+                      Mutual Fund Details
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {data.amc_name && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">AMC</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.amc_name}</div>
+                        </div>
+                      )}
+                      {data.scheme_name && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Scheme</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.scheme_name} {data.scheme_is_nfo && <span className="text-xs bg-yellow-100 dark:text-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-1 rounded ml-2">NFO</span>}</div>
+                        </div>
+                      )}
+                      {data.scheme_category && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Category</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.scheme_category} - {data.scheme_sub_category}</div>
+                        </div>
+                      )}
+                      {(data.scheme_plan || data.scheme_type) && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Plan & Type</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.scheme_plan} - {data.scheme_type}</div>
+                        </div>
+                      )}
+                      {data.folio_number && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Folio Number</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.folio_number}</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-                {data.schemeName && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Scheme</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">{data.schemeName}</div>
+
+                {/* FD Details */}
+                {data.fd_issuer_name && (
+                  <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                      <span className="w-2 h-2 bg-purple-600 rounded-full mr-2"></span>
+                      Fixed Deposit Details
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {data.fd_issuer_name && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Issuer</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.fd_issuer_name} ({data.fd_issuer_type})</div>
+                        </div>
+                      )}
+                      {data.fd_scheme_name && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Scheme</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.fd_scheme_name}</div>
+                          {data.fd_is_cumulative && <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded ml-2">Cumulative</span>}
+                        </div>
+                      )}
+                      {data.fd_deposit_amount && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Deposit Amount</div>
+                          <div className="font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.fd_deposit_amount)}</div>
+                        </div>
+                      )}
+                      {data.fd_tenure_months && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Tenure</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.fd_tenure_months} months ({Math.floor(data.fd_tenure_months/12)} years)</div>
+                        </div>
+                      )}
+                      {data.fd_payout_frequency && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Payout Frequency</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.fd_payout_frequency}</div>
+                        </div>
+                      )}
+                      {data.fd_total_rate_pa && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Interest Rate</div>
+                          <div className="font-semibold text-green-600 dark:text-green-400">{data.fd_total_rate_pa.toFixed(2)}% p.a.</div>
+                        </div>
+                      )}
+                      {data.fd_maturity_amount && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Maturity Amount</div>
+                          <div className="font-semibold text-green-700 dark:text-green-400">{fmtAmt(data.fd_maturity_amount)}</div>
+                        </div>
+                      )}
+                      {data.fd_maturity_date && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Maturity Date</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.fd_maturity_date)}</div>
+                        </div>
+                      )}
+                      {data.fd_application_number && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Application/FD Number</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.fd_application_number}</div>
+                        </div>
+                      )}
+                      {data.fd_tds_applicable && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">TDS</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.fd_form_15g_15h ? 'Form 15G/15H Submitted' : 'Applicable'}</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-                {data.schemeOption && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Option</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">{data.schemeOption}</div>
+                
+                {/* Transaction Details */}
+                {data.transaction_type && (
+                  <div className="mt-4 p-4 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-300 dark:border-green-800">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                      <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
+                      Transaction Details: {data.transaction_type}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {data.sip_frequency && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">SIP Frequency</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.sip_frequency}</div>
+                        </div>
+                      )}
+                      {data.sip_start_date && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.sip_start_date)}</div>
+                        </div>
+                      )}
+                      {data.sip_end_date && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">End Date</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.sip_end_date)}</div>
+                        </div>
+                      )}
+                      {data.sip_is_perpetual && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Type</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">Perpetual (30 years)</div>
+                        </div>
+                      )}
+                      {data.swp_frequency && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">SWP Frequency</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.swp_frequency}</div>
+                        </div>
+                      )}
+                      {data.swp_start_date && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.swp_start_date)}</div>
+                        </div>
+                      )}
+                      {data.swp_amount && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Withdrawal Amount</div>
+                          <div className="font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.swp_amount)}</div>
+                        </div>
+                      )}
+                      {data.stp_target_scheme_name && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Transfer to Scheme</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.stp_target_scheme_name}</div>
+                        </div>
+                      )}
+                      {data.stp_frequency && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">STP Frequency</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.stp_frequency}</div>
+                        </div>
+                      )}
+                      {data.stp_start_date && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.stp_start_date)}</div>
+                        </div>
+                      )}
+                      {data.stp_amount && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Transfer Amount</div>
+                          <div className="font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.stp_amount)}</div>
+                        </div>
+                      )}
+                      {data.switch_to_scheme_name && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Switch to Scheme</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.switch_to_scheme_name}</div>
+                        </div>
+                      )}
+                      {data.switch_type && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Switch Type</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.switch_type}</div>
+                        </div>
+                      )}
+                      {data.switch_value && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Switch Value</div>
+                          <div className="font-semibold text-green-600 dark:text-green-400">{data.switch_type === 'Amount' ? fmtAmt(data.switch_value) : `${data.switch_value} units`}</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-                {data.period && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Period</div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">{data.period}</div>
-                  </div>
-                )}
-              </div>
+              </>
             )}
           </div>
 
@@ -2573,7 +2684,10 @@ export default function MultiStepReceipt() {
   const [empSeed, setEmpSeed] = useState({ empCode: '', employeeName: '', branch: '' })
   const [investorSeed, setInvestorSeed] = useState({ investorId: '', investorInfo: null })
   const [productTypeSeed, setProductTypeSeed] = useState('')
+  const [mfSchemeSeed, setMfSchemeSeed] = useState(null) // Stores selectedAmc, selectedScheme, hasExistingFolio, folioNumber
   const [investmentTypeSeed, setInvestmentTypeSeed] = useState('')
+  const [fdIssuerSeed, setFdIssuerSeed] = useState(null)
+  const [fdSchemeSeed, setFdSchemeSeed] = useState(null)
   const [finalData, setFinalData] = useState(null)
   const [supportingDocument, setSupportingDocument] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -2726,27 +2840,121 @@ export default function MultiStepReceipt() {
           onBack={() => setStep(2)}
           onNext={type => { 
             setProductTypeSeed(type)
-            // Skip Investment Type step for non-MF products
+            // MF and FD go through special flows
             if (type === 'MF') {
               setStep(4)
+            } else if (type === 'FD') {
+              setStep(4) // FD also starts at step 4 (FD Issuer selection)
             } else {
-              setStep(5) // Skip to product details
+              setStep(999) // Skip to old flow for other types
             }
           }}
         />
       )}
 
-      {step === 4 && productTypeSeed === 'MF' && (
-        <StepInvestmentType
+      {/* FD Flow */}
+      {step === 4 && productTypeSeed === 'FD' && (
+        <StepFDIssuer
           onBack={() => setStep(3)}
-          onNext={type => { setInvestmentTypeSeed(type); setStep(5) }}
-          productType={productTypeSeed}
+          onNext={(issuer) => {
+            setFdIssuerSeed(issuer)
+            setStep(5)
+          }}
+          token={token}
         />
       )}
 
-      {step === 5 && (
+      {step === 5 && productTypeSeed === 'FD' && fdIssuerSeed && (
+        <StepFDScheme
+          onBack={() => setStep(4)}
+          onNext={(scheme) => {
+            setFdSchemeSeed(scheme)
+            setStep(6)
+          }}
+          token={token}
+          issuer={fdIssuerSeed}
+        />
+      )}
+
+      {step === 6 && productTypeSeed === 'FD' && fdSchemeSeed && (
+        <StepFDDetails
+          onBack={() => setStep(5)}
+          onNext={(fdData) => {
+            const base = buildBase()
+            const merged = {
+              ...base,
+              ...fdData,
+              productType: productTypeSeed
+            }
+            setFinalData(merged)
+            setStep(7)
+          }}
+          token={token}
+          issuer={fdIssuerSeed}
+          scheme={fdSchemeSeed}
+        />
+      )}
+
+      {step === 4 && productTypeSeed === 'MF' && (
+        <StepMFScheme
+          onBack={() => setStep(3)}
+          onNext={mfData => { 
+            setMfSchemeSeed(mfData)
+            setStep(5) // Next: Investment Type selection
+          }}
+          token={token}
+        />
+      )}
+
+      {step === 5 && productTypeSeed === 'MF' && mfSchemeSeed && (
+        <StepInvestmentType
+          onBack={() => setStep(4)}
+          onNext={type => { 
+            setInvestmentTypeSeed(type)
+            setStep(6) // Next: Transaction-specific details
+          }}
+          productType={productTypeSeed}
+          hasExistingFolio={mfSchemeSeed.hasExistingFolio}
+        />
+      )}
+
+      {step === 6 && productTypeSeed === 'MF' && mfSchemeSeed && investmentTypeSeed && (
+        <StepTransactionDetails
+          onBack={() => setStep(5)}
+          onNext={transactionData => {
+            // Merge all data and go to final step
+            const base = buildBase()
+            const merged = {
+              ...base,
+              ...transactionData,
+              amc_code: mfSchemeSeed.selectedAmc.amc_code,
+              amc_name: mfSchemeSeed.selectedAmc.amc_name,
+              scheme_code: mfSchemeSeed.selectedScheme.scheme_code,
+              scheme_name: mfSchemeSeed.selectedScheme.scheme_name,
+              scheme_category: mfSchemeSeed.selectedScheme.category,
+              scheme_sub_category: mfSchemeSeed.selectedScheme.sub_category,
+              scheme_plan: mfSchemeSeed.selectedScheme.plan,
+              scheme_type: mfSchemeSeed.selectedScheme.type,
+              scheme_is_nfo: mfSchemeSeed.selectedScheme.is_nfo,
+              has_existing_folio: mfSchemeSeed.hasExistingFolio,
+              folio_number: mfSchemeSeed.folioNumber,
+              transaction_type: investmentTypeSeed,
+              investmentType: investmentTypeSeed,
+              productType: productTypeSeed
+            }
+            setFinalData(merged)
+            setStep(7)
+          }}
+          investmentType={investmentTypeSeed}
+          selectedScheme={mfSchemeSeed.selectedScheme}
+          selectedAmc={mfSchemeSeed.selectedAmc}
+          token={token}
+        />
+      )}
+
+      {step === 5 && productTypeSeed !== 'MF' && (
         <StepProduct
-          onBack={() => setStep(productTypeSeed === 'MF' ? 4 : 3)}
+          onBack={() => setStep(3)}
           onNext={(_, normalized) => {
             const base = buildBase()
             const merged = { ...base, ...normalized, investmentType: investmentTypeSeed, productType: productTypeSeed }
@@ -2758,7 +2966,7 @@ export default function MultiStepReceipt() {
         />
       )}
 
-      {step === 6 && finalData && (
+      {step === 7 && finalData && (
         <StepFinal 
           data={finalData} 
           onBack={() => setStep(5)} 

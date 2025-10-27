@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes,Route,Navigate } from 'react-router-dom'
+import { Routes,Route,Navigate,useLocation } from 'react-router-dom'
 import { AuthProvider,useAuth } from './context/AuthContext'
 import { DarkModeProvider } from './context/DarkModeContext'
 import Layout from './components/Layout.jsx'
@@ -12,6 +12,21 @@ import ReceiptViewPage from './pages/ReceiptViewPage.jsx'
 import TransactionsPage from './pages/TransactionsPage.jsx'
 import UserManagementPage from './pages/UserManagementPage.jsx'
 import CustomerManagementPage from './pages/CustomerManagementPage.jsx'
+import SchemeManagementPage from './pages/SchemeManagementPage.jsx'
+
+// Page Transition Wrapper
+function PageTransition({ children }) {
+  const location = useLocation()
+  
+  return (
+    <div 
+      key={location.pathname}
+      className="page-transition-enter"
+    >
+      {children}
+    </div>
+  )
+}
 
 function PrivateRoute({children}){
   const {user}=useAuth()
@@ -39,14 +54,42 @@ export default function App(){
       <Routes>
         <Route path="/login" element={<LoginPage/>}/>
         <Route path="/" element={<PrivateRoute><Layout/></PrivateRoute>}>
-          <Route path="dashboard" element={<DashboardPage/>}/>
-          <Route path="branches" element={<BranchRoute><BranchDashboard/></BranchRoute>}/>
-          <Route path="admin/branches" element={<AdminRoute><AdminBranchManagement/></AdminRoute>}/>
-          <Route path="receipts" element={<ReceiptsPage/>}/>
-          <Route path="receipts/:id" element={<ReceiptViewPage/>}/>
-          <Route path="transactions" element={<TransactionsPage/>}/>
-          <Route path="users" element={<AdminRoute><UserManagementPage/></AdminRoute>}/>
-          <Route path="customers" element={<CustomerRoute><CustomerManagementPage/></CustomerRoute>}/>
+          <Route 
+            path="dashboard" 
+            element={<PageTransition><DashboardPage/></PageTransition>}
+          />
+          <Route 
+            path="branches" 
+            element={<PageTransition><BranchRoute><BranchDashboard/></BranchRoute></PageTransition>}
+          />
+          <Route 
+            path="admin/branches" 
+            element={<PageTransition><AdminRoute><AdminBranchManagement/></AdminRoute></PageTransition>}
+          />
+          <Route 
+            path="receipts" 
+            element={<PageTransition><ReceiptsPage/></PageTransition>}
+          />
+          <Route 
+            path="receipts/:id" 
+            element={<PageTransition><ReceiptViewPage/></PageTransition>}
+          />
+          <Route 
+            path="transactions" 
+            element={<PageTransition><TransactionsPage/></PageTransition>}
+          />
+          <Route 
+            path="users" 
+            element={<PageTransition><AdminRoute><UserManagementPage/></AdminRoute></PageTransition>}
+          />
+          <Route 
+            path="customers" 
+            element={<PageTransition><CustomerRoute><CustomerManagementPage/></CustomerRoute></PageTransition>}
+          />
+          <Route 
+            path="schemes" 
+            element={<PageTransition><AdminRoute><SchemeManagementPage/></AdminRoute></PageTransition>}
+          />
         </Route>
       </Routes>
     </AuthProvider>
