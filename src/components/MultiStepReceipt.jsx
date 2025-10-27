@@ -1233,8 +1233,8 @@ function StepProductType({ onBack, onNext }) {
       value: 'FD', 
       label: 'Fixed Deposit', 
       icon: '🏦',
-      description: 'Secure fixed returns with guaranteed interest rates (Coming Soon)',
-      enabled: false
+      description: 'Secure fixed returns with guaranteed interest rates',
+      enabled: true
     },
     { 
       value: 'BOND', 
@@ -1379,7 +1379,6 @@ function StepProduct({ onBack, onNext, investmentType, productType }) {
 
   return (
     <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 5 — Fill Product Details</h3>
       <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
         <p className="text-sm text-blue-800 dark:text-blue-200">
           <strong>Product Type:</strong> {productType === 'MF' ? 'Mutual Funds' : productType === 'INS' ? 'Insurance' : productType === 'FD' ? 'Fixed Deposit' : 'Bonds'} | <strong>Investment Type:</strong> {investmentType}
@@ -2958,7 +2957,7 @@ export default function MultiStepReceipt() {
         />
       )}
 
-      {step === 5 && productTypeSeed !== 'MF' && (
+      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && (
         <StepProduct
           onBack={() => setStep(3)}
           onNext={(_, normalized) => {

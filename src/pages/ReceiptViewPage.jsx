@@ -300,6 +300,11 @@ export default function ReceiptViewPage() {
     renewalDueDate: receipt.renewal_due_date || receipt.renewalDueDate,
     maturityAmount: receipt.maturity_amount || receipt.maturityAmount,
     renewalAmount: receipt.renewal_amount || receipt.renewalAmount,
+    // SIP fields
+    sip_frequency: receipt.sip_frequency,
+    sip_start_date: receipt.sip_start_date,
+    sip_end_date: receipt.sip_end_date,
+    sip_is_perpetual: receipt.sip_is_perpetual,
   }
 
   return (
@@ -489,6 +494,42 @@ export default function ReceiptViewPage() {
                   </div>
                 )}
               </div>
+
+              {/* SIP Details */}
+              {(transformedReceipt.sip_frequency || transformedReceipt.sip_start_date) && (
+                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                    SIP Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {transformedReceipt.sip_frequency && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Frequency</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.sip_frequency}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.sip_start_date && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.sip_start_date).toLocaleDateString('en-IN')}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.sip_end_date && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">End Date</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.sip_end_date).toLocaleDateString('en-IN')}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.sip_is_perpetual && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Type</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">Perpetual (30 years)</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

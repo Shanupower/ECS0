@@ -39,8 +39,9 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
 
     setLoading(true)
     try {
+      const issuer_key = issuer?._key || issuer?.issuer_key
       const result = await api.calculateFDRate(token, {
-        issuer_key: issuer.issuer_key,
+        issuer_key: issuer_key,
         scheme_id: scheme.scheme_id,
         tenure_months: parseInt(tenureMonths),
         payout_frequency: payoutFrequency,
@@ -85,8 +86,9 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   }, [principalAmount])
 
   const handleNext = () => {
+    const issuer_key = issuer?._key || issuer?.issuer_key
     const fdData = {
-      fd_issuer_key: issuer.issuer_key,
+      fd_issuer_key: issuer_key,
       fd_issuer_name: issuer.short_name,
       fd_issuer_type: issuer.type,
       fd_scheme_id: scheme.scheme_id,
@@ -117,15 +119,16 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
     const minAmount = scheme?.min_amount || issuer?.min_deposit_amount || 0
     if (parseFloat(principalAmount) < minAmount) return false
     if (issuer?.max_deposit_amount && parseFloat(principalAmount) > issuer.max_deposit_amount) return false
+    if (!scheme) return false
     if (parseInt(tenureMonths) < scheme.min_tenure_months) return false
     if (parseInt(tenureMonths) > scheme.max_tenure_months) return false
-    if (!lockedInterestRatePa) return false
+    // Don't block if rate is still loading, allow proceeding anyway
     return true
   }
 
   return (
     <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 6 — FD Booking Details</h3>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">FD Booking Details</h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Enter deposit details and review calculation</p>
 
       <div className="space-y-6">

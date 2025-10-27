@@ -50,7 +50,7 @@ export default function SchemeManagementPage() {
     is_nfo: false,
     nfo_validity: ''
   })
-  
+
   // FD Form Data States
   const [fdIssuerFormData, setFdIssuerFormData] = useState({
     legal_name: '',
@@ -119,7 +119,7 @@ export default function SchemeManagementPage() {
 
   useEffect(() => {
     if (selectedFdIssuer) {
-      loadFDSchemes(selectedFdIssuer.issuer_key)
+      loadFDSchemes(selectedFdIssuer._key || selectedFdIssuer.issuer_key)
     }
   }, [selectedFdIssuer, token])
 
@@ -343,8 +343,9 @@ export default function SchemeManagementPage() {
       return
     }
     try {
-      await api.createFDScheme(token, selectedFdIssuer._key, fdSchemeFormData)
-      await loadFDSchemes(selectedFdIssuer._key)
+      const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+      await api.createFDScheme(token, issuerKey, fdSchemeFormData)
+      await loadFDSchemes(issuerKey)
       setShowFDSchemeForm(false)
       resetFDSchemeForm()
     } catch (err) {
@@ -356,8 +357,9 @@ export default function SchemeManagementPage() {
     e.preventDefault()
     if (!selectedFdIssuer || !editingFDScheme) return
     try {
-      await api.updateFDScheme(token, selectedFdIssuer._key, editingFDScheme.scheme_id, fdSchemeFormData)
-      await loadFDSchemes(selectedFdIssuer._key)
+      const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+      await api.updateFDScheme(token, issuerKey, editingFDScheme.scheme_id, fdSchemeFormData)
+      await loadFDSchemes(issuerKey)
       setEditingFDScheme(null)
       setShowFDSchemeForm(false)
       resetFDSchemeForm()
@@ -370,8 +372,9 @@ export default function SchemeManagementPage() {
     if (!confirm('Are you sure you want to delete this FD scheme?')) return
     if (!selectedFdIssuer) return
     try {
-      await api.deleteFDScheme(token, selectedFdIssuer._key, scheme_id)
-      await loadFDSchemes(selectedFdIssuer._key)
+      const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+      await api.deleteFDScheme(token, issuerKey, scheme_id)
+      await loadFDSchemes(issuerKey)
     } catch (err) {
       alert('Failed to delete FD scheme: ' + err.message)
     }
@@ -384,7 +387,8 @@ export default function SchemeManagementPage() {
       return
     }
     try {
-      await api.createFDRateSlab(token, selectedFdIssuer._key, selectedFdScheme.scheme_id, fdSlabFormData)
+      const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+      await api.createFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, fdSlabFormData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setShowFDSlabForm(false)
       resetFDSlabForm()
@@ -397,7 +401,8 @@ export default function SchemeManagementPage() {
     e.preventDefault()
     if (!selectedFdIssuer || !selectedFdScheme || !editingFDSlab) return
     try {
-      await api.updateFDRateSlab(token, selectedFdIssuer._key, selectedFdScheme.scheme_id, editingFDSlab.slab_id, fdSlabFormData)
+      const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+      await api.updateFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, editingFDSlab.slab_id, fdSlabFormData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setEditingFDSlab(null)
       setShowFDSlabForm(false)
@@ -454,7 +459,7 @@ export default function SchemeManagementPage() {
       tenure_max_months: 24,
       payout_frequency_type: 'Monthly',
       base_interest_rate_pa: 0,
-      compounding_frequency: 'Quarterly',
+      compounding_frequency: null,
       effective_yield_pa: null,
       notes_public_display: '',
       is_active: true
@@ -511,7 +516,7 @@ export default function SchemeManagementPage() {
       tenure_max_months: slab.tenure_max_months || 24,
       payout_frequency_type: slab.payout_frequency_type || 'Monthly',
       base_interest_rate_pa: slab.base_interest_rate_pa || 0,
-      compounding_frequency: slab.compounding_frequency || 'Quarterly',
+      compounding_frequency: slab.compounding_frequency || null,
       effective_yield_pa: slab.effective_yield_pa || null,
       notes_public_display: slab.notes_public_display || '',
       is_active: slab.is_active !== undefined ? slab.is_active : true
@@ -552,13 +557,17 @@ export default function SchemeManagementPage() {
   }
 
   const loadFDRateSlabs = async (scheme_id) => {
-    if (!token || !scheme_id || !selectedFdIssuer) return
+    if (!token || !scheme_id) return
+    
+    // If selectedFdIssuer is not set, don't load (rate slabs view requires issuer)
+    if (!selectedFdIssuer) return
     
     setLoading(true)
     setError('')
     
     try {
-      const result = await api.getFDRateSlabs(token, selectedFdIssuer._key, scheme_id)
+      const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+      const result = await api.getFDRateSlabs(token, issuerKey, scheme_id)
       setFdRateSlabs(Array.isArray(result) ? result : [])
     } catch (err) {
       setError(err.message || 'Failed to load rate slabs')
@@ -587,6 +596,303 @@ export default function SchemeManagementPage() {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
           <p className="text-gray-600 dark:text-gray-400">This page is only available for administrators.</p>
         </div>
+      </div>
+    )
+  }
+
+  // FD Rate Slabs View - Must be checked BEFORE Schemes view
+  if (activeTab === 'FD' && selectedFdScheme && selectedFdIssuer) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <button
+            onClick={() => setSelectedFdScheme(null)}
+            className="inline-flex items-center mb-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
+          >
+            <FiArrowLeft className="w-4 h-4 mr-2" />
+            Back to Schemes
+          </button>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {selectedFdScheme.scheme_name}
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {selectedFdIssuer.short_name} • {selectedFdScheme.is_cumulative ? 'Cumulative' : 'Non-Cumulative'}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                resetFDSlabForm()
+                setEditingFDSlab(null)
+                setShowFDSlabForm(true)
+              }}
+              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              <FiPlus className="w-4 h-4 mr-2" />
+              Add Rate Slab
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Tenure Range</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payout Frequency</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Base Rate</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Effective Yield</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    </td>
+                  </tr>
+                ) : fdRateSlabs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No rate slabs available. Add one to get started.
+                    </td>
+                  </tr>
+                ) : (
+                  fdRateSlabs.map((slab) => (
+                    <tr key={slab._key} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                        {slab.tenure_min_months} - {slab.tenure_max_months} months
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {slab.payout_frequency_type}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
+                        {slab.base_interest_rate_pa}% p.a.
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400">
+                        {slab.effective_yield_pa ? `${slab.effective_yield_pa}% p.a.` : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          slab.is_active 
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                        }`}>
+                          {slab.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => {
+                            openFDSlabEdit(slab)
+                            setShowFDSlabForm(true)
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-4"
+                        >
+                          <FiEdit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Delete this rate slab?')) {
+                              try {
+                                const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+                                await api.deleteFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, slab.slab_id)
+                                await loadFDRateSlabs(selectedFdScheme.scheme_id)
+                              } catch (err) {
+                                alert('Failed to delete slab: ' + err.message)
+                              }
+                            }
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* FD Rate Slab Form Modal - Embedded in Rate Slabs View */}
+        {showFDSlabForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  {editingFDSlab ? 'Edit Rate Slab' : 'Add New Rate Slab'}
+                </h2>
+                <form onSubmit={editingFDSlab ? handleUpdateFDSlab : handleCreateFDSlab} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Slab ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={fdSlabFormData.slab_id}
+                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, slab_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 12to24_months_monthly"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Min Tenure (months) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={fdSlabFormData.tenure_min_months}
+                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_min_months: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Max Tenure (months) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={fdSlabFormData.tenure_max_months}
+                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_max_months: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Payout Frequency <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        required
+                        value={fdSlabFormData.payout_frequency_type}
+                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, payout_frequency_type: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="Monthly">Monthly</option>
+                        <option value="Quarterly">Quarterly</option>
+                        <option value="Half-Yearly">Half-Yearly</option>
+                        <option value="Yearly">Yearly</option>
+                        <option value="On Maturity">On Maturity</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Base Interest Rate (% p.a.) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      max="30"
+                      step="0.01"
+                      value={fdSlabFormData.base_interest_rate_pa}
+                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, base_interest_rate_pa: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  
+                  {selectedFdScheme?.is_cumulative && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Compounding Frequency <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          required
+                          value={fdSlabFormData.compounding_frequency || ''}
+                          onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, compounding_frequency: e.target.value || null })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="Quarterly">Quarterly</option>
+                          <option value="Half-Yearly">Half-Yearly</option>
+                          <option value="Yearly">Yearly</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Effective Yield (% p.a.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          step="0.01"
+                          value={fdSlabFormData.effective_yield_pa || ''}
+                          onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, effective_yield_pa: e.target.value ? parseFloat(e.target.value) : null })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder="Leave empty to calculate automatically"
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Public Display Notes
+                    </label>
+                    <input
+                      type="text"
+                      value={fdSlabFormData.notes_public_display}
+                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, notes_public_display: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., Rates effective 27-Oct-2025"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={fdSlabFormData.is_active}
+                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, is_active: e.target.checked })}
+                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Slab is active
+                      </span>
+                    </label>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowFDSlabForm(false)
+                        setEditingFDSlab(null)
+                        resetFDSlabForm()
+                      }}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                      {editingFDSlab ? 'Update Slab' : 'Create Slab'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -982,299 +1288,6 @@ export default function SchemeManagementPage() {
                       className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
                       {editingFDScheme ? 'Update Scheme' : 'Create Scheme'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // FD Rate Slabs View
-  if (activeTab === 'FD' && selectedFdScheme) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <button
-            onClick={() => setSelectedFdScheme(null)}
-            className="inline-flex items-center mb-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
-          >
-            <FiArrowLeft className="w-4 h-4 mr-2" />
-            Back to Schemes
-          </button>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {selectedFdScheme.scheme_name}
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {selectedFdIssuer.short_name} • {selectedFdScheme.is_cumulative ? 'Cumulative' : 'Non-Cumulative'}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                resetFDSlabForm()
-                setEditingFDSlab(null)
-                setShowFDSlabForm(true)
-              }}
-              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add Rate Slab
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Tenure Range</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payout Frequency</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Base Rate</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Effective Yield</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {loading ? (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
-                    </td>
-                  </tr>
-                ) : fdRateSlabs.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                      No rate slabs available. Add one to get started.
-                    </td>
-                  </tr>
-                ) : (
-                  fdRateSlabs.map((slab) => (
-                    <tr key={slab._key} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        {slab.tenure_min_months} - {slab.tenure_max_months} months
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {slab.payout_frequency_type}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
-                        {slab.base_interest_rate_pa}% p.a.
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400">
-                        {slab.effective_yield_pa ? `${slab.effective_yield_pa}% p.a.` : '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          slab.is_active 
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                        }`}>
-                          {slab.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => {
-                            setEditingFDSlab(slab)
-                            setShowFDSlabForm(true)
-                          }}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-4"
-                        >
-                          <FiEdit className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (confirm('Delete this rate slab?')) {
-                              try {
-                                await api.deleteFDRateSlab(token, selectedFdIssuer._key, selectedFdScheme.scheme_id, slab.slab_id)
-                                await loadFDRateSlabs(selectedFdScheme.scheme_id)
-                              } catch (err) {
-                                alert('Failed to delete slab: ' + err.message)
-                              }
-                            }
-                          }}
-                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                        >
-                          <FiTrash2 className="w-5 h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* FD Rate Slab Form Modal - Embedded in Rate Slabs View */}
-        {showFDSlabForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                  {editingFDSlab ? 'Edit Rate Slab' : 'Add New Rate Slab'}
-                </h2>
-                <form onSubmit={editingFDSlab ? handleUpdateFDSlab : handleCreateFDSlab} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Slab ID <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={fdSlabFormData.slab_id}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, slab_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="e.g., 12to24_months_monthly"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Min Tenure (months) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        value={fdSlabFormData.tenure_min_months}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_min_months: parseInt(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Max Tenure (months) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        value={fdSlabFormData.tenure_max_months}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_max_months: parseInt(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Payout Frequency <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        required
-                        value={fdSlabFormData.payout_frequency_type}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, payout_frequency_type: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="Monthly">Monthly</option>
-                        <option value="Quarterly">Quarterly</option>
-                        <option value="Half-Yearly">Half-Yearly</option>
-                        <option value="Yearly">Yearly</option>
-                        <option value="On Maturity">On Maturity</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Base Interest Rate (% p.a.) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        max="30"
-                        step="0.01"
-                        value={fdSlabFormData.base_interest_rate_pa}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, base_interest_rate_pa: parseFloat(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Compounding Frequency <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        required
-                        value={fdSlabFormData.compounding_frequency}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, compounding_frequency: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="Quarterly">Quarterly</option>
-                        <option value="Half-Yearly">Half-Yearly</option>
-                        <option value="Yearly">Yearly</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Effective Yield (% p.a.)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="30"
-                      step="0.01"
-                      value={fdSlabFormData.effective_yield_pa || ''}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, effective_yield_pa: e.target.value ? parseFloat(e.target.value) : null })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Leave empty to calculate automatically"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Public Display Notes
-                    </label>
-                    <input
-                      type="text"
-                      value={fdSlabFormData.notes_public_display}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, notes_public_display: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="e.g., Rates effective 27-Oct-2025"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={fdSlabFormData.is_active}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, is_active: e.target.checked })}
-                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Slab is active
-                      </span>
-                    </label>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowFDSlabForm(false)
-                        setEditingFDSlab(null)
-                        resetFDSlabForm()
-                      }}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      {editingFDSlab ? 'Update Slab' : 'Create Slab'}
                     </button>
                   </div>
                 </form>
@@ -1731,14 +1744,14 @@ export default function SchemeManagementPage() {
               <FiPlus className="w-4 h-4 mr-2" />
               Add FD Issuer
             </button>
-            <button
-              onClick={loadFDIssuers}
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+          <button
+            onClick={loadFDIssuers}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
           </>
         )}
       </div>
@@ -2079,7 +2092,7 @@ export default function SchemeManagementPage() {
                 </div>
                 
                 <div className="flex justify-end space-x-3 pt-4">
-                  <button
+              <button
                     type="button"
                     onClick={() => {
                       setShowFDIssuerForm(false)
@@ -2092,10 +2105,10 @@ export default function SchemeManagementPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
                     {editingFDIssuer ? 'Update Issuer' : 'Create Issuer'}
-                  </button>
+              </button>
                 </div>
               </form>
             </div>
@@ -2341,7 +2354,7 @@ export default function SchemeManagementPage() {
                 </div>
                 
                 <div className="flex justify-end space-x-3 pt-4">
-                  <button
+              <button
                     type="button"
                     onClick={() => {
                       setShowFDSchemeForm(false)
@@ -2354,180 +2367,10 @@ export default function SchemeManagementPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
                     {editingFDScheme ? 'Update Scheme' : 'Create Scheme'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FD Rate Slab Form Modal */}
-      {showFDSlabForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                {editingFDSlab ? 'Edit Rate Slab' : 'Add New Rate Slab'}
-              </h2>
-              <form onSubmit={editingFDSlab ? handleUpdateFDSlab : handleCreateFDSlab} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Slab ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={fdSlabFormData.slab_id}
-                    onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, slab_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="e.g., 12to24_months_monthly"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Min Tenure (months) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={fdSlabFormData.tenure_min_months}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_min_months: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Max Tenure (months) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={fdSlabFormData.tenure_max_months}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_max_months: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Payout Frequency <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      required
-                      value={fdSlabFormData.payout_frequency_type}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, payout_frequency_type: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="Monthly">Monthly</option>
-                      <option value="Quarterly">Quarterly</option>
-                      <option value="Half-Yearly">Half-Yearly</option>
-                      <option value="Yearly">Yearly</option>
-                      <option value="On Maturity">On Maturity</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Base Interest Rate (% p.a.) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      max="30"
-                      step="0.01"
-                      value={fdSlabFormData.base_interest_rate_pa}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, base_interest_rate_pa: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Compounding Frequency <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      required
-                      value={fdSlabFormData.compounding_frequency}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, compounding_frequency: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="Quarterly">Quarterly</option>
-                      <option value="Half-Yearly">Half-Yearly</option>
-                      <option value="Yearly">Yearly</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Effective Yield (% p.a.)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="30"
-                    step="0.01"
-                    value={fdSlabFormData.effective_yield_pa || ''}
-                    onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, effective_yield_pa: e.target.value ? parseFloat(e.target.value) : null })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Leave empty to calculate automatically"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Public Display Notes
-                  </label>
-                  <input
-                    type="text"
-                    value={fdSlabFormData.notes_public_display}
-                    onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, notes_public_display: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="e.g., Rates effective 27-Oct-2025"
-                  />
-                </div>
-                
-                <div>
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={fdSlabFormData.is_active}
-                      onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, is_active: e.target.checked })}
-                      className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Slab is active
-                    </span>
-                  </label>
-                </div>
-                
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowFDSlabForm(false)
-                      setEditingFDSlab(null)
-                      resetFDSlabForm()
-                    }}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    {editingFDSlab ? 'Update Slab' : 'Create Slab'}
-                  </button>
+              </button>
                 </div>
               </form>
             </div>

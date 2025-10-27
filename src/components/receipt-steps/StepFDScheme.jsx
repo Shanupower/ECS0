@@ -8,16 +8,17 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
-    if (issuer?.issuer_key) {
+    if (issuer?._key || issuer?.issuer_key) {
       loadSchemes()
     }
   }, [issuer])
 
   const loadSchemes = async () => {
-    if (!token || !issuer?.issuer_key) return
+    const issuer_key = issuer?._key || issuer?.issuer_key
+    if (!token || !issuer_key) return
     setLoading(true)
     try {
-      const result = await api.getFDSchemesByIssuer(token, issuer.issuer_key)
+      const result = await api.getFDSchemesByIssuer(token, issuer_key)
       setSchemes(Array.isArray(result) ? result : [])
     } catch (error) {
       console.error('Failed to load FD schemes:', error)
@@ -40,7 +41,7 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
 
   return (
     <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 5 — Select FD Scheme</h3>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Select FD Scheme</h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
         From: <strong className="text-gray-900 dark:text-white">{issuer?.short_name}</strong>
       </p>
