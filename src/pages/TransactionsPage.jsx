@@ -561,7 +561,7 @@ export default function TransactionsPage() {
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-gray-500 dark:text-gray-400">Amount</span>
-                        <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(receipt.investment_amount || receipt.investmentAmount)}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(receipt.fd_deposit_amount || receipt.investment_amount || receipt.investmentAmount)}</p>
                       </div>
                       {isAdmin && (
                         <div>
@@ -581,7 +581,7 @@ export default function TransactionsPage() {
                     {/* Product Info */}
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
                       <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{receipt.product_category || 'N/A'}</p>
                     </div>
 
@@ -679,12 +679,12 @@ export default function TransactionsPage() {
                               <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.investor_id || receipt.investorId}</div>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <div className="text-xs font-medium text-gray-700 dark:text-dark-300 truncate" title={receipt.scheme_name || receipt.schemeName}>
-                                {receipt.scheme_name || receipt.schemeName || 'N/A'}
+                              <div className="text-xs font-medium text-gray-700 dark:text-dark-300 truncate" title={receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName}>
+                                {receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}
                               </div>
                               <span className="text-gray-400 dark:text-dark-500">•</span>
                               <span className="text-xs text-gray-600 dark:text-dark-400 capitalize">
-                                {receipt.product_category || receipt.issuer_category || receipt.issuerCategory}
+                                {receipt.product_category || 'N/A'}
                               </span>
                             </div>
                           </div>
@@ -713,7 +713,7 @@ export default function TransactionsPage() {
                         <td className="px-3 py-3">
                           <div className="text-right">
                             <div className="text-base font-bold text-gray-900 dark:text-white">
-                              {formatCurrency(receipt.investment_amount || receipt.investmentAmount)}
+                              {formatCurrency(receipt.fd_deposit_amount || receipt.investment_amount || receipt.investmentAmount)}
                             </div>
                           </div>
                         </td>

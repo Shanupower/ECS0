@@ -1423,7 +1423,8 @@ export default function MultiStepReceipt() {
             const merged = {
               ...base,
               ...fdData,
-              productType: productTypeSeed
+              productType: productTypeSeed,
+              product_category: 'FD'
             }
             setFinalData(merged)
             setStep(7)

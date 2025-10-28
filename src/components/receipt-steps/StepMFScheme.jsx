@@ -109,6 +109,13 @@ export default function StepMFScheme({ onBack, onNext, token }) {
             </select>
             {selectedScheme && (
               <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                {selectedScheme.is_nfo && (
+                  <div className="mb-3">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
+                      🆕 NFO - New Fund Offer
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="font-medium text-gray-700 dark:text-gray-300">Category:</span>

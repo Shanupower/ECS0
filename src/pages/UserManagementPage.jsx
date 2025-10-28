@@ -12,7 +12,8 @@ import {
   FiUser,
   FiMail,
   FiMapPin,
-  FiShield
+  FiShield,
+  FiSearch
 } from 'react-icons/fi'
 
 export default function UserManagementPage() {
@@ -22,6 +23,7 @@ export default function UserManagementPage() {
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [formData, setFormData] = useState({
     emp_code: '',
     name: '',
@@ -132,6 +134,17 @@ export default function UserManagementPage() {
     return new Date(dateString).toLocaleDateString('en-IN')
   }
 
+  // Filter users based on search query
+  const filteredUsers = users.filter(user => {
+    const query = searchQuery.toLowerCase()
+    return (
+      user.name?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query) ||
+      user.emp_code?.toLowerCase().includes(query) ||
+      user.branch?.toLowerCase().includes(query)
+    )
+  })
+
   if (!isAdmin) {
     return (
       <div className="text-center py-12">
@@ -187,6 +200,24 @@ export default function UserManagementPage() {
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
           <FiAlertCircle className="h-5 w-5 mr-2" />
           {error}
+        </div>
+      )}
+
+      {/* Search Bar */}
+      {!loading && !error && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <FiSearch className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search by name, email, employee code, or branch..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            />
+          </div>
         </div>
       )}
 
@@ -326,7 +357,7 @@ export default function UserManagementPage() {
           {/* Mobile Card View */}
           <div className="block sm:hidden">
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <div key={user.id} className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -390,7 +421,7 @@ export default function UserManagementPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div className="flex items-center">
@@ -462,7 +493,14 @@ export default function UserManagementPage() {
             </table>
           </div>
           
-          {users.length === 0 && (
+          {filteredUsers.length === 0 && searchQuery && (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              <FiUsers className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+              <p>No users found matching "{searchQuery}".</p>
+            </div>
+          )}
+          
+          {filteredUsers.length === 0 && !searchQuery && users.length === 0 && (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
               <FiUsers className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
               <p>No users found.</p>

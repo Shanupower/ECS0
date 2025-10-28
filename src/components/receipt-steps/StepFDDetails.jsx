@@ -10,6 +10,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   const [women, setWomen] = useState(false)
   const [renewal, setRenewal] = useState(false)
   const [form15g15h, setForm15g15h] = useState(false)
+  const [applicationNumber, setApplicationNumber] = useState('')
   
   // Auto-computed fields
   const [lockedInterestRatePa, setLockedInterestRatePa] = useState(null)
@@ -21,6 +22,15 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   
   const [rateCalculation, setRateCalculation] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  // Auto-set payout frequency to "On Maturity" for cumulative schemes
+  useEffect(() => {
+    if (scheme?.is_cumulative && !payoutFrequency) {
+      setPayoutFrequency('On Maturity')
+    } else if (scheme?.is_cumulative && payoutFrequency !== 'On Maturity') {
+      setPayoutFrequency('On Maturity')
+    }
+  }, [scheme?.is_cumulative])
 
   useEffect(() => {
     calculateRate()
@@ -52,7 +62,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
       
       setRateCalculation(result)
       setLockedInterestRatePa(result.total_rate_pa)
-      setEffectiveYieldPa(result.total_rate_pa) // Assuming same for now
+      setEffectiveYieldPa(result.effective_yield_pa || result.total_rate_pa)
       
       // Calculate maturity/payout amounts
       if (principalAmount) {
@@ -109,13 +119,14 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
       fd_women_bonus: rateCalculation?.bonuses?.women,
       fd_renewal_bonus: rateCalculation?.bonuses?.renewal,
       fd_tds_applicable: scheme.tds_applicable,
-      fd_form_15g_15h: scheme.show_form15g15h_option && form15g15h
+      fd_form_15g_15h: scheme.show_form15g15h_option && form15g15h,
+      fd_application_number: applicationNumber
     }
     onNext(fdData)
   }
 
   const canProceed = () => {
-    if (!principalAmount || !tenureMonths || !payoutFrequency) return false
+    if (!principalAmount || !tenureMonths || !payoutFrequency || !applicationNumber) return false
     const minAmount = scheme?.min_amount || issuer?.min_deposit_amount || 0
     if (parseFloat(principalAmount) < minAmount) return false
     if (issuer?.max_deposit_amount && parseFloat(principalAmount) > issuer.max_deposit_amount) return false
@@ -146,6 +157,21 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
           <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
             Rate is locked as of this date
           </p>
+        </div>
+
+        {/* Application/FD Number */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Application/FD Number <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={applicationNumber}
+            onChange={(e) => setApplicationNumber(e.target.value)}
+            placeholder="Enter application/FD number"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            required
+          />
         </div>
 
         {/* Principal Amount */}
@@ -191,17 +217,28 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Payout Frequency <span className="text-red-500">*</span>
+            {scheme?.is_cumulative && (
+              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Fixed for Cumulative)</span>
+            )}
           </label>
           <select
             value={payoutFrequency}
             onChange={(e) => setPayoutFrequency(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            disabled={scheme?.is_cumulative}
+            className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
+              scheme?.is_cumulative ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
           >
             <option value="">Select frequency...</option>
             {scheme?.payout_frequency_type?.map(freq => (
               <option key={freq} value={freq}>{freq}</option>
             ))}
           </select>
+          {scheme?.is_cumulative && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Cumulative schemes payout only at maturity
+            </p>
+          )}
         </div>
 
         {/* Bonuses */}

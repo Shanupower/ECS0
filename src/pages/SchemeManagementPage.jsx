@@ -129,6 +129,21 @@ export default function SchemeManagementPage() {
     }
   }, [selectedFdScheme, token])
 
+  // Auto-calculate effective yield for cumulative schemes
+  useEffect(() => {
+    if (selectedFdScheme?.is_cumulative && fdSlabFormData.compounding_frequency && fdSlabFormData.base_interest_rate_pa) {
+      const r = fdSlabFormData.base_interest_rate_pa / 100
+      const n = fdSlabFormData.compounding_frequency === 'Monthly' ? 12 :
+                fdSlabFormData.compounding_frequency === 'Quarterly' ? 4 :
+                fdSlabFormData.compounding_frequency === 'Half-Yearly' ? 2 : 1
+      const effectiveYield = Math.round(((Math.pow(1 + r / n, n) - 1) * 100) * 100) / 100
+      // Only update if the calculated value is different from current value
+      if (Math.abs((fdSlabFormData.effective_yield_pa || 0) - effectiveYield) > 0.001) {
+        setFdSlabFormData(prev => ({ ...prev, effective_yield_pa: effectiveYield }))
+      }
+    }
+  }, [fdSlabFormData.base_interest_rate_pa, fdSlabFormData.compounding_frequency, selectedFdScheme?.is_cumulative])
+
   const loadAMCs = async () => {
     if (!token) return
     
@@ -453,11 +468,13 @@ export default function SchemeManagementPage() {
   }
   
   const resetFDSlabForm = () => {
+    // Auto-set payout frequency to "On Maturity" for cumulative schemes
+    const defaultPayoutFrequency = selectedFdScheme?.is_cumulative ? 'On Maturity' : 'Monthly'
     setFdSlabFormData({
       slab_id: '',
       tenure_min_months: 12,
       tenure_max_months: 24,
-      payout_frequency_type: 'Monthly',
+      payout_frequency_type: defaultPayoutFrequency,
       base_interest_rate_pa: 0,
       compounding_frequency: null,
       effective_yield_pa: null,
@@ -510,11 +527,13 @@ export default function SchemeManagementPage() {
   
   const openFDSlabEdit = (slab) => {
     setEditingFDSlab(slab)
+    // Auto-set payout frequency to "On Maturity" for cumulative schemes
+    const defaultPayoutFrequency = selectedFdScheme?.is_cumulative ? 'On Maturity' : (slab.payout_frequency_type || 'Monthly')
     setFdSlabFormData({
       slab_id: slab.slab_id || '',
       tenure_min_months: slab.tenure_min_months || 12,
       tenure_max_months: slab.tenure_max_months || 24,
-      payout_frequency_type: slab.payout_frequency_type || 'Monthly',
+      payout_frequency_type: defaultPayoutFrequency,
       base_interest_rate_pa: slab.base_interest_rate_pa || 0,
       compounding_frequency: slab.compounding_frequency || null,
       effective_yield_pa: slab.effective_yield_pa || null,
@@ -774,12 +793,18 @@ export default function SchemeManagementPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Payout Frequency <span className="text-red-500">*</span>
+                        {selectedFdScheme?.is_cumulative && (
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Fixed for Cumulative)</span>
+                        )}
                       </label>
                       <select
                         required
                         value={fdSlabFormData.payout_frequency_type}
                         onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, payout_frequency_type: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        disabled={selectedFdScheme?.is_cumulative}
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                          selectedFdScheme?.is_cumulative ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
                       >
                         <option value="Monthly">Monthly</option>
                         <option value="Quarterly">Quarterly</option>
@@ -787,6 +812,11 @@ export default function SchemeManagementPage() {
                         <option value="Yearly">Yearly</option>
                         <option value="On Maturity">On Maturity</option>
                       </select>
+                      {selectedFdScheme?.is_cumulative && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          Cumulative schemes payout only at maturity
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -1090,7 +1120,15 @@ export default function SchemeManagementPage() {
                       <input
                         type="checkbox"
                         checked={fdSchemeFormData.is_cumulative}
-                        onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, is_cumulative: e.target.checked })}
+                        onChange={(e) => {
+                          const isCumulative = e.target.checked
+                          setFdSchemeFormData({
+                            ...fdSchemeFormData,
+                            is_cumulative: isCumulative,
+                            // Auto-set payout frequency based on cumulative status
+                            payout_frequency_type: isCumulative ? ['On Maturity'] : ['Monthly']
+                          })
+                        }}
                         className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                       />
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2172,7 +2210,15 @@ export default function SchemeManagementPage() {
                     <input
                       type="checkbox"
                       checked={fdSchemeFormData.is_cumulative}
-                      onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, is_cumulative: e.target.checked })}
+                      onChange={(e) => {
+                        const isCumulative = e.target.checked
+                        setFdSchemeFormData({
+                          ...fdSchemeFormData,
+                          is_cumulative: isCumulative,
+                          // Auto-set payout frequency based on cumulative status
+                          payout_frequency_type: isCumulative ? ['On Maturity'] : ['Monthly']
+                        })
+                      }}
                       className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                     />
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">

@@ -10,15 +10,6 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
     branch: ''
   })
   const [onlineTransactionNumber, setOnlineTransactionNumber] = useState('')
-  const [fdDetails, setFdDetails] = useState({
-    companyName: '',
-    clientCategory: '',
-    investAmount: '',
-    period: '',
-    interestRate: '',
-    interestPayable: '',
-    transactionType: 'Fresh'
-  })
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0]
@@ -66,17 +57,18 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
     
     // Validate product-specific details
     if (data.productType === 'FD') {
-      if (!fdDetails.companyName || !fdDetails.clientCategory || !fdDetails.investAmount || 
-          !fdDetails.period || !fdDetails.interestRate || !fdDetails.interestPayable) {
+      // Validate FD fields from data
+      if (!data.fd_issuer_name || !data.fd_scheme_name || !data.fd_deposit_amount || 
+          !data.fd_tenure_months || !data.fd_payout_frequency || !data.fd_application_number) {
         alert('Please fill all Fixed Deposit details')
         return
       }
-      if (parseFloat(fdDetails.investAmount) <= 0) {
+      if (parseFloat(data.fd_deposit_amount) <= 0) {
         alert('Deposit amount must be a positive number')
         return
       }
-      if (parseFloat(fdDetails.interestRate) <= 0) {
-        alert('Interest rate must be a positive number')
+      if (!data.fd_locked_interest_rate_pa || parseFloat(data.fd_locked_interest_rate_pa) <= 0) {
+        alert('Interest rate must be calculated')
         return
       }
     } else if (data.productType === 'MF') {
@@ -127,8 +119,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       ...data,
       transactionType,
       ...(transactionType === 'Offline' ? offlineDetails : {}),
-      ...(transactionType === 'Online' ? { transactionNumber: onlineTransactionNumber } : {}),
-      ...(data.productType === 'FD' ? fdDetails : {})
+      ...(transactionType === 'Online' ? { transactionNumber: onlineTransactionNumber } : {})
     }
     
     onSave(finalData)
