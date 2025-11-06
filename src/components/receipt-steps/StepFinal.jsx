@@ -352,10 +352,25 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                           <div className="font-semibold text-gray-900 dark:text-gray-100">{data.scheme_category} - {data.scheme_sub_category}</div>
                         </div>
                       )}
-                      {(data.scheme_plan || data.scheme_type) && (
+                      {(data.scheme_plan || data.scheme_option || data.scheme_type) && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                          <div className="text-sm text-gray-600 dark:text-gray-400">Plan & Type</div>
-                          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.scheme_plan} - {data.scheme_type}</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Plan, Option & Type</div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">
+                            {data.scheme_plan && <span>{data.scheme_plan}</span>}
+                            {data.scheme_option && (
+                              <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                data.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                                data.scheme_option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                                'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                              }`}>
+                                {data.scheme_option === 'GROWTH' ? 'Growth' : 
+                                 data.scheme_option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                                 data.scheme_option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                                 data.scheme_option}
+                              </span>
+                            )}
+                            {data.scheme_type && <span className="ml-2">- {data.scheme_type}</span>}
+                          </div>
                         </div>
                       )}
                       {data.folio_number && (

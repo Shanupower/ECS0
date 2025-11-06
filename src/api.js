@@ -140,6 +140,9 @@ export const api={
   updateScheme:(t,scheme_code,data)=>req(`/api/schemes/${scheme_code}`,{method:'PUT',token:t,json:data}),
   deleteScheme:(t,scheme_code)=>req(`/api/schemes/${scheme_code}`,{method:'DELETE',token:t}),
   checkNfoValidity:(t)=>req('/api/schemes/check-nfo-validity',{method:'POST',token:t}),
+  expandPreview:(t,data)=>req('/api/schemes/expand-preview',{method:'POST',token:t,json:data}),
+  commitVariants:(t,data)=>req('/api/schemes/commit-variants',{method:'POST',token:t,json:data}),
+  checkDuplicate:(t,params)=>req('/api/schemes/check-duplicate',{token:t,query:params}),
   
   // FD Schemes endpoints (nested structure)
   listFDIssuers:(t)=>req('/api/fd-schemes/issuers',{token:t}),

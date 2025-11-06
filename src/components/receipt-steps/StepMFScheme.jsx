@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { api } from '../../api'
+import SearchableSelect from '../SearchableSelect.jsx'
 
 export default function StepMFScheme({ onBack, onNext, token }) {
   const [amcs, setAmcs] = useState([])
@@ -46,6 +47,23 @@ export default function StepMFScheme({ onBack, onNext, token }) {
     }
   }
 
+  // Format AMCs for SearchableSelect
+  const amcOptions = useMemo(() => {
+    return amcs.map(amc => ({
+      label: amc.amc_name,
+      value: amc.amc_code
+    }))
+  }, [amcs])
+
+  // Format schemes for SearchableSelect
+  const schemeOptions = useMemo(() => {
+    return schemes.map(scheme => ({
+      label: `${scheme.display_name || scheme.scheme_name}${scheme.is_nfo ? ' [NFO]' : ''}`,
+      value: scheme.scheme_code,
+      scheme: scheme // Store full scheme object
+    }))
+  }, [schemes])
+
   const handleNext = () => {
     if (!selectedScheme || hasExistingFolio === null) return
     
@@ -68,20 +86,18 @@ export default function StepMFScheme({ onBack, onNext, token }) {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Select AMC (Asset Management Company) <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
+            options={amcOptions}
             value={selectedAmc?.amc_code || ''}
-            onChange={(e) => {
-              const amc = amcs.find(a => a.amc_code === e.target.value)
+            onChange={(amcCode) => {
+              const amc = amcs.find(a => a.amc_code === amcCode)
               setSelectedAmc(amc || null)
               setSelectedScheme(null)
             }}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
-          >
-            <option value="">Select AMC...</option>
-            {amcs.map(amc => (
-              <option key={amc.amc_code} value={amc.amc_code}>{amc.amc_name}</option>
-            ))}
-          </select>
+            placeholder="Search for an AMC..."
+            disabled={loading}
+            maxHeight={250}
+          />
         </div>
 
         {/* Scheme Selection */}
@@ -90,23 +106,17 @@ export default function StepMFScheme({ onBack, onNext, token }) {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Select Scheme <span className="text-red-500">*</span>
             </label>
-            <select
+            <SearchableSelect
+              options={schemeOptions}
               value={selectedScheme?.scheme_code || ''}
-              onChange={(e) => {
-                const scheme = schemes.find(s => s.scheme_code === e.target.value)
+              onChange={(schemeCode) => {
+                const scheme = schemes.find(s => s.scheme_code === schemeCode)
                 setSelectedScheme(scheme || null)
               }}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="Search for a scheme..."
               disabled={!selectedAmc || loading}
-            >
-              <option value="">Select Scheme...</option>
-              {schemes.map(scheme => (
-                <option key={scheme.scheme_code} value={scheme.scheme_code}>
-                  {scheme.scheme_name}
-                  {scheme.is_nfo && ' [NFO]'}
-                </option>
-              ))}
-            </select>
+              maxHeight={300}
+            />
             {selectedScheme && (
               <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                 {selectedScheme.is_nfo && (
@@ -128,6 +138,25 @@ export default function StepMFScheme({ onBack, onNext, token }) {
                   <div>
                     <span className="font-medium text-gray-700 dark:text-gray-300">Plan:</span>
                     <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.plan}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">Option:</span>
+                    <span className="ml-2">
+                      {selectedScheme.option ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          selectedScheme.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                          selectedScheme.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                        }`}>
+                          {selectedScheme.option === 'GROWTH' ? 'Growth' : 
+                           selectedScheme.option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                           selectedScheme.option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                           selectedScheme.option}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 dark:text-gray-400">-</span>
+                      )}
+                    </span>
                   </div>
                   <div>
                     <span className="font-medium text-gray-700 dark:text-gray-300">Type:</span>

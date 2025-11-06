@@ -1470,11 +1470,12 @@ export default function MultiStepReceipt() {
               amc_code: mfSchemeSeed.selectedAmc.amc_code,
               amc_name: mfSchemeSeed.selectedAmc.amc_name,
               scheme_code: mfSchemeSeed.selectedScheme.scheme_code,
-              scheme_name: mfSchemeSeed.selectedScheme.scheme_name,
-              schemeName: mfSchemeSeed.selectedScheme.scheme_name, // camelCase for compatibility
+              scheme_name: mfSchemeSeed.selectedScheme.display_name || mfSchemeSeed.selectedScheme.scheme_name,
+              schemeName: mfSchemeSeed.selectedScheme.display_name || mfSchemeSeed.selectedScheme.scheme_name, // camelCase for compatibility
               scheme_category: mfSchemeSeed.selectedScheme.category,
               scheme_sub_category: mfSchemeSeed.selectedScheme.sub_category,
               scheme_plan: mfSchemeSeed.selectedScheme.plan,
+              scheme_option: mfSchemeSeed.selectedScheme.option,
               scheme_type: mfSchemeSeed.selectedScheme.type,
               scheme_is_nfo: mfSchemeSeed.selectedScheme.is_nfo,
               has_existing_folio: mfSchemeSeed.hasExistingFolio,

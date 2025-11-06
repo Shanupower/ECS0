@@ -516,6 +516,20 @@ export default function ReceiptViewPage() {
                     <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
                       <div className="text-sm text-gray-600 dark:text-gray-400">Scheme Name</div>
                       <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.schemeName}</div>
+                      {transformedReceipt.scheme_option && (
+                        <div className="mt-2">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            transformedReceipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                            transformedReceipt.scheme_option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                            'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                          }`}>
+                            {transformedReceipt.scheme_option === 'GROWTH' ? 'Growth' : 
+                             transformedReceipt.scheme_option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                             transformedReceipt.scheme_option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                             transformedReceipt.scheme_option}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

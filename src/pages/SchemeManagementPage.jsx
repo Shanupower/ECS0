@@ -41,15 +41,23 @@ export default function SchemeManagementPage() {
     amc_code: ''
   })
   const [schemeFormData, setSchemeFormData] = useState({
-    scheme_name: '',
+    base_name: '',
     scheme_code: '',
     category: 'Equity',
     sub_category: '',
-    plan: 'Regular',
-    type: 'Open Ended',
+    plans: ['REGULAR'],
+    options: ['GROWTH'],
+    type: 'OPEN_ENDED',
     is_nfo: false,
     nfo_validity: ''
   })
+  
+  // Variant preview states
+  const [showVariantPreview, setShowVariantPreview] = useState(false)
+  const [variantPreviewData, setVariantPreviewData] = useState([])
+  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [proposedAmfiCodes, setProposedAmfiCodes] = useState({})
+  const [updateIfExists, setUpdateIfExists] = useState(false)
 
   // FD Form Data States
   const [fdIssuerFormData, setFdIssuerFormData] = useState({
@@ -214,30 +222,126 @@ export default function SchemeManagementPage() {
     }
   }
 
-  const handleCreateScheme = async (e) => {
-    e.preventDefault()
-    
+  // Generate variant preview
+  const handlePreviewVariants = async () => {
     if (!selectedAmc) {
       alert('Please select an AMC first')
       return
     }
     
+    if (!schemeFormData.base_name || !schemeFormData.base_name.trim()) {
+      alert('Please enter a scheme name')
+      return
+    }
+    
+    if (schemeFormData.plans.length === 0) {
+      alert('Please select at least one plan')
+      return
+    }
+    
+    if (schemeFormData.options.length === 0) {
+      alert('Please select at least one option')
+      return
+    }
+    
+    setLoadingPreview(true)
     try {
-      const schemeData = {
-        ...schemeFormData,
+      const previewData = {
         amc_code: selectedAmc.amc_code,
         amc_name: selectedAmc.amc_name,
-        nav_latest: 0,
-        nav_date: new Date().toISOString().split('T')[0]
+        base_name: schemeFormData.base_name,
+        category: schemeFormData.category,
+        sub_category: schemeFormData.sub_category,
+        type: schemeFormData.type,
+        is_nfo: schemeFormData.is_nfo,
+        plans: schemeFormData.plans,
+        options: schemeFormData.options,
+        proposedAmfiCodes: proposedAmfiCodes
       }
       
-      await api.createScheme(token, schemeData)
+      const result = await api.expandPreview(token, previewData)
+      
+      // Initialize each variant with selected: true and editable amfi_code
+      const initializedVariants = result.variants.map((v, idx) => ({
+        ...v,
+        selected: !v.exists, // Pre-select only non-existing variants
+        id: `${v.plan}|${v.option}`
+      }))
+      
+      setVariantPreviewData(initializedVariants)
+      setShowVariantPreview(true)
+    } catch (err) {
+      alert('Failed to generate preview: ' + err.message)
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+  
+  // Commit selected variants
+  const handleCommitVariants = async () => {
+    const selectedVariants = variantPreviewData.filter(v => v.selected)
+    
+    if (selectedVariants.length === 0) {
+      alert('Please select at least one variant to create')
+      return
+    }
+    
+    // Validate all selected variants have AMFI codes (unless NFO)
+    const missingAmfi = selectedVariants.filter(v => !v.amfi_code && !schemeFormData.is_nfo)
+    if (missingAmfi.length > 0) {
+      alert('All selected variants must have an AMFI code (or enable NFO mode)')
+      return
+    }
+    
+    setLoadingPreview(true)
+    try {
+      const commitData = {
+        amc_code: selectedAmc.amc_code,
+        amc_name: selectedAmc.amc_name,
+        base_name: schemeFormData.base_name,
+        category: schemeFormData.category,
+        sub_category: schemeFormData.sub_category,
+        type: schemeFormData.type,
+        is_nfo: schemeFormData.is_nfo,
+        nfo_validity: schemeFormData.nfo_validity,
+        variants: selectedVariants.map(v => ({
+          plan: v.plan,
+          option: v.option,
+          amfi_code: v.amfi_code,
+          selected: true,
+          updateIfExists: updateIfExists
+        }))
+      }
+      
+      const result = await api.commitVariants(token, commitData)
+      
+      let message = `Successfully processed ${selectedVariants.length} variants:\n`
+      message += `Created: ${result.created}\n`
+      message += `Updated: ${result.updated}\n`
+      message += `Skipped: ${result.skipped}`
+      
+      if (result.errors && result.errors.length > 0) {
+        message += `\n\nErrors:\n${result.errors.map(e => `${e.variant}: ${e.error}`).join('\n')}`
+      }
+      
+      alert(message)
+      
       await loadSchemes(selectedAmc.amc_code)
       setShowSchemeForm(false)
+      setShowVariantPreview(false)
       resetSchemeForm()
     } catch (err) {
-      alert('Failed to create scheme: ' + err.message)
+      alert('Failed to commit variants: ' + err.message)
+    } finally {
+      setLoadingPreview(false)
     }
+  }
+  
+  const handleCreateScheme = async (e) => {
+    e.preventDefault()
+    
+    // Use variant preview flow
+    handlePreviewVariants()
   }
 
   const handleUpdateScheme = async (e) => {
@@ -270,15 +374,20 @@ export default function SchemeManagementPage() {
 
   const resetSchemeForm = () => {
     setSchemeFormData({
-      scheme_name: '',
+      base_name: '',
       scheme_code: '',
       category: 'Equity',
       sub_category: '',
-      plan: 'Regular',
-      type: 'Open Ended',
+      plans: ['REGULAR'],
+      options: ['GROWTH'],
+      type: 'OPEN_ENDED',
       is_nfo: false,
       nfo_validity: ''
     })
+    setShowVariantPreview(false)
+    setVariantPreviewData([])
+    setProposedAmfiCodes({})
+    setUpdateIfExists(false)
   }
 
   const openAMCEdit = (amc) => {
@@ -1406,13 +1515,13 @@ export default function SchemeManagementPage() {
                     Scheme Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Code
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Category
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Plan
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Option
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Type
@@ -1428,13 +1537,15 @@ export default function SchemeManagementPage() {
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredSchemes.map((scheme, idx) => (
                   <tr key={scheme.scheme_code || idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {scheme.scheme_name}
+                        {scheme.display_name || scheme.scheme_name}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {scheme.scheme_code}
+                      {scheme.display_name && scheme.display_name !== scheme.scheme_name && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Base: {scheme.base_name || scheme.scheme_name}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
@@ -1442,7 +1553,23 @@ export default function SchemeManagementPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {scheme.plan}
+                      {scheme.plan || 'Regular'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {scheme.option ? (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          scheme.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                          scheme.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                        }`}>
+                          {scheme.option === 'GROWTH' ? 'Growth' : 
+                           scheme.option === 'IDCW_PAYOUT' ? 'IDCW-P' : 
+                           scheme.option === 'IDCW_REINVEST' ? 'IDCW-R' : 
+                           scheme.option}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {scheme.type}
@@ -1493,82 +1620,59 @@ export default function SchemeManagementPage() {
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                   {editingScheme ? 'Edit Scheme' : 'Add New Scheme'}
                 </h2>
-                <form onSubmit={editingScheme ? handleUpdateScheme : handleCreateScheme} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                {!showVariantPreview ? (
+                  <form onSubmit={handleCreateScheme} className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Scheme Name <span className="text-red-500">*</span>
+                        Scheme Base Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         required
-                        value={schemeFormData.scheme_name}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, scheme_name: e.target.value })}
+                        value={schemeFormData.base_name}
+                        onChange={(e) => setSchemeFormData({ ...schemeFormData, base_name: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., HDFC Flexi Cap Fund"
                       />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Base name without plan or option suffixes
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Scheme Code <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={schemeFormData.scheme_code}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, scheme_code: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Category <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          required
+                          value={schemeFormData.category}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="Equity">Equity</option>
+                          <option value="Debt">Debt</option>
+                          <option value="Hybrid">Hybrid</option>
+                          <option value="Commodity">Commodity</option>
+                          <option value="ETF">ETF</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Sub Category <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={schemeFormData.sub_category}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder="e.g., Flexi Cap, Large Cap"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Category <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        required
-                        value={schemeFormData.category}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="Equity">Equity</option>
-                        <option value="Debt">Debt</option>
-                        <option value="Hybrid">Hybrid</option>
-                        <option value="Commodity">Commodity</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Sub Category <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={schemeFormData.sub_category}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Plan <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        required
-                        value={schemeFormData.plan}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, plan: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="Regular">Regular</option>
-                        <option value="Direct">Direct</option>
-                        <option value="ETF">ETF</option>
-                      </select>
-                    </div>
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Type <span className="text-red-500">*</span>
@@ -1579,62 +1683,261 @@ export default function SchemeManagementPage() {
                         onChange={(e) => setSchemeFormData({ ...schemeFormData, type: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       >
-                        <option value="Open Ended">Open Ended</option>
-                        <option value="Close Ended">Close Ended</option>
-                        <option value="Exchange Traded Fund">Exchange Traded Fund</option>
+                        <option value="OPEN_ENDED">Open Ended</option>
+                        <option value="CLOSE_ENDED">Close Ended</option>
+                        <option value="INTERVAL">Interval</option>
                       </select>
                     </div>
-                  </div>
-                  
-                  <div>
-                    <label className="flex items-center space-x-2">
+                    
+                    {/* Plan Multi-Select */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Plan (Multi-Select) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-3">
+                        {['REGULAR', 'DIRECT'].map(plan => (
+                          <label key={plan} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={schemeFormData.plans.includes(plan)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSchemeFormData({ ...schemeFormData, plans: [...schemeFormData.plans, plan] })
+                                } else {
+                                  setSchemeFormData({ ...schemeFormData, plans: schemeFormData.plans.filter(p => p !== plan) })
+                                }
+                              }}
+                              className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {plan === 'REGULAR' ? 'Regular' : 'Direct'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Option Multi-Select */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Option (Multi-Select) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-3">
+                        {['GROWTH', 'IDCW_PAYOUT', 'IDCW_REINVEST'].map(option => (
+                          <label key={option} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={schemeFormData.options.includes(option)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSchemeFormData({ ...schemeFormData, options: [...schemeFormData.options, option] })
+                                } else {
+                                  setSchemeFormData({ ...schemeFormData, options: schemeFormData.options.filter(o => o !== option) })
+                                }
+                              }}
+                              className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {option === 'GROWTH' ? 'Growth' : option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 'IDCW – Reinvestment'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={schemeFormData.is_nfo}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, is_nfo: e.target.checked, nfo_validity: e.target.checked ? schemeFormData.nfo_validity : '' })}
+                          className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          This is an NFO (New Fund Offering)
+                        </span>
+                      </label>
+                    </div>
+                    
+                    {schemeFormData.is_nfo && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          NFO Validity Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          required={schemeFormData.is_nfo}
+                          value={schemeFormData.nfo_validity}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, nfo_validity: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                          ⚠️ AMFI code required before activation
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-end space-x-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSchemeForm(false)
+                          resetSchemeForm()
+                        }}
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={loadingPreview || schemeFormData.plans.length === 0 || schemeFormData.options.length === 0}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingPreview ? 'Loading...' : 'Preview Variants'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Variant Preview Table */
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-md font-semibold text-gray-900 dark:text-white">
+                        Preview Scheme Variants ({variantPreviewData.length} total)
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowVariantPreview(false)}
+                        className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                      >
+                        ← Back to Form
+                      </button>
+                    </div>
+                    
+                    {schemeFormData.is_nfo && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                          ⚠️ This is an NFO. AMFI code required before activation.
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center space-x-2 mb-2">
                       <input
                         type="checkbox"
-                        checked={schemeFormData.is_nfo}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, is_nfo: e.target.checked, nfo_validity: e.target.checked ? schemeFormData.nfo_validity : '' })}
+                        checked={updateIfExists}
+                        onChange={(e) => setUpdateIfExists(e.target.checked)}
                         className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                       />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        This is an NFO (New Fund Offering)
-                      </span>
-                    </label>
-                  </div>
-                  
-                  {schemeFormData.is_nfo && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        NFO Validity Date <span className="text-red-500">*</span>
+                      <label className="text-sm text-gray-700 dark:text-gray-300">
+                        Update existing schemes if they already exist
                       </label>
-                      <input
-                        type="date"
-                        required={schemeFormData.is_nfo}
-                        value={schemeFormData.nfo_validity}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, nfo_validity: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
                     </div>
-                  )}
-                  
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSchemeForm(false)
-                        setEditingScheme(null)
-                        resetSchemeForm()
-                      }}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      {editingScheme ? 'Update Scheme' : 'Create Scheme'}
-                    </button>
+                    
+                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              Select
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              Display Name
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              Plan
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              Option
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              AMFI Code
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {variantPreviewData.map((variant, idx) => (
+                            <tr key={variant.id} className={variant.exists ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="checkbox"
+                                  checked={variant.selected}
+                                  onChange={(e) => {
+                                    const updated = [...variantPreviewData]
+                                    updated[idx].selected = e.target.checked
+                                    setVariantPreviewData(updated)
+                                  }}
+                                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                                {variant.display_name}
+                              </td>
+                              <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+                                {variant.plan}
+                              </td>
+                              <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+                                {variant.option.replace('_', ' ')}
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="text"
+                                  value={variant.amfi_code}
+                                  onChange={(e) => {
+                                    const updated = [...variantPreviewData]
+                                    updated[idx].amfi_code = e.target.value
+                                    setVariantPreviewData(updated)
+                                  }}
+                                  placeholder="Enter AMFI code"
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-col gap-1">
+                                  {variant.exists && (
+                                    <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200">
+                                      Exists
+                                    </span>
+                                  )}
+                                  {variant.missingAmfi && (
+                                    <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200">
+                                      Missing AMFI
+                                    </span>
+                                  )}
+                                  {variant.warnings && variant.warnings.length > 0 && variant.warnings.map((warning, wIdx) => (
+                                    <span key={wIdx} className="inline-flex text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200">
+                                      {warning}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowVariantPreview(false)}
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCommitVariants}
+                        disabled={loadingPreview || variantPreviewData.filter(v => v.selected).length === 0}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingPreview ? 'Creating...' : `Create ${variantPreviewData.filter(v => v.selected).length} Variants`}
+                      </button>
+                    </div>
                   </div>
-                </form>
+                )}
               </div>
             </div>
           </div>

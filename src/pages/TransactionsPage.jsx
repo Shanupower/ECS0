@@ -582,7 +582,21 @@ export default function TransactionsPage() {
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{receipt.product_category || 'N/A'}</p>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{receipt.product_category || 'N/A'}</p>
+                        {receipt.scheme_option && receipt.product_category === 'MF' && (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                            receipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                            receipt.scheme_option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                            'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                          }`}>
+                            {receipt.scheme_option === 'GROWTH' ? 'G' : 
+                             receipt.scheme_option === 'IDCW_PAYOUT' ? 'IP' : 
+                             receipt.scheme_option === 'IDCW_REINVEST' ? 'IR' : 
+                             receipt.scheme_option}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Documents */}
@@ -678,7 +692,7 @@ export default function TransactionsPage() {
                               </div>
                               <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.investor_id || receipt.investorId}</div>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <div className="text-xs font-medium text-gray-700 dark:text-dark-300 truncate" title={receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName}>
                                 {receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}
                               </div>
@@ -686,6 +700,21 @@ export default function TransactionsPage() {
                               <span className="text-xs text-gray-600 dark:text-dark-400 capitalize">
                                 {receipt.product_category || 'N/A'}
                               </span>
+                              {receipt.scheme_option && receipt.product_category === 'MF' && (
+                                <>
+                                  <span className="text-gray-400 dark:text-dark-500">•</span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                    receipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                                    receipt.scheme_option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                                    'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                                  }`}>
+                                    {receipt.scheme_option === 'GROWTH' ? 'G' : 
+                                     receipt.scheme_option === 'IDCW_PAYOUT' ? 'IP' : 
+                                     receipt.scheme_option === 'IDCW_REINVEST' ? 'IR' : 
+                                     receipt.scheme_option}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </td>
