@@ -11,6 +11,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
   const [targetScheme, setTargetScheme] = useState('')
   const [switchType, setSwitchType] = useState('Amount')
   const [loading, setLoading] = useState(false)
+  const [stpOriginalAmount, setStpOriginalAmount] = useState('')
 
   useEffect(() => {
     if ((investmentType === 'STP' || investmentType === 'Switch Over') && token && selectedAmc) {
@@ -54,6 +55,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       transactionData.stp_frequency = frequency
       transactionData.stp_start_date = startDate
       transactionData.stp_amount = amount
+      transactionData.stp_original_amount = stpOriginalAmount
     } else if (investmentType === 'Switch Over') {
       const target = schemes.find(s => s.scheme_code === targetScheme)
       transactionData.switch_from_scheme_code = selectedScheme.scheme_code
@@ -71,7 +73,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
     if (!amount) return false
     if (investmentType === 'SIP' && (!amount || !frequency || !startDate || (!isPerpetual && !endDate))) return false
     if (investmentType === 'SWP' && (!frequency || !startDate)) return false
-    if (investmentType === 'STP' && (!targetScheme || !frequency || !startDate)) return false
+    if (investmentType === 'STP' && (!targetScheme || !frequency || !startDate || !stpOriginalAmount)) return false
     if (investmentType === 'Switch Over' && (!targetScheme)) return false
     return true
   }
@@ -216,6 +218,19 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
 
       {investmentType === 'STP' && (
         <div className="space-y-6">
+           <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Total Original Scheme Amount (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={stpOriginalAmount}
+              onChange={(e) => setStpOriginalAmount(e.target.value)}
+              placeholder="Enter total original scheme amount"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Total amount invested in the original scheme</p>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Transfer to Scheme <span className="text-red-500">*</span>
@@ -234,6 +249,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               ))}
             </select>
           </div>
+         
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Frequency <span className="text-red-500">*</span>
@@ -269,9 +285,10 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="Enter transfer amount"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              placeholder="Enter periodic transfer amount"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Amount to be transferred periodically</p>
           </div>
         </div>
       )}

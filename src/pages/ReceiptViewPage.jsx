@@ -305,6 +305,17 @@ export default function ReceiptViewPage() {
     sip_start_date: receipt.sip_start_date,
     sip_end_date: receipt.sip_end_date,
     sip_is_perpetual: receipt.sip_is_perpetual,
+    // STP fields
+    stp_target_scheme_code: receipt.stp_target_scheme_code,
+    stp_target_scheme_name: receipt.stp_target_scheme_name,
+    stp_frequency: receipt.stp_frequency,
+    stp_start_date: receipt.stp_start_date,
+    stp_amount: receipt.stp_amount,
+    stp_original_amount: receipt.stp_original_amount,
+    // SWP fields
+    swp_frequency: receipt.swp_frequency,
+    swp_start_date: receipt.swp_start_date,
+    swp_amount: receipt.swp_amount,
     // FD-specific fields
     fd_issuer_key: receipt.fd_issuer_key,
     fd_issuer_name: receipt.fd_issuer_name,

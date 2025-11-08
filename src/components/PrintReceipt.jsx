@@ -96,6 +96,36 @@ export default function PrintReceipt({ data = {} }) {
         </div>
       </div>
 
+      {/* SIP/STP/SWP Specific Details */}
+      {(data.mode === 'SIP' || data.mode === 'STP' || data.mode === 'SWP') && (
+        <div className="card">
+          <h3>{data.mode} Details</h3>
+          {data.mode === 'SIP' && (
+            <>
+              {line('Frequency', data.sip_frequency)}
+              {line('Start Date', fmtDate(data.sip_start_date))}
+              {line('End Date', data.sip_is_perpetual ? 'Perpetual (30 years)' : fmtDate(data.sip_end_date))}
+            </>
+          )}
+          {data.mode === 'STP' && (
+            <>
+              {line('Target Scheme', data.stp_target_scheme_name)}
+              {line('Total Original Scheme Amount', fmtAmt(data.stp_original_amount))}
+              {line('Frequency', data.stp_frequency)}
+              {line('Start Date', fmtDate(data.stp_start_date))}
+              {line('Transfer Amount', fmtAmt(data.stp_amount))}
+            </>
+          )}
+          {data.mode === 'SWP' && (
+            <>
+              {line('Frequency', data.swp_frequency)}
+              {line('Start Date', fmtDate(data.swp_start_date))}
+              {line('Withdrawal Amount', fmtAmt(data.swp_amount))}
+            </>
+          )}
+        </div>
+      )}
+
       <div className="rec-grid">
         <div className="card">
           <h3>Payment Instrument</h3>
