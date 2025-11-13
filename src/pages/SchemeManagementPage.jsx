@@ -36,6 +36,26 @@ export default function SchemeManagementPage() {
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Utility function to trim all string values in an object (including nested arrays/objects)
+  const trimFormData = (obj) => {
+    if (typeof obj === 'string') {
+      return obj.trim()
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(item => trimFormData(item))
+    }
+    if (obj && typeof obj === 'object') {
+      const trimmed = {}
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          trimmed[key] = trimFormData(obj[key])
+        }
+      }
+      return trimmed
+    }
+    return obj
+  }
   const [amcFormData, setAmcFormData] = useState({
     amc_name: '',
     amc_code: ''
@@ -188,7 +208,8 @@ export default function SchemeManagementPage() {
     e.preventDefault()
     
     try {
-      await api.createAMC(token, amcFormData)
+      const trimmedData = trimFormData(amcFormData)
+      await api.createAMC(token, trimmedData)
       await loadAMCs()
       setShowAMCForm(false)
       resetAMCForm()
@@ -201,7 +222,8 @@ export default function SchemeManagementPage() {
     e.preventDefault()
     
     try {
-      await api.updateAMC(token, editingAMC.amc_code, amcFormData)
+      const trimmedData = trimFormData(amcFormData)
+      await api.updateAMC(token, editingAMC.amc_code, trimmedData)
       await loadAMCs()
       setEditingAMC(null)
       resetAMCForm()
@@ -295,7 +317,7 @@ export default function SchemeManagementPage() {
     
     setLoadingPreview(true)
     try {
-      const commitData = {
+      const commitData = trimFormData({
         amc_code: selectedAmc.amc_code,
         amc_name: selectedAmc.amc_name,
         base_name: schemeFormData.base_name,
@@ -311,7 +333,7 @@ export default function SchemeManagementPage() {
           selected: true,
           updateIfExists: updateIfExists
         }))
-      }
+      })
       
       const result = await api.commitVariants(token, commitData)
       
@@ -348,7 +370,8 @@ export default function SchemeManagementPage() {
     e.preventDefault()
     
     try {
-      await api.updateScheme(token, editingScheme.scheme_code, schemeFormData)
+      const trimmedData = trimFormData(schemeFormData)
+      await api.updateScheme(token, editingScheme.scheme_code, trimmedData)
       await loadSchemes(selectedAmc.amc_code)
       setEditingScheme(null)
       resetSchemeForm()
@@ -416,7 +439,8 @@ export default function SchemeManagementPage() {
   const handleCreateFDIssuer = async (e) => {
     e.preventDefault()
     try {
-      await api.createFDIssuer(token, fdIssuerFormData)
+      const trimmedData = trimFormData(fdIssuerFormData)
+      await api.createFDIssuer(token, trimmedData)
       await loadFDIssuers()
       setShowFDIssuerForm(false)
       setFdIssuerFormData({
@@ -440,7 +464,8 @@ export default function SchemeManagementPage() {
   const handleUpdateFDIssuer = async (e) => {
     e.preventDefault()
     try {
-      await api.updateFDIssuer(token, editingFDIssuer._key, fdIssuerFormData)
+      const trimmedData = trimFormData(fdIssuerFormData)
+      await api.updateFDIssuer(token, editingFDIssuer._key, trimmedData)
       await loadFDIssuers()
       setEditingFDIssuer(null)
       setShowFDIssuerForm(false)
@@ -468,7 +493,8 @@ export default function SchemeManagementPage() {
     }
     try {
       const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
-      await api.createFDScheme(token, issuerKey, fdSchemeFormData)
+      const trimmedData = trimFormData(fdSchemeFormData)
+      await api.createFDScheme(token, issuerKey, trimmedData)
       await loadFDSchemes(issuerKey)
       setShowFDSchemeForm(false)
       resetFDSchemeForm()
@@ -482,7 +508,8 @@ export default function SchemeManagementPage() {
     if (!selectedFdIssuer || !editingFDScheme) return
     try {
       const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
-      await api.updateFDScheme(token, issuerKey, editingFDScheme.scheme_id, fdSchemeFormData)
+      const trimmedData = trimFormData(fdSchemeFormData)
+      await api.updateFDScheme(token, issuerKey, editingFDScheme.scheme_id, trimmedData)
       await loadFDSchemes(issuerKey)
       setEditingFDScheme(null)
       setShowFDSchemeForm(false)
@@ -512,7 +539,8 @@ export default function SchemeManagementPage() {
     }
     try {
       const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
-      await api.createFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, fdSlabFormData)
+      const trimmedData = trimFormData(fdSlabFormData)
+      await api.createFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, trimmedData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setShowFDSlabForm(false)
       resetFDSlabForm()
@@ -526,7 +554,8 @@ export default function SchemeManagementPage() {
     if (!selectedFdIssuer || !selectedFdScheme || !editingFDSlab) return
     try {
       const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
-      await api.updateFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, editingFDSlab.slab_id, fdSlabFormData)
+      const trimmedData = trimFormData(fdSlabFormData)
+      await api.updateFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, editingFDSlab.slab_id, trimmedData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setEditingFDSlab(null)
       setShowFDSlabForm(false)

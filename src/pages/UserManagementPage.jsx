@@ -60,7 +60,16 @@ export default function UserManagementPage() {
     e.preventDefault()
     
     try {
-      await api.createUser(token, formData)
+      // Trim all string values before submission
+      const trimmedData = {}
+      for (const key in formData) {
+        if (formData.hasOwnProperty(key)) {
+          const value = formData[key]
+          trimmedData[key] = typeof value === 'string' ? value.trim() : value
+        }
+      }
+      
+      await api.createUser(token, trimmedData)
       await loadUsers()
       setShowCreateForm(false)
       resetForm()
@@ -73,7 +82,16 @@ export default function UserManagementPage() {
     e.preventDefault()
     
     try {
-      await api.updateUser(token, editingUser.id, formData)
+      // Trim all string values before submission
+      const trimmedData = {}
+      for (const key in formData) {
+        if (formData.hasOwnProperty(key)) {
+          const value = formData[key]
+          trimmedData[key] = typeof value === 'string' ? value.trim() : value
+        }
+      }
+      
+      await api.updateUser(token, editingUser.id, trimmedData)
       await loadUsers()
       setEditingUser(null)
       resetForm()
@@ -304,6 +322,7 @@ export default function UserManagementPage() {
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
                   >
                     <option value="employee">Employee</option>
+                    <option value="manager">Branch Manager</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
@@ -371,10 +390,12 @@ export default function UserManagementPage() {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                           user.role === 'admin' 
                             ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' 
+                            : user.role === 'manager'
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
                             : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
                         }`}>
                           {user.role === 'admin' && <FiShield className="w-3 h-3 mr-1" />}
-                          {user.role}
+                          {user.role === 'manager' ? 'Branch Manager' : user.role}
                         </span>
                       </div>
                       <div className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
@@ -446,10 +467,12 @@ export default function UserManagementPage() {
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         user.role === 'admin' 
                           ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' 
+                          : user.role === 'manager'
+                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
                           : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
                       }`}>
                         {user.role === 'admin' && <FiShield className="w-3 h-3 mr-1" />}
-                        {user.role}
+                        {user.role === 'manager' ? 'Branch Manager' : user.role}
                       </span>
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400">

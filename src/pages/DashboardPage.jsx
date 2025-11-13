@@ -60,16 +60,12 @@ export default function DashboardPage() {
       })
       setDailyStats(dailyData)
       
-      // Load branch statistics if admin
+      // Load branch statistics if admin (for branch performance section)
       if (isAdmin) {
         const branchData = await api.getGlobalBranchStats(token)
         setBranchStats(branchData)
-      } else if (user?.role === 'branch' && user?.branch_code) {
-        // For branch users, get their branch stats
-        const branchData = await api.getBranchStats(token, user.branch_code)
-        setBranchStats(branchData)
       }
-      // For regular employees, we don't load branch-specific stats
+      // Employees and managers don't need branch stats on main dashboard
       
     } catch (err) {
       console.error('Dashboard load error:', err)
@@ -106,18 +102,19 @@ export default function DashboardPage() {
   }
 
   const isAdmin = user?.role === 'admin'
-
-  const calculateCommission = (amount) => {
-    return amount * 0.01 // 1% commission
-  }
+  const isEmployee = user?.role === 'employee'
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-          <p className="text-gray-600 dark:text-dark-300 mt-1">Overview of your financial transactions</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {isEmployee ? 'My Performance' : 'Dashboard'}
+          </h1>
+          <p className="text-gray-600 dark:text-dark-300 mt-1">
+            {isEmployee ? 'Track your personal performance metrics' : 'Overview of financial transactions'}
+          </p>
         </div>
         <button
           onClick={loadDashboardData}
@@ -225,12 +222,12 @@ export default function DashboardPage() {
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Commission Earned</div>
+                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Collection/Credit Earned</div>
                   <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrency(calculateCommission(summary.total_investments || 0))}
+                    {formatCurrency(summary.collection_credit_earned || 0)}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
-                    1% of investments
+                    Algorithm pending implementation
                   </div>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
@@ -322,20 +319,18 @@ export default function DashboardPage() {
           {/* CSV Export Section - Admin Only */}
           {isAdmin && <CSVExport token={token} user={user} />}
 
-          {/* Branch Performance Section */}
-          {branchStats && (
+          {/* Branch Performance Section - Only for Admin */}
+          {branchStats && isAdmin && (
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
               <div className="flex items-center mb-6">
                 <FiMapPin className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {isAdmin ? 'Branch Performance Overview' : `${user?.branch || 'Your Branch'} Performance`}
+                  Branch Performance Overview
                 </h3>
               </div>
               
-              {isAdmin ? (
-                // Admin view - show all branches
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {branchStats.branches && branchStats.branches.slice(0, 6).map((branch, index) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {branchStats.branches && branchStats.branches.slice(0, 6).map((branch, index) => (
                     <div key={branch.branch_code} className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center">
@@ -358,42 +353,13 @@ export default function DashboardPage() {
                           <span className="font-medium text-gray-900 dark:text-white">{branch.total_receipts || 0}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500 dark:text-dark-400">Commission:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(calculateCommission(branch.total_investments || 0))}</span>
+                          <span className="text-gray-500 dark:text-dark-400">Collection/Credit:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(0)}</span>
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-              ) : (
-                // Employee view - show their branch stats
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Investments</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatCurrency(branchStats.total_investments || 0)}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {branchStats.total_receipts || 0}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Users</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {branchStats.total_users || 0}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
-                    <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Commission Earned</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatCurrency(calculateCommission(branchStats.total_investments || 0))}
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
         </>

@@ -61,7 +61,6 @@ function createFormData(data, files) {
 export const api={
   // Auth endpoints
   login:(c,p)=>req('/api/auth/login',{method:'POST',json:{emp_code:c,password:p}}),
-  branchLogin:(branchName,p)=>req('/api/auth/branch-login',{method:'POST',json:{branch_name:branchName,password:p}}),
   register:(data)=>req('/api/auth/register',{method:'POST',json:data}),
   
   // User endpoints

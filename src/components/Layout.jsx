@@ -58,14 +58,14 @@ export default function Layout(){
       { to: "/admin/branches", label: "Branch Management", icon: FiShield },
       { to: "/users", label: "User Management", icon: FiUsers },
       { to: "/schemes", label: "Scheme Management", icon: FiDatabase },
-      { to: "/customers", label: "Customer Management", icon: FiUserCheck }
+      { to: "/customers", label: "Client Management", icon: FiUserCheck }
     ] : []),
     ...(isBranchManager ? [
       { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
-      { to: "/customers", label: "Customer Management", icon: FiUserCheck }
+      { to: "/customers", label: "Client Management", icon: FiUserCheck }
     ] : []),
     ...(user?.role === 'employee' ? [
-      { to: "/customers", label: "Customer Management", icon: FiUserCheck }
+      { to: "/customers", label: "Client Management", icon: FiUserCheck }
     ] : [])
   ]
   
@@ -150,6 +150,12 @@ export default function Layout(){
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 flex-shrink-0">
                     <FiShield className="w-3 h-3 mr-1" />
                     Admin
+                  </span>
+                )}
+                {isBranchManager && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 flex-shrink-0">
+                    <FiMapPin className="w-3 h-3 mr-1" />
+                    Manager
                   </span>
                 )}
               </div>

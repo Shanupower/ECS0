@@ -29,17 +29,7 @@ export function AuthProvider({children}){
     }
   }
 
-  const branchLogin=async(branchName,p)=>{
-    const out=await api.branchLogin(branchName,p)
-    setToken(out.token)
-    // Set user info from branch login response
-    setUser(out.user)
-    // Store branch info if available
-    if(out.branch){
-      localStorage.setItem('branchInfo', JSON.stringify(out.branch))
-    }
-  }
-  const logout=()=>{setToken('');setUser(null)}
-  return <AuthCtx.Provider value={{token,user,login,branchLogin,logout}}>{children}</AuthCtx.Provider>
+  const logout=()=>{setToken('');setUser(null);localStorage.removeItem('branchInfo')}
+  return <AuthCtx.Provider value={{token,user,login,logout}}>{children}</AuthCtx.Provider>
 }
 export const useAuth=()=>useContext(AuthCtx)
