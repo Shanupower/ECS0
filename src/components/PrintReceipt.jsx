@@ -1,5 +1,6 @@
 import React from 'react';
 import Logo from './Logo.jsx'
+import { getCategoryDisplayName } from '../utils/categoryMapping'
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '');
 const fmtAmt = (a) => {
   if (a === null || a === undefined || a === '') return '';
@@ -56,7 +57,7 @@ export default function PrintReceipt({ data = {} }) {
       <div className="card">
         <h3>Investment Details</h3>
         <div className="two">
-          {line('Product Category', data.product_category || (Array.isArray(data.txnCategory) && data.txnCategory.length ? data.txnCategory.join(', ') : ''))}
+          {line('Product Category', getCategoryDisplayName(data.product_category) || (Array.isArray(data.txnCategory) && data.txnCategory.length ? data.txnCategory.join(', ') : ''))}
           {line('Transaction', data.txnType)}
         </div>
         <div className="two">
@@ -104,7 +105,7 @@ export default function PrintReceipt({ data = {} }) {
             <>
               {line('Frequency', data.sip_frequency)}
               {line('Start Date', fmtDate(data.sip_start_date))}
-              {line('End Date', data.sip_is_perpetual ? 'Perpetual (30 years)' : fmtDate(data.sip_end_date))}
+              {line('End Date', data.sip_is_perpetual ? 'Perpetual (40 years)' : fmtDate(data.sip_end_date))}
             </>
           )}
           {data.mode === 'STP' && (

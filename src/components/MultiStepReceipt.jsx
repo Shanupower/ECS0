@@ -1467,6 +1467,7 @@ export default function MultiStepReceipt() {
             const merged = {
               ...base,
               ...transactionData,
+              product_category: 'MF',
               amc_code: mfSchemeSeed.selectedAmc.amc_code,
               amc_name: mfSchemeSeed.selectedAmc.amc_name,
               scheme_code: mfSchemeSeed.selectedScheme.scheme_code,

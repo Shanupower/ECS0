@@ -149,7 +149,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
                 onChange={(e) => setIsPerpetual(e.target.checked)}
                 className="w-4 h-4 text-red-600"
               />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Perpetual (30 years)</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Perpetual (40 years)</span>
             </label>
             {!isPerpetual && (
               <div className="mt-2">

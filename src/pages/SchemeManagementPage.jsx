@@ -424,12 +424,13 @@ export default function SchemeManagementPage() {
   const openSchemeEdit = (scheme) => {
     setEditingScheme(scheme)
     setSchemeFormData({
-      scheme_name: scheme.scheme_name,
-      scheme_code: scheme.scheme_code,
+      base_name: scheme.base_name || scheme.scheme_name || '',
+      scheme_code: scheme.scheme_code || '',
       category: scheme.category || 'Equity',
       sub_category: scheme.sub_category || '',
-      plan: scheme.plan || 'Regular',
-      type: scheme.type || 'Open Ended',
+      plans: scheme.plan ? [scheme.plan] : ['REGULAR'],
+      options: scheme.option ? [scheme.option] : ['GROWTH'],
+      type: scheme.type || 'OPEN_ENDED',
       is_nfo: scheme.is_nfo || false,
       nfo_validity: scheme.nfo_validity || ''
     })

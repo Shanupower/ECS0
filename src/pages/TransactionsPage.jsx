@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { getCategoryDisplayName } from '../utils/categoryMapping'
 import { 
   FiClock, 
   FiFilter, 
@@ -583,7 +584,7 @@ export default function TransactionsPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
                       <div className="flex items-center gap-1 flex-wrap">
-                        <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{receipt.product_category || 'N/A'}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{getCategoryDisplayName(receipt.product_category)}</p>
                         {receipt.scheme_option && receipt.product_category === 'MF' && (
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
                             receipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
@@ -697,8 +698,8 @@ export default function TransactionsPage() {
                                 {receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}
                               </div>
                               <span className="text-gray-400 dark:text-dark-500">•</span>
-                              <span className="text-xs text-gray-600 dark:text-dark-400 capitalize">
-                                {receipt.product_category || 'N/A'}
+                              <span className="text-xs text-gray-600 dark:text-dark-400">
+                                {getCategoryDisplayName(receipt.product_category)}
                               </span>
                               {receipt.scheme_option && receipt.product_category === 'MF' && (
                                 <>
@@ -734,7 +735,7 @@ export default function TransactionsPage() {
                                 {formatDate(receipt.date)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-dark-400">
-                                {receipt.product_category || 'N/A'}
+                                {getCategoryDisplayName(receipt.product_category)}
                               </div>
                             </div>
                           </td>

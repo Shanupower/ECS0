@@ -241,26 +241,61 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             {/* Category Breakdown */}
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-              <div className="flex items-center mb-6">
-                <FiBarChart className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">By Category</h3>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
+                    <FiBarChart className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">By Category</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Investment breakdown</p>
+                  </div>
+                </div>
               </div>
               {categoryStats.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={categoryStats}>
-                    <XAxis dataKey="category" stroke="currentColor" className="text-gray-600 dark:text-dark-400" />
-                    <YAxis stroke="currentColor" className="text-gray-600 dark:text-dark-400" />
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart 
+                    data={categoryStats}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorCategory" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.9}/>
+                        <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.7}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                    <XAxis 
+                      dataKey="category" 
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#6B7280', fontSize: 12 }}
+                      tickLine={{ stroke: '#E5E7EB' }}
+                    />
+                    <YAxis 
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#6B7280', fontSize: 12 }}
+                      tickLine={{ stroke: '#E5E7EB' }}
+                      tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
+                    />
                     <Tooltip 
                       formatter={(value) => [formatCurrency(value), 'Amount']}
                       labelFormatter={(label) => `Category: ${label}`}
                       contentStyle={{
-                        backgroundColor: 'var(--tw-bg-opacity, 1)',
-                        border: '1px solid var(--tw-border-opacity, 1)',
-                        borderRadius: '0.5rem',
-                        color: 'var(--tw-text-opacity, 1)'
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                        padding: '12px 16px'
                       }}
+                      labelStyle={{ color: '#111827', fontWeight: 600, marginBottom: '4px' }}
+                      cursor={{ fill: 'rgba(139, 92, 246, 0.05)' }}
                     />
-                    <Bar dataKey="amount" fill="#dc2626" />
+                    <Bar 
+                      dataKey="amount" 
+                      fill="url(#colorCategory)"
+                      radius={[8, 8, 0, 0]}
+                      maxBarSize={60}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -273,37 +308,65 @@ export default function DashboardPage() {
 
             {/* Daily Timeline */}
             <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-              <div className="flex items-center mb-6">
-                <FiActivity className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Daily Timeline</h3>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center mr-3">
+                    <FiActivity className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Daily Timeline</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Investment trends</p>
+                  </div>
+                </div>
               </div>
               {dailyStats.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dailyStats}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-30" />
+                <ResponsiveContainer width="100%" height={350}>
+                  <LineChart 
+                    data={dailyStats}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorTimeline" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#06B6D4" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
                     <XAxis 
                       dataKey="date" 
                       tickFormatter={formatDate}
-                      stroke="currentColor" 
-                      className="text-gray-600 dark:text-dark-400"
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#6B7280', fontSize: 12 }}
+                      tickLine={{ stroke: '#E5E7EB' }}
                     />
-                    <YAxis stroke="currentColor" className="text-gray-600 dark:text-dark-400" />
+                    <YAxis 
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#6B7280', fontSize: 12 }}
+                      tickLine={{ stroke: '#E5E7EB' }}
+                      tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
+                    />
                     <Tooltip 
                       formatter={(value) => [formatCurrency(value), 'Amount']}
                       labelFormatter={(label) => `Date: ${formatDate(label)}`}
                       contentStyle={{
-                        backgroundColor: 'var(--tw-bg-opacity, 1)',
-                        border: '1px solid var(--tw-border-opacity, 1)',
-                        borderRadius: '0.5rem',
-                        color: 'var(--tw-text-opacity, 1)'
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                        padding: '12px 16px'
                       }}
+                      labelStyle={{ color: '#111827', fontWeight: 600, marginBottom: '4px' }}
+                      cursor={{ stroke: '#06B6D4', strokeWidth: 2 }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="amount" 
-                      stroke="#dc2626" 
+                      stroke="#06B6D4" 
                       strokeWidth={3}
-                      dot={{ fill: '#dc2626', strokeWidth: 2, r: 5 }}
+                      dot={{ fill: '#06B6D4', strokeWidth: 2, r: 5 }}
+                      activeDot={{ r: 7, fill: '#0891B2' }}
+                      fillOpacity={1}
+                      fill="url(#colorTimeline)"
                     />
                   </LineChart>
                 </ResponsiveContainer>
