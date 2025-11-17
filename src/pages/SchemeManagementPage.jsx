@@ -145,17 +145,29 @@ export default function SchemeManagementPage() {
     }
   }, [selectedAmc, token])
 
-  useEffect(() => {
-    if (selectedFdIssuer) {
-      loadFDSchemes(selectedFdIssuer._key || selectedFdIssuer.issuer_key)
-    }
-  }, [selectedFdIssuer, token])
+useEffect(() => {
+  if (!selectedFdIssuer) {
+    setFdSchemes([])
+    setSelectedFdScheme(null)
+    setFdRateSlabs([])
+    return
+  }
+  
+  const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+  if (!issuerKey) return
+  
+  // Reset scheme selection whenever issuer context changes
+  setSelectedFdScheme(null)
+  loadFDSchemes(issuerKey)
+}, [selectedFdIssuer, token])
 
-  useEffect(() => {
-    if (selectedFdScheme) {
-      loadFDRateSlabs(selectedFdScheme.scheme_id)
-    }
-  }, [selectedFdScheme, token])
+useEffect(() => {
+  if (!selectedFdScheme) {
+    setFdRateSlabs([])
+    return
+  }
+  loadFDRateSlabs(selectedFdScheme.scheme_id)
+}, [selectedFdScheme, token])
 
   // Auto-calculate effective yield for cumulative schemes
   useEffect(() => {
@@ -706,7 +718,21 @@ export default function SchemeManagementPage() {
     
     try {
       const result = await api.getFDSchemesByIssuer(token, issuer_key)
-      setFdSchemes(Array.isArray(result) ? result : [])
+      const list = Array.isArray(result) ? result : []
+      const seen = new Set()
+      const deduped = []
+      
+      for (const scheme of list) {
+        const rawId = scheme?.scheme_id
+        const key = rawId === undefined || rawId === null ? '' : String(rawId).trim().toUpperCase()
+        if (key && seen.has(key)) {
+          continue
+        }
+        if (key) seen.add(key)
+        deduped.push(scheme)
+      }
+      
+      setFdSchemes(deduped)
     } catch (err) {
       setError(err.message || 'Failed to load FD schemes')
     } finally {
