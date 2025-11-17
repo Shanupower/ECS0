@@ -61,7 +61,7 @@ export default function Layout(){
       { to: "/customers", label: "Client Management", icon: FiUserCheck }
     ] : []),
     ...(isBranchManager ? [
-      { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
+      { to: "/branches", label: "Branch Dashboard", icon: FiBarChart, disabled: true, comingSoon: true },
       { to: "/customers", label: "Client Management", icon: FiUserCheck }
     ] : []),
     ...(user?.role === 'employee' ? [
@@ -109,6 +109,29 @@ export default function Layout(){
         <nav className="p-4 space-y-2">
           {navItems.map((item) => {
             const Icon = item.icon
+            const isDisabled = item.disabled
+            const hasComingSoon = item.comingSoon
+            
+            if (isDisabled) {
+              return (
+                <div
+                  key={item.to}
+                  className="flex items-center justify-between px-4 py-3 text-gray-400 dark:text-dark-500 rounded-lg cursor-not-allowed opacity-60 relative group"
+                  title="Coming Soon"
+                >
+                  <div className="flex items-center space-x-3 flex-1">
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium">{item.label}</span>
+                  </div>
+                  {hasComingSoon && (
+                    <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full">
+                      Coming Soon
+                    </span>
+                  )}
+                </div>
+              )
+            }
+            
             return (
               <Link 
                 key={item.to}
