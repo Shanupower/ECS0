@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { normalizeBranchForDB, getAllValidBranches } from '../utils/branchMapping'
+import { normalizeBranchForDB, normalizeBranchForEmployee, normalizeBranchForAPI, getAllValidBranches } from '../utils/branchMapping'
 import SearchableSelect from '../components/SearchableSelect'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 import { 
@@ -321,7 +321,17 @@ export default function ClientManagementPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('ecs_token')
-      await api.updateCustomer(token, selectedCustomer.investor_id, formData)
+      
+      // Prepare update data - normalize branch to DB format and send as relationship_manager
+      const updateData = { ...formData }
+      if (updateData.branch) {
+        const normalizedBranch = normalizeBranchForAPI(updateData.branch)
+        updateData.relationship_manager = normalizedBranch
+        // Remove branch field as backend expects relationship_manager
+        delete updateData.branch
+      }
+      
+      await api.updateCustomer(token, selectedCustomer.investor_id, updateData)
 
       setSuccess('Client updated successfully!')
       setShowEditModal(false)
@@ -380,6 +390,9 @@ export default function ClientManagementPage() {
   // Open edit modal
   const openEditModal = (customer) => {
     setSelectedCustomer(customer)
+    // Convert DB format (relationship_manager) to employee format for dropdown
+    const dbBranch = customer.relationship_manager || ''
+    const employeeBranch = normalizeBranchForEmployee(dbBranch)
     setFormData({
       title: customer.title || '',
       name: customer.name || '',
@@ -394,7 +407,7 @@ export default function ClientManagementPage() {
       pin: customer.pin || '',
       country: customer.country || 'India',
       date_of_birth: customer.date_of_birth || '',
-      branch: customer.relationship_manager || ''
+      branch: employeeBranch
     })
     setShowEditModal(true)
   }

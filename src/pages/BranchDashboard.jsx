@@ -197,7 +197,7 @@ export default function BranchDashboard() {
 
       {/* Global Statistics */}
       {globalStats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${globalStats.total_service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
           <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <div>
@@ -245,21 +245,36 @@ export default function BranchDashboard() {
               <div>
                 <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Collection/Credit</div>
                 <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(0)}
+                  {formatCurrency(globalStats?.total_collection_credit || 0)}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">Algorithm pending</div>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                 <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
           </div>
+          
+          {globalStats.total_service_income !== undefined && (
+            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Service Income</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                    {formatCurrency(globalStats.total_service_income || 0)}
+                  </div>
+                </div>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Manager Summary Cards */}
       {isManager && branchStats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin && branchStats.service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
           <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <div>
@@ -307,15 +322,30 @@ export default function BranchDashboard() {
               <div>
                 <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Collection/Credit Earned</div>
                 <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(0)}
+                  {formatCurrency(branchStats.collection_credit || 0)}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">Algorithm pending</div>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                 <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
           </div>
+          
+          {isAdmin && branchStats.service_income !== undefined && (
+            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Service Income Earned</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                    {formatCurrency(branchStats.service_income || 0)}
+                  </div>
+                </div>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

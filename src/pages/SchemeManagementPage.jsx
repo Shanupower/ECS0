@@ -69,7 +69,9 @@ export default function SchemeManagementPage() {
     options: ['GROWTH'],
     type: 'OPEN_ENDED',
     is_nfo: false,
-    nfo_validity: ''
+    nfo_validity: '',
+    cc: 0,
+    si: 0
   })
   
   // Variant preview states
@@ -113,6 +115,8 @@ export default function SchemeManagementPage() {
     tds_applicable: true,
     show_form15g15h_option: true,
     is_active: true,
+    cc: 0,
+    si: 0,
     rate_slabs: []
   })
   
@@ -299,7 +303,9 @@ useEffect(() => {
       const initializedVariants = result.variants.map((v, idx) => ({
         ...v,
         selected: !v.exists, // Pre-select only non-existing variants
-        id: `${v.plan}|${v.option}`
+        id: `${v.plan}|${v.option}`,
+        cc: v.cc || 0,
+        si: v.si || 0
       }))
       
       setVariantPreviewData(initializedVariants)
@@ -342,6 +348,8 @@ useEffect(() => {
           plan: v.plan,
           option: v.option,
           amfi_code: v.amfi_code,
+          cc: v.cc || 0,
+          si: v.si || 0,
           selected: true,
           updateIfExists: updateIfExists
         }))
@@ -382,7 +390,11 @@ useEffect(() => {
     e.preventDefault()
     
     try {
-      const trimmedData = trimFormData(schemeFormData)
+      const trimmedData = trimFormData({
+        ...schemeFormData,
+        cc: schemeFormData.cc !== undefined ? schemeFormData.cc : null,
+        si: schemeFormData.si !== undefined ? schemeFormData.si : null
+      })
       await api.updateScheme(token, editingScheme.scheme_code, trimmedData)
       await loadSchemes(selectedAmc.amc_code)
       setEditingScheme(null)
@@ -417,7 +429,9 @@ useEffect(() => {
       options: ['GROWTH'],
       type: 'OPEN_ENDED',
       is_nfo: false,
-      nfo_validity: ''
+      nfo_validity: '',
+      cc: 0,
+      si: 0
     })
     setShowVariantPreview(false)
     setVariantPreviewData([])
@@ -444,8 +458,11 @@ useEffect(() => {
       options: scheme.option ? [scheme.option] : ['GROWTH'],
       type: scheme.type || 'OPEN_ENDED',
       is_nfo: scheme.is_nfo || false,
-      nfo_validity: scheme.nfo_validity || ''
+      nfo_validity: scheme.nfo_validity || '',
+      cc: scheme.cc || 0,
+      si: scheme.si || 0
     })
+    setShowVariantPreview(false) // Don't show variant preview when editing
   }
   
   // FD Handler Functions
@@ -614,6 +631,8 @@ useEffect(() => {
       tds_applicable: true,
       show_form15g15h_option: true,
       is_active: true,
+      cc: 0,
+      si: 0,
       rate_slabs: []
     })
   }
@@ -672,6 +691,8 @@ useEffect(() => {
       tds_applicable: scheme.tds_applicable || true,
       show_form15g15h_option: scheme.show_form15g15h_option || true,
       is_active: scheme.is_active !== undefined ? scheme.is_active : true,
+      cc: scheme.cc || 0,
+      si: scheme.si || 0,
       rate_slabs: scheme.rate_slabs || []
     })
   }
@@ -1474,13 +1495,46 @@ useEffect(() => {
                     </label>
                   </div>
                   
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CC (%) <span className="text-gray-500">(Commission Credit)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={fdSchemeFormData.cc || 0}
+                        onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, cc: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        SI (%) <span className="text-gray-500">(Service Income)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={fdSchemeFormData.si || 0}
+                        onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, si: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                  
                   <div className="flex justify-end space-x-3 pt-4">
                     <button
                       type="button"
                       onClick={() => {
                         setShowFDSchemeForm(false)
-                        setEditingFDScheme(null)
-                        resetFDSchemeForm()
+                        setTimeout(() => {
+                          setEditingFDScheme(null)
+                          resetFDSchemeForm()
+                        }, 300)
                       }}
                       className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
@@ -1670,13 +1724,180 @@ useEffect(() => {
 
         {/* Scheme Form Modal */}
         {(showSchemeForm || editingScheme) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowSchemeForm(false)
+                setTimeout(() => {
+                  setEditingScheme(null)
+                  resetSchemeForm()
+                }, 300)
+              }
+            }}
+          >
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                   {editingScheme ? 'Edit Scheme' : 'Add New Scheme'}
                 </h2>
-                {!showVariantPreview ? (
+                {editingScheme ? (
+                  /* Direct Edit Form for Existing Scheme */
+                  <form onSubmit={handleUpdateScheme} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Scheme Code <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={schemeFormData.scheme_code}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Scheme code cannot be changed
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Scheme Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={schemeFormData.base_name}
+                        onChange={(e) => setSchemeFormData({ ...schemeFormData, base_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Category <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          required
+                          value={schemeFormData.category}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="Equity">Equity</option>
+                          <option value="Debt">Debt</option>
+                          <option value="Hybrid">Hybrid</option>
+                          <option value="Commodity">Commodity</option>
+                          <option value="ETF">ETF</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Sub Category
+                        </label>
+                        <input
+                          type="text"
+                          value={schemeFormData.sub_category}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Plan
+                        </label>
+                        <input
+                          type="text"
+                          value={schemeFormData.plans[0] || ''}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Option
+                        </label>
+                        <input
+                          type="text"
+                          value={schemeFormData.options[0] || ''}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Type
+                      </label>
+                      <select
+                        value={schemeFormData.type}
+                        onChange={(e) => setSchemeFormData({ ...schemeFormData, type: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="OPEN_ENDED">Open Ended</option>
+                        <option value="CLOSE_ENDED">Close Ended</option>
+                        <option value="INTERVAL">Interval</option>
+                      </select>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          CC (%) <span className="text-gray-500">(Commission Credit)</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={schemeFormData.cc || 0}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, cc: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          SI (%) <span className="text-gray-500">(Service Income)</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={schemeFormData.si || 0}
+                          onChange={(e) => setSchemeFormData({ ...schemeFormData, si: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingScheme(null)
+                          setTimeout(() => {
+                            resetSchemeForm()
+                          }, 300)
+                        }}
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      >
+                        Update Scheme
+                      </button>
+                    </div>
+                  </form>
+                ) : !showVariantPreview ? (
                   <form onSubmit={handleCreateScheme} className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1838,7 +2059,10 @@ useEffect(() => {
                         type="button"
                         onClick={() => {
                           setShowSchemeForm(false)
-                          resetSchemeForm()
+                          setTimeout(() => {
+                            setEditingScheme(null)
+                            resetSchemeForm()
+                          }, 300)
                         }}
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                       >
@@ -1909,6 +2133,12 @@ useEffect(() => {
                               AMFI Code
                             </th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              CC (%)
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                              SI (%)
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                               Status
                             </th>
                           </tr>
@@ -1940,13 +2170,45 @@ useEffect(() => {
                               <td className="px-3 py-2">
                                 <input
                                   type="text"
-                                  value={variant.amfi_code}
+                                  value={variant.amfi_code || ''}
                                   onChange={(e) => {
                                     const updated = [...variantPreviewData]
                                     updated[idx].amfi_code = e.target.value
                                     setVariantPreviewData(updated)
                                   }}
                                   placeholder="Enter AMFI code"
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                  value={variant.cc || 0}
+                                  onChange={(e) => {
+                                    const updated = [...variantPreviewData]
+                                    updated[idx].cc = parseFloat(e.target.value) || 0
+                                    setVariantPreviewData(updated)
+                                  }}
+                                  placeholder="0"
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                  value={variant.si || 0}
+                                  onChange={(e) => {
+                                    const updated = [...variantPreviewData]
+                                    updated[idx].si = parseFloat(e.target.value) || 0
+                                    setVariantPreviewData(updated)
+                                  }}
+                                  placeholder="0"
                                   className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                               </td>
@@ -1976,6 +2238,19 @@ useEffect(() => {
                     </div>
                     
                     <div className="flex justify-end space-x-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSchemeForm(false)
+                          setTimeout(() => {
+                            setEditingScheme(null)
+                            resetSchemeForm()
+                          }, 300)
+                        }}
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
                       <button
                         type="button"
                         onClick={() => setShowVariantPreview(false)}
@@ -2084,8 +2359,10 @@ useEffect(() => {
                     type="button"
                     onClick={() => {
                       setShowAMCForm(false)
-                      setEditingAMC(null)
-                      resetAMCForm()
+                      setTimeout(() => {
+                        setEditingAMC(null)
+                        resetAMCForm()
+                      }, 300)
                     }}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
@@ -2493,8 +2770,10 @@ useEffect(() => {
                     type="button"
                     onClick={() => {
                       setShowFDIssuerForm(false)
-                      setEditingFDIssuer(null)
-                      resetFDIssuerForm()
+                      setTimeout(() => {
+                        setEditingFDIssuer(null)
+                        resetFDIssuerForm()
+                      }, 300)
                     }}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
@@ -2758,13 +3037,46 @@ useEffect(() => {
                   </label>
                 </div>
                 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      CC (%) <span className="text-gray-500">(Commission Credit)</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={fdSchemeFormData.cc || 0}
+                      onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, cc: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      SI (%) <span className="text-gray-500">(Service Income)</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={fdSchemeFormData.si || 0}
+                      onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, si: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                
                 <div className="flex justify-end space-x-3 pt-4">
               <button
                     type="button"
                     onClick={() => {
                       setShowFDSchemeForm(false)
-                      setEditingFDScheme(null)
-                      resetFDSchemeForm()
+                      setTimeout(() => {
+                        setEditingFDScheme(null)
+                        resetFDSchemeForm()
+                      }, 300)
                     }}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >

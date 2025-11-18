@@ -32,6 +32,7 @@ export default function UserManagementPage() {
     role: 'employee',
     password: ''
   })
+  const [fieldErrors, setFieldErrors] = useState({})
 
   const isAdmin = user?.role === 'admin'
 
@@ -59,6 +60,9 @@ export default function UserManagementPage() {
   const handleCreateUser = async (e) => {
     e.preventDefault()
     
+    // Clear previous field errors
+    setFieldErrors({})
+    
     try {
       // Trim all string values before submission
       const trimmedData = {}
@@ -73,13 +77,23 @@ export default function UserManagementPage() {
       await loadUsers()
       setShowCreateForm(false)
       resetForm()
+      setFieldErrors({})
     } catch (err) {
-      alert('Failed to create user: ' + err.message)
+      // Handle field-specific errors
+      if (err.field) {
+        setFieldErrors({ [err.field]: err.detail || err.message })
+      } else {
+        // General error - show in alert or set a general error state
+        setFieldErrors({ _general: err.detail || err.message })
+      }
     }
   }
 
   const handleUpdateUser = async (e) => {
     e.preventDefault()
+    
+    // Clear previous field errors
+    setFieldErrors({})
     
     try {
       // Trim all string values before submission
@@ -95,8 +109,14 @@ export default function UserManagementPage() {
       await loadUsers()
       setEditingUser(null)
       resetForm()
+      setFieldErrors({})
     } catch (err) {
-      alert('Failed to update user: ' + err.message)
+      // Handle field-specific errors
+      if (err.field) {
+        setFieldErrors({ [err.field]: err.detail || err.message })
+      } else {
+        setFieldErrors({ _general: err.detail || err.message })
+      }
     }
   }
 
@@ -134,6 +154,7 @@ export default function UserManagementPage() {
       role: 'employee',
       password: ''
     })
+    setFieldErrors({})
   }
 
   const startEdit = (user) => {
@@ -251,6 +272,14 @@ export default function UserManagementPage() {
             </div>
             
             <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser} className="space-y-4">
+              {/* General error message */}
+              {fieldErrors._general && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start">
+                  <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-sm text-red-700 dark:text-red-300">{fieldErrors._general}</span>
+                </div>
+              )}
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Employee Code</label>
                 <div className="relative">
@@ -260,11 +289,31 @@ export default function UserManagementPage() {
                   <input
                     type="text"
                     value={formData.emp_code}
-                    onChange={e => setFormData(prev => ({ ...prev, emp_code: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                    onChange={e => {
+                      setFormData(prev => ({ ...prev, emp_code: e.target.value }))
+                      // Clear error when user starts typing
+                      if (fieldErrors.emp_code) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors.emp_code
+                          return newErrors
+                        })
+                      }
+                    }}
+                    className={`w-full pl-10 pr-4 py-3 border ${
+                      fieldErrors.emp_code 
+                        ? 'border-red-500 dark:border-red-500' 
+                        : 'border-gray-300 dark:border-gray-600'
+                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
                     required
                   />
                 </div>
+                {fieldErrors.emp_code && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    {fieldErrors.emp_code}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -272,10 +321,29 @@ export default function UserManagementPage() {
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                  onChange={e => {
+                    setFormData(prev => ({ ...prev, name: e.target.value }))
+                    if (fieldErrors.name) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev }
+                        delete newErrors.name
+                        return newErrors
+                      })
+                    }
+                  }}
+                  className={`w-full p-3 border ${
+                    fieldErrors.name 
+                      ? 'border-red-500 dark:border-red-500' 
+                      : 'border-gray-300 dark:border-gray-600'
+                  } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
                   required
                 />
+                {fieldErrors.name && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    {fieldErrors.name}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -287,11 +355,30 @@ export default function UserManagementPage() {
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                    onChange={e => {
+                      setFormData(prev => ({ ...prev, email: e.target.value }))
+                      if (fieldErrors.email) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors.email
+                          return newErrors
+                        })
+                      }
+                    }}
+                    className={`w-full pl-10 pr-4 py-3 border ${
+                      fieldErrors.email 
+                        ? 'border-red-500 dark:border-red-500' 
+                        : 'border-gray-300 dark:border-gray-600'
+                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
                     required
                   />
                 </div>
+                {fieldErrors.email && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -339,11 +426,30 @@ export default function UserManagementPage() {
                   <input
                     type="password"
                     value={formData.password}
-                    onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                    onChange={e => {
+                      setFormData(prev => ({ ...prev, password: e.target.value }))
+                      if (fieldErrors.password) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors.password
+                          return newErrors
+                        })
+                      }
+                    }}
+                    className={`w-full pl-10 pr-4 py-3 border ${
+                      fieldErrors.password 
+                        ? 'border-red-500 dark:border-red-500' 
+                        : 'border-gray-300 dark:border-gray-600'
+                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
                     required={!editingUser}
                   />
                 </div>
+                {fieldErrors.password && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    {fieldErrors.password}
+                  </p>
+                )}
               </div>
               
               <div className="flex gap-3 pt-4">

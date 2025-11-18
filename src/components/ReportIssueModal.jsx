@@ -64,9 +64,19 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
         created_by: user?.id || user?.emp_code || 'unknown'
       }
 
-      // Create issue with or without photo
-      const files = photo ? [photo] : []
-      const result = await api.createIssue(token, issueData, files)
+      // Create FormData manually for issues endpoint (needs 'screenshot' field name)
+      const formDataToSend = new FormData()
+      formDataToSend.append('title', issueData.title)
+      formDataToSend.append('description', issueData.description)
+      formDataToSend.append('created_by', issueData.created_by)
+      
+      // Add photo with correct field name 'screenshot' (backend expects this)
+      if (photo) {
+        formDataToSend.append('screenshot', photo)
+      }
+
+      // Call API with FormData
+      const result = await api.createIssueWithFormData(token, formDataToSend)
 
       setSuccess(`Issue reported successfully! Issue ID: ${result.id || 'N/A'}`)
       setFormData({ title: '', description: '' })
