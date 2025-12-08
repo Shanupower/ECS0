@@ -53,12 +53,14 @@ export default function Layout(){
     { to: "/dashboard", label: "Dashboard", icon: FiHome },
     { to: "/receipts", label: "Create Receipt", icon: FiFileText },
     { to: "/transactions", label: "Transaction History", icon: FiClock },
+    { to: "/my-issues", label: "My Issues", icon: FiAlertTriangle },
     ...(isAdmin ? [
       { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
       { to: "/admin/branches", label: "Branch Management", icon: FiShield },
       { to: "/users", label: "User Management", icon: FiUsers },
       { to: "/schemes", label: "Scheme Management", icon: FiDatabase },
-      { to: "/customers", label: "Client Management", icon: FiUserCheck }
+      { to: "/customers", label: "Customer Management", icon: FiUserCheck },
+      { to: "/issues", label: "All Issues", icon: FiAlertTriangle }
     ] : []),
     ...(isBranchManager ? [
       { to: "/branches", label: "Branch Dashboard", icon: FiBarChart, disabled: true, comingSoon: true },

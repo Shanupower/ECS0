@@ -67,6 +67,24 @@ function createFormData(data, files) {
   return formData
 }
 
+function createIssueFormData(data, file) {
+  const formData = new FormData()
+  
+  // Add all data fields
+  Object.keys(data).forEach(key => {
+    if (data[key] !== null && data[key] !== undefined) {
+      formData.append(key, data[key])
+    }
+  })
+  
+  // Add file with 'screenshot' field name for issues
+  if (file) {
+    formData.append('screenshot', file)
+  }
+  
+  return formData
+}
+
 export const api={
   // Auth endpoints
   login:(c,p)=>req('/api/auth/login',{method:'POST',json:{emp_code:c,password:p}}),
@@ -122,11 +140,20 @@ export const api={
   createBranch:(t,data)=>req('/api/branches',{method:'POST',token:t,json:data}),
   
   // Issues endpoints
-  createIssue:(t,data,files)=>files && files.length > 0 ? reqWithFiles('/api/issues',{method:'POST',token:t,formData:createFormData(data,files)}) : req('/api/issues',{method:'POST',token:t,json:data}),
-  createIssueWithFormData:(t,formData)=>reqWithFiles('/api/issues',{method:'POST',token:t,formData}),
+  createIssue:(t,data,files)=>{
+    if (files && files.length > 0) {
+      // For issues, use the first file with 'screenshot' field name
+      const file = Array.isArray(files) ? files[0] : files
+      return reqWithFiles('/api/issues',{method:'POST',token:t,formData:createIssueFormData(data,file)})
+    }
+    return req('/api/issues',{method:'POST',token:t,json:data})
+  },
   listIssues:(t,q)=>req('/api/issues',{token:t,query:q}),
+  listMyIssues:(t,q)=>req('/api/issues/my',{token:t,query:q}),
   getIssue:(t,id)=>req(`/api/issues/${id}`,{token:t}),
   updateIssueStatus:(t,id,status)=>req(`/api/issues/${id}/status`,{method:'PATCH',token:t,json:{status}}),
+  updateIssuePriority:(t,id,priority)=>req(`/api/issues/${id}/priority`,{method:'PATCH',token:t,json:{priority}}),
+  addIssueFix:(t,id,fixText)=>req(`/api/issues/${id}/fix`,{method:'POST',token:t,json:{fix_text:fixText}}),
   updateBranch:(t,code,data)=>req(`/api/branches/${code}`,{method:'PUT',token:t,json:data}),
   deleteBranch:(t,code)=>req(`/api/branches/${code}`,{method:'DELETE',token:t}),
   assignUsersToBranch:(t,code,userIds)=>req(`/api/branches/${code}/users`,{method:'POST',token:t,json:{user_ids:userIds}}),

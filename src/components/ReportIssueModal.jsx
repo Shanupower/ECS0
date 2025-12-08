@@ -7,7 +7,8 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
   const { token, user } = useAuth()
   const [formData, setFormData] = useState({
     title: '',
-    description: ''
+    description: '',
+    priority: 'medium'
   })
   const [photo, setPhoto] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -61,6 +62,7 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
       const issueData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
+        priority: formData.priority,
         created_by: user?.id || user?.emp_code || 'unknown'
       }
 
@@ -79,7 +81,7 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
       const result = await api.createIssueWithFormData(token, formDataToSend)
 
       setSuccess(`Issue reported successfully! Issue ID: ${result.id || 'N/A'}`)
-      setFormData({ title: '', description: '' })
+      setFormData({ title: '', description: '', priority: 'medium' })
       setPhoto(null)
       
       // Reset file input
@@ -101,7 +103,7 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
   }
 
   const handleClose = () => {
-    setFormData({ title: '', description: '' })
+    setFormData({ title: '', description: '', priority: 'medium' })
     setPhoto(null)
     setError('')
     setSuccess('')
@@ -170,6 +172,25 @@ const ReportIssueModal = ({ isOpen, onClose }) => {
               required
               disabled={isSubmitting}
             />
+          </div>
+
+          <div>
+            <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+              Priority
+            </label>
+            <select
+              id="priority"
+              name="priority"
+              value={formData.priority}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isSubmitting}
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
           </div>
 
           <div>
