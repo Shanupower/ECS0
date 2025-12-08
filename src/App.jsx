@@ -13,6 +13,8 @@ import TransactionsPage from './pages/TransactionsPage.jsx'
 import UserManagementPage from './pages/UserManagementPage.jsx'
 import CustomerManagementPage from './pages/CustomerManagementPage.jsx'
 import SchemeManagementPage from './pages/SchemeManagementPage.jsx'
+import IssuesPage from './pages/IssuesPage.jsx'
+import MyIssuesPage from './pages/MyIssuesPage.jsx'
 
 // Page Transition Wrapper
 function PageTransition({ children }) {
@@ -89,6 +91,14 @@ export default function App(){
           <Route 
             path="schemes" 
             element={<PageTransition><AdminRoute><SchemeManagementPage/></AdminRoute></PageTransition>}
+          />
+          <Route 
+            path="issues" 
+            element={<PageTransition><AdminRoute><IssuesPage/></AdminRoute></PageTransition>}
+          />
+          <Route 
+            path="my-issues" 
+            element={<PageTransition><MyIssuesPage/></PageTransition>}
           />
         </Route>
       </Routes>
