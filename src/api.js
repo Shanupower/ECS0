@@ -14,7 +14,16 @@ async function req(path,{method='GET',token,json,query}={}){
   })
   const ct=res.headers.get('content-type')||''
   const data= ct.includes('application/json')?await res.json():await res.text()
-  if(!res.ok) throw new Error(data.error||data.message||res.statusText)
+  if(!res.ok) {
+    const error = new Error(data.detail || data.error || data.message || res.statusText)
+    // Preserve full error object for field-specific error handling
+    if (typeof data === 'object' && data !== null) {
+      error.field = data.field
+      error.errorType = data.error
+      error.detail = data.detail
+    }
+    throw error
+  }
   return data
 }
 
@@ -79,7 +88,6 @@ function createIssueFormData(data, file) {
 export const api={
   // Auth endpoints
   login:(c,p)=>req('/api/auth/login',{method:'POST',json:{emp_code:c,password:p}}),
-  branchLogin:(branchName,p)=>req('/api/auth/branch-login',{method:'POST',json:{branch_name:branchName,password:p}}),
   register:(data)=>req('/api/auth/register',{method:'POST',json:data}),
   
   // User endpoints
@@ -99,6 +107,7 @@ export const api={
   deleteReceipt:(t,id,r)=>req(`/api/receipts/${id}`,{method:'DELETE',token:t,json:{reason:r}}),
   restoreReceipt:(t,id)=>req(`/api/receipts/${id}/restore`,{method:'POST',token:t}),
   updateReceiptStatus:(t,id,status)=>req(`/api/receipts/${id}/status`,{method:'PATCH',token:t,json:{status}}),
+  updateReceiptBonus:(t,id,bonusData)=>req(`/api/receipts/${id}/bonus`,{method:'PUT',token:t,json:bonusData}),
   getReceiptMedia:(t,id)=>req(`/api/receipts/${id}/media`,{token:t}),
   downloadReceiptMedia:(t,id,mediaId)=>req(`/api/receipts/${id}/media/${mediaId}`,{token:t}),
   downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
@@ -117,6 +126,7 @@ export const api={
   statsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
   statsByCategory:(t,q)=>req('/api/stats/by-category',{token:t,query:q}),
   statsByDay:(t,q)=>req('/api/stats/by-day',{token:t,query:q}),
+  getMonthlyCCSI:(t,q)=>req('/api/stats/monthly-cc-si',{token:t,query:q}),
   
   // Branch endpoints
   listBranches:(t)=>req('/api/branches',{token:t}),

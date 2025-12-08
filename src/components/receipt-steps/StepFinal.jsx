@@ -486,7 +486,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                   {data.sip_is_perpetual && (
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <div className="text-sm text-gray-600 dark:text-gray-400">Type</div>
-                      <div className="font-semibold text-gray-900 dark:text-gray-100">Perpetual (30 years)</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">Perpetual (40 years)</div>
                     </div>
                   )}
                   {data.swp_frequency && (

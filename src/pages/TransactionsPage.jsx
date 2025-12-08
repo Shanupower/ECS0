@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { getCategoryDisplayName } from '../utils/categoryMapping'
 import { 
   FiClock, 
   FiFilter, 
@@ -15,7 +16,9 @@ import {
   FiFile,
   FiDownload,
   FiChevronDown,
-  FiChevronUp
+  FiChevronUp,
+  FiAward,
+  FiX
 } from 'react-icons/fi'
 
 export default function TransactionsPage() {
@@ -42,6 +45,9 @@ export default function TransactionsPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [showErrorToast, setShowErrorToast] = useState(false)
   const [expandedRows, setExpandedRows] = useState(new Set())
+  const [showBonusModal, setShowBonusModal] = useState(false)
+  const [selectedReceipt, setSelectedReceipt] = useState(null)
+  const [bonusData, setBonusData] = useState({ additional_cc: 0, additional_si: 0 })
 
   const isAdmin = user?.role === 'admin'
 
@@ -239,6 +245,43 @@ export default function TransactionsPage() {
     
     checkForMessages()
   }, [])
+
+  const handleAddBonus = (receipt) => {
+    setSelectedReceipt(receipt)
+    setBonusData({
+      additional_cc: receipt.additional_cc || 0,
+      additional_si: receipt.additional_si || 0
+    })
+    setShowBonusModal(true)
+  }
+
+  const handleSaveBonus = async () => {
+    if (!selectedReceipt || !token) return
+    
+    try {
+      await api.updateReceiptBonus(token, selectedReceipt._key || selectedReceipt.id, bonusData)
+      setShowBonusModal(false)
+      setSelectedReceipt(null)
+      setBonusData({ additional_cc: 0, additional_si: 0 })
+      setSuccessMessage('Bonus updated successfully')
+      setShowSuccessToast(true)
+      setTimeout(() => setShowSuccessToast(false), 5000)
+      loadReceipts()
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to update bonus')
+      setShowErrorToast(true)
+      setTimeout(() => setShowErrorToast(false), 5000)
+    }
+  }
+
+  const handleCloseBonusModal = () => {
+    setShowBonusModal(false)
+    // Reset data only when closing, not when canceling
+    setTimeout(() => {
+      setSelectedReceipt(null)
+      setBonusData({ additional_cc: 0, additional_si: 0 })
+    }, 300) // Small delay to allow modal close animation
+  }
 
   const handleDelete = async (receiptId, reason = 'deleted by user') => {
     if (!confirm('Are you sure you want to delete this receipt?')) return
@@ -583,7 +626,7 @@ export default function TransactionsPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
                       <div className="flex items-center gap-1 flex-wrap">
-                        <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{receipt.product_category || 'N/A'}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{getCategoryDisplayName(receipt.product_category)}</p>
                         {receipt.scheme_option && receipt.product_category === 'MF' && (
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
                             receipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
@@ -622,6 +665,15 @@ export default function TransactionsPage() {
                         <FiEye className="w-3.5 h-3.5 mr-1.5" />
                         View Details
                       </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleAddBonus(receipt)}
+                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-lg text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60"
+                        >
+                          <FiAward className="w-3.5 h-3.5 mr-1.5" />
+                          Add Bonus
+                        </button>
+                      )}
                       {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
                         <button
                           onClick={() => handleDelete(receipt._key || receipt.id)}
@@ -697,8 +749,8 @@ export default function TransactionsPage() {
                                 {receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}
                               </div>
                               <span className="text-gray-400 dark:text-dark-500">•</span>
-                              <span className="text-xs text-gray-600 dark:text-dark-400 capitalize">
-                                {receipt.product_category || 'N/A'}
+                              <span className="text-xs text-gray-600 dark:text-dark-400">
+                                {getCategoryDisplayName(receipt.product_category)}
                               </span>
                               {receipt.scheme_option && receipt.product_category === 'MF' && (
                                 <>
@@ -734,7 +786,7 @@ export default function TransactionsPage() {
                                 {formatDate(receipt.date)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-dark-400">
-                                {receipt.product_category || 'N/A'}
+                                {getCategoryDisplayName(receipt.product_category)}
                               </div>
                             </div>
                           </td>
@@ -809,6 +861,18 @@ export default function TransactionsPage() {
                                       Complete
                                     </button>
                                   )}
+                                  {isAdmin && !receipt.deleted_at && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleAddBonus(receipt)
+                                      }}
+                                      className="inline-flex items-center px-3 py-1.5 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-md text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 transition-all hover:shadow-sm mr-2"
+                                    >
+                                      <FiAward className="w-3.5 h-3.5 mr-1.5" />
+                                      Bonus
+                                    </button>
+                                  )}
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -859,6 +923,78 @@ export default function TransactionsPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Bonus Modal */}
+      {showBonusModal && selectedReceipt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Add Bonus - Receipt {selectedReceipt.receipt_no || selectedReceipt.receiptNo}
+                </h2>
+                <button
+                  onClick={handleCloseBonusModal}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Additional CC (Commission Credit)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={bonusData.additional_cc}
+                    onChange={(e) => setBonusData({ ...bonusData, additional_cc: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Current CC: ₹{((selectedReceipt.cc_amount || 0) + (selectedReceipt.additional_cc || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Additional SI (Service Income)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={bonusData.additional_si}
+                    onChange={(e) => setBonusData({ ...bonusData, additional_si: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Current SI: ₹{((selectedReceipt.si_amount || 0) + (selectedReceipt.additional_si || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={handleCloseBonusModal}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveBonus}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                >
+                  Save Bonus
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

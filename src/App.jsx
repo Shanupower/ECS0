@@ -11,7 +11,7 @@ import ReceiptsPage from './pages/ReceiptsPage.jsx'
 import ReceiptViewPage from './pages/ReceiptViewPage.jsx'
 import TransactionsPage from './pages/TransactionsPage.jsx'
 import UserManagementPage from './pages/UserManagementPage.jsx'
-import CustomerManagementPage from './pages/CustomerManagementPage.jsx'
+import ClientManagementPage from './pages/ClientManagementPage.jsx'
 import SchemeManagementPage from './pages/SchemeManagementPage.jsx'
 import IssuesPage from './pages/IssuesPage.jsx'
 import MyIssuesPage from './pages/MyIssuesPage.jsx'
@@ -42,12 +42,12 @@ function AdminRoute({children}){
 
 function BranchRoute({children}){
   const {user}=useAuth()
-  return (user?.role === 'admin' || user?.role === 'branch') ? children : <Navigate to="/dashboard"/>
+  return (user?.role === 'admin' || user?.role === 'manager') ? children : <Navigate to="/dashboard"/>
 }
 
-function CustomerRoute({children}){
+function ClientRoute({children}){
   const {user}=useAuth()
-  return (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'employee' || user?.role === 'branch') ? children : <Navigate to="/dashboard"/>
+  return (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'employee') ? children : <Navigate to="/dashboard"/>
 }
 
 export default function App(){
@@ -86,7 +86,7 @@ export default function App(){
           />
           <Route 
             path="customers" 
-            element={<PageTransition><CustomerRoute><CustomerManagementPage/></CustomerRoute></PageTransition>}
+            element={<PageTransition><ClientRoute><ClientManagementPage/></ClientRoute></PageTransition>}
           />
           <Route 
             path="schemes" 

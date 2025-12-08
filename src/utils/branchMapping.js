@@ -106,9 +106,33 @@ export function normalizeBranchForDB(branchName) {
 // Convert database branch name to employee list format
 export function normalizeBranchForEmployee(branchName) {
   if (!branchName) return branchName
-  // Find the key that maps to this value
+  
+  // First try BRANCH_MAPPINGS reverse lookup
   const entry = Object.entries(BRANCH_MAPPINGS).find(([key, value]) => value === branchName)
-  return entry ? entry[0] : branchName
+  if (entry) return entry[0]
+  
+  // Then try API_BRANCH_MAPPINGS reverse lookup (more comprehensive)
+  // Find all entries where the value matches the DB format
+  const apiEntry = Object.entries(API_BRANCH_MAPPINGS).find(([key, value]) => 
+    value === branchName && getAllValidBranches().includes(key)
+  )
+  if (apiEntry) return apiEntry[0]
+  
+  // If the branchName is already in employee format, return it
+  if (getAllValidBranches().includes(branchName)) {
+    return branchName
+  }
+  
+  // Try case-insensitive match in valid branches
+  const lowerBranchName = branchName.toLowerCase()
+  const validBranch = getAllValidBranches().find(branch => {
+    const normalized = normalizeBranchForAPI(branch)
+    return normalized.toLowerCase() === lowerBranchName
+  })
+  if (validBranch) return validBranch
+  
+  // Fallback: return as-is
+  return branchName
 }
 
 // Normalize branch name for API calls - maps user branch to API-expected branch name
