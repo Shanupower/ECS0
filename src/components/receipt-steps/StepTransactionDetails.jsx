@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { api } from '../../api'
+import SearchableSelect from '../SearchableSelect.jsx'
 
 export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, token }) {
   const [amount, setAmount] = useState('')
@@ -235,19 +236,48 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Transfer to Scheme <span className="text-red-500">*</span>
             </label>
-            <select
+            <SearchableSelect
+              options={useMemo(() => schemes.map(scheme => ({
+                label: `${scheme.display_name || scheme.scheme_name}${scheme.option ? ` (${scheme.option === 'GROWTH' ? 'Growth' : scheme.option === 'IDCW_PAYOUT' ? 'IDCW-Payout' : scheme.option === 'IDCW_REINVEST' ? 'IDCW-Reinvestment' : scheme.option})` : ''}`,
+                value: scheme.scheme_code,
+                scheme: scheme
+              })), [schemes])}
               value={targetScheme}
-              onChange={(e) => setTargetScheme(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              onChange={(schemeCode) => setTargetScheme(schemeCode)}
+              placeholder="Search for a scheme..."
               disabled={loading || !schemes.length}
-            >
-              <option value="">Select scheme...</option>
-              {schemes.map(scheme => (
-                <option key={scheme.scheme_code} value={scheme.scheme_code}>
-                  {scheme.scheme_name}
-                </option>
-              ))}
-            </select>
+              maxHeight={300}
+            />
+            {targetScheme && (() => {
+              const selected = schemes.find(s => s.scheme_code === targetScheme)
+              return selected ? (
+                <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Scheme:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selected.scheme_name}</span>
+                    </div>
+                    {selected.option && (
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Option:</span>
+                        <span className="ml-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            selected.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                            selected.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                            'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                          }`}>
+                            {selected.option === 'GROWTH' ? 'Growth' : 
+                             selected.option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                             selected.option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                             selected.option}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null
+            })()}
           </div>
          
           <div>
@@ -304,19 +334,54 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Switch to Scheme <span className="text-red-500">*</span>
             </label>
-            <select
+            <SearchableSelect
+              options={useMemo(() => schemes.map(scheme => ({
+                label: `${scheme.display_name || scheme.scheme_name}${scheme.option ? ` (${scheme.option === 'GROWTH' ? 'Growth' : scheme.option === 'IDCW_PAYOUT' ? 'IDCW-Payout' : scheme.option === 'IDCW_REINVEST' ? 'IDCW-Reinvestment' : scheme.option})` : ''}`,
+                value: scheme.scheme_code,
+                scheme: scheme
+              })), [schemes])}
               value={targetScheme}
-              onChange={(e) => setTargetScheme(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              onChange={(schemeCode) => setTargetScheme(schemeCode)}
+              placeholder="Search for a scheme..."
               disabled={loading || !schemes.length}
-            >
-              <option value="">Select scheme...</option>
-              {schemes.map(scheme => (
-                <option key={scheme.scheme_code} value={scheme.scheme_code}>
-                  {scheme.scheme_name}
-                </option>
-              ))}
-            </select>
+              maxHeight={300}
+            />
+            {targetScheme && (() => {
+              const selected = schemes.find(s => s.scheme_code === targetScheme)
+              return selected ? (
+                <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Scheme:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selected.scheme_name}</span>
+                    </div>
+                    {selected.option && (
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Option:</span>
+                        <span className="ml-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            selected.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                            selected.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                            'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                          }`}>
+                            {selected.option === 'GROWTH' ? 'Growth' : 
+                             selected.option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                             selected.option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                             selected.option}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                    {selected.type && (
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Type:</span>
+                        <span className="ml-2 text-gray-600 dark:text-gray-400">{selected.type}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null
+            })()}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

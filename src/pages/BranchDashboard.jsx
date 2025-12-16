@@ -42,6 +42,7 @@ export default function BranchDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedBranches, setExpandedBranches] = useState(new Set())
+  const [includePending, setIncludePending] = useState(false)
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
@@ -58,7 +59,9 @@ export default function BranchDashboard() {
       setBranches(branchesData)
       
       // Load global branch statistics
-      const globalStatsData = await api.getGlobalBranchStats(token)
+      const globalStatsData = await api.getGlobalBranchStats(token, {
+        includePending: includePending ? '1' : '0'
+      })
       setGlobalStats(globalStatsData)
       
       // If user is manager, filter to their branch only
@@ -83,7 +86,9 @@ export default function BranchDashboard() {
     if (!branchCode) return
     
     try {
-      const stats = await api.getBranchStats(token, branchCode)
+      const stats = await api.getBranchStats(token, branchCode, {
+        includePending: includePending ? '1' : '0'
+      })
       setBranchStats(stats)
     } catch (err) {
       console.error('Failed to load branch stats:', err)
@@ -102,7 +107,7 @@ export default function BranchDashboard() {
 
   useEffect(() => {
     loadBranchData()
-  }, [token])
+  }, [token, includePending])
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -129,11 +134,11 @@ export default function BranchDashboard() {
     if (!globalStats || !globalStats.branches) return []
     
     return globalStats.branches.map(branch => ({
-      name: branch.branch_name,
+      name: branch.branch || branch.branch_name || 'Unknown Branch',
       investments: branch.total_investments || 0,
       receipts: branch.total_receipts || 0,
-      users: branch.total_users || 0,
-      commission: 0
+      users: branch.total_employees || 0,
+      commission: branch.commissions || 0
     }))
   }
 
@@ -145,7 +150,7 @@ export default function BranchDashboard() {
     return globalStats.branches
       .filter(branch => branch.total_investments > 0)
       .map((branch, index) => ({
-        name: branch.branch_name,
+        name: branch.branch || branch.branch_name || 'Unknown Branch',
         value: branch.total_investments || 0,
         percentage: total > 0 ? ((branch.total_investments || 0) / total * 100).toFixed(1) : 0
       }))
@@ -185,14 +190,38 @@ export default function BranchDashboard() {
             {isAdmin ? 'Overview of all branch performance' : isManager ? 'Your branch team performance metrics' : `Performance overview for ${user?.branch || 'your branch'}`}
           </p>
         </div>
-        <button
-          onClick={loadBranchData}
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
-        >
-          <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center space-x-3 cursor-pointer group">
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={includePending}
+                onChange={e => setIncludePending(e.target.checked)}
+                className="sr-only"
+              />
+              <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
+                includePending 
+                  ? 'bg-red-600 dark:bg-red-500' 
+                  : 'bg-gray-300 dark:bg-gray-600'
+              }`}>
+                <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                  includePending ? 'translate-x-5' : 'translate-x-0'
+                }`}></div>
+              </div>
+            </div>
+            <span className="text-sm font-medium text-gray-700 dark:text-dark-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+              Include Pending
+            </span>
+          </label>
+          <button
+            onClick={loadBranchData}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
+          >
+            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Global Statistics */}
@@ -245,7 +274,7 @@ export default function BranchDashboard() {
               <div>
                 <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Collection/Credit</div>
                 <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(globalStats?.total_collection_credit || 0)}
+                  {formatCurrency(globalStats?.total_collection_credit || globalStats?.total_commissions || 0)}
                 </div>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
@@ -308,7 +337,7 @@ export default function BranchDashboard() {
               <div>
                 <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Team Members</div>
                 <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(branchStats.total_users || 0)}
+                  {formatNumber(branchStats?.statistics?.total_employees || 0)}
                 </div>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -322,7 +351,7 @@ export default function BranchDashboard() {
               <div>
                 <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Collection/Credit Earned</div>
                 <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(branchStats.collection_credit || 0)}
+                  {formatCurrency(branchStats?.statistics?.collection_credit || branchStats?.statistics?.commissions || 0)}
                 </div>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
@@ -518,15 +547,15 @@ export default function BranchDashboard() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {getTopPerformers().map((branch, index) => (
-              <div key={branch.branch_code} className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+              <div key={branch.branch_code || branch.branch || index} className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center">
                     <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-3">
                       <span className="text-sm font-bold text-red-600 dark:text-red-400">#{index + 1}</span>
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{branch.branch_name}</div>
-                      <div className="text-xs text-gray-500 dark:text-dark-400">{branch.branch_code}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">{branch.branch || branch.branch_name || 'Unknown Branch'}</div>
+                      <div className="text-xs text-gray-500 dark:text-dark-400">{branch.branch_code || ''}</div>
                     </div>
                   </div>
                 </div>
@@ -541,7 +570,7 @@ export default function BranchDashboard() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500 dark:text-dark-400">Collection/Credit:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(0)}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(branch.commissions || 0)}</span>
                   </div>
                 </div>
               </div>
@@ -566,14 +595,15 @@ export default function BranchDashboard() {
               const normalizedBranchName = normalizeName(branch.branch_name)
               
               const branchData = globalStats?.branches?.find(b => {
-                const normalizedStatName = normalizeName(b.branch_name)
+                const statBranchName = b.branch || b.branch_name || ''
+                const normalizedStatName = normalizeName(statBranchName)
                 return (
-                  b.branch_name === branch.branch_name || 
+                  statBranchName === branch.branch_name || 
                   b.branch_code === branch.branch_code ||
                   normalizedStatName.includes(normalizedBranchName) ||
                   normalizedBranchName.includes(normalizedStatName) ||
-                  b.branch_name?.toUpperCase().includes(branch.branch_name?.toUpperCase()) ||
-                  branch.branch_name?.toUpperCase().includes(b.branch_name?.toUpperCase())
+                  statBranchName?.toUpperCase().includes(branch.branch_name?.toUpperCase()) ||
+                  branch.branch_name?.toUpperCase().includes(statBranchName?.toUpperCase())
                 )
               })
               
@@ -623,13 +653,13 @@ export default function BranchDashboard() {
                         <div className="bg-gray-50 dark:bg-dark-700 p-3 rounded-lg">
                           <div className="text-xs text-gray-500 dark:text-dark-400 mb-1">Total Users</div>
                           <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {formatNumber(branchData?.total_users || 0)}
+                            {formatNumber(branchData?.total_employees || 0)}
                           </div>
                         </div>
                         <div className="bg-gray-50 dark:bg-dark-700 p-3 rounded-lg">
                           <div className="text-xs text-gray-500 dark:text-dark-400 mb-1">Collection/Credit Earned</div>
                           <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {formatCurrency(0)}
+                            {formatCurrency(branchData?.commissions || 0)}
                           </div>
                         </div>
                         <div className="bg-gray-50 dark:bg-dark-700 p-3 rounded-lg">

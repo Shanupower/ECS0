@@ -131,10 +131,10 @@ export const api={
   // Branch endpoints
   listBranches:(t)=>req('/api/branches',{token:t}),
   getBranch:(t,code)=>req(`/api/branches/${code}`,{token:t}),
-  getBranchStats:(t,code)=>req(`/api/branches/${code}/stats`,{token:t}),
+  getBranchStats:(t,code,q)=>req(`/api/branches/${code}/stats`,{token:t,query:q}),
+  getGlobalBranchStats:(t,q)=>req('/api/stats/branches',{token:t,query:q}),
   getBranchReceipts:(t,code,q)=>req(`/api/branches/${code}/receipts`,{token:t,query:q}),
   createBranchReceipt:(t,code,data,files)=>files && files.length > 0 ? reqWithFiles(`/api/branches/${code}/receipts`,{method:'POST',token:t,formData:createFormData(data,files)}) : req(`/api/branches/${code}/receipts`,{method:'POST',token:t,json:data}),
-  getGlobalBranchStats:(t)=>req('/api/stats/branches',{token:t}),
   
   // Branch management endpoints (admin only)
   createBranch:(t,data)=>req('/api/branches',{method:'POST',token:t,json:data}),
@@ -160,6 +160,7 @@ export const api={
   
   // Export endpoints
   exportReceipts:(t,q)=>req('/api/export/receipts',{token:t,query:q}),
+  exportTransactions:(t,q)=>req('/api/export/transactions',{token:t,query:q}),
   exportCustomers:(t)=>req('/api/export/customers',{token:t}),
   exportUsers:(t)=>req('/api/export/users',{token:t}),
   exportBranches:(t)=>req('/api/export/branches',{token:t}),

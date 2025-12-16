@@ -411,6 +411,58 @@ export default function TransactionsPage() {
     }
   }
 
+  const handleDownloadHistory = async () => {
+    if (!token) return
+    try {
+      const query = {
+        from: filters.from,
+        to: filters.to,
+        branch_code: user?.branch_code || undefined,
+        emp_code: isAdmin ? (filters.emp_code || undefined) : undefined,
+        status: filters.status || undefined,
+        category: filters.category || undefined
+      }
+      Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
+      const blob = await api.exportTransactions(token, query)
+      // api.exportTransactions returns text; use fetch-style download instead
+    } catch (err) {
+      console.error('Failed to export transactions via API helper, falling back to direct download:', err)
+    }
+
+    // Fallback: direct browser download using fetch
+    try {
+      const qs = new URLSearchParams({
+        from: filters.from,
+        to: filters.to,
+        ...(user?.branch_code ? { branch_code: user.branch_code } : {}),
+        ...(isAdmin && filters.emp_code ? { emp_code: filters.emp_code } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.category ? { category: filters.category } : {})
+      }).toString()
+
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/export/transactions?${qs}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (!res.ok) throw new Error('Failed to download transaction history')
+      const csvText = await res.text()
+      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to download transaction history')
+      setShowErrorToast(true)
+      setTimeout(() => setShowErrorToast(false), 5000)
+    }
+  }
+
   const getRowBackgroundColor = (receipt) => {
     if (receipt.deleted_at) {
       return 'bg-red-50 dark:bg-red-900/10 border-l-4 border-red-400'
@@ -471,6 +523,14 @@ export default function TransactionsPage() {
         >
           <FiRefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline ml-2">Refresh</span>
+        </button>
+        <button
+          onClick={handleDownloadHistory}
+          disabled={loading}
+          className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
+        >
+          <FiDownload className="w-5 h-5 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline ml-2">Download CSV</span>
         </button>
       </div>
       

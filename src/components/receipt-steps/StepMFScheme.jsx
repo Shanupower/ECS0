@@ -162,6 +162,18 @@ export default function StepMFScheme({ onBack, onNext, token }) {
                     <span className="font-medium text-gray-700 dark:text-gray-300">Type:</span>
                     <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.type}</span>
                   </div>
+                  <div>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">CC %</span>
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">
+                      {selectedScheme.cc !== undefined ? `${Number(selectedScheme.cc).toFixed(2)} %` : '0.00 %'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">SI %</span>
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">
+                      {selectedScheme.si !== undefined ? `${Number(selectedScheme.si).toFixed(2)} %` : '0.00 %'}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
