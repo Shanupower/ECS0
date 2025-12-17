@@ -51,7 +51,8 @@ export default function DashboardPage() {
       // For admins, adjust query based on view mode
       if (isAdmin) {
         if (viewMode === 'personal') {
-          // Admin viewing personal data - filter by their emp_code
+          // Admin viewing personal data - filter by their emp_code and send viewMode
+          queryParams.viewMode = 'personal'
           if (user?.emp_code) {
             queryParams.emp_code = user.emp_code
           }
