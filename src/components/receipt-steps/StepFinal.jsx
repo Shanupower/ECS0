@@ -10,6 +10,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
     branch: ''
   })
   const [onlineTransactionNumber, setOnlineTransactionNumber] = useState('')
+  const [othersTransactionType, setOthersTransactionType] = useState('')
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0]
@@ -38,7 +39,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
   const handleSave = () => {
     // Validate transaction type
     if (!transactionType) {
-      alert('Please select transaction type (Online/Offline)')
+      alert('Please select transaction type (Online/Offline/Others)')
       return
     }
     
@@ -51,6 +52,11 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
     } else if (transactionType === 'Online') {
       if (!onlineTransactionNumber || onlineTransactionNumber.trim() === '') {
         alert('Please enter transaction number')
+        return
+      }
+    } else if (transactionType === 'Others') {
+      if (!othersTransactionType || othersTransactionType.trim() === '') {
+        alert('Please enter transaction type (e.g., RTGS, NEFT, etc.)')
         return
       }
     }
@@ -114,12 +120,35 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       return
     }
     
-    // Merge additional data
+    // Merge additional data with transaction_details structure
+    const transactionDetails = {
+      entry_mode: transactionType === 'Others' ? 'Others' : transactionType,
+      channel: transactionType === 'Online' ? onlineTransactionNumber : 
+               transactionType === 'Offline' ? 'Cheque' :
+               transactionType === 'Others' ? othersTransactionType : null,
+      ...(transactionType === 'Offline' ? {
+        bank_name: offlineDetails.bankName,
+        reference_no: offlineDetails.chequeNumber,
+        txn_date: offlineDetails.chequeDate,
+        bank_branch: offlineDetails.branch
+      } : {}),
+      ...(transactionType === 'Online' ? {
+        reference_no: onlineTransactionNumber
+      } : {}),
+      ...(transactionType === 'Others' ? {
+        notes: othersTransactionType
+      } : {})
+    }
+    
     const finalData = {
       ...data,
       transactionType,
+      transaction_details: transactionDetails,
+      entry_mode: transactionDetails.entry_mode,
+      transaction_channel: transactionDetails.channel,
       ...(transactionType === 'Offline' ? offlineDetails : {}),
-      ...(transactionType === 'Online' ? { transactionNumber: onlineTransactionNumber } : {})
+      ...(transactionType === 'Online' ? { transactionNumber: onlineTransactionNumber } : {}),
+      ...(transactionType === 'Others' ? { othersTransactionType } : {})
     }
     
     onSave(finalData)
@@ -561,7 +590,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
               Transaction Type *
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <button
                 type="button"
                 onClick={() => setTransactionType('Online')}
@@ -589,6 +618,21 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                 <div className="text-center">
                   <div className="text-2xl mb-2">🏦</div>
                   <div className="font-semibold text-gray-900 dark:text-gray-100">Offline</div>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setTransactionType('Others')}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  transactionType === 'Others'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                    : 'border-gray-300 dark:border-gray-600 hover:border-purple-400'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">📝</div>
+                  <div className="font-semibold text-gray-900 dark:text-gray-100">Others</div>
                 </div>
               </button>
             </div>
@@ -664,6 +708,25 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Others Transaction Details */}
+            {transactionType === 'Others' && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Transaction Type * (e.g., RTGS, NEFT, etc.)
+                </label>
+                <input
+                  type="text"
+                  value={othersTransactionType}
+                  onChange={(e) => setOthersTransactionType(e.target.value)}
+                  placeholder="Enter transaction type (e.g., RTGS, NEFT, IMPS, etc.)"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Specify the transaction type or payment method used
+                </p>
               </div>
             )}
           </div>
