@@ -18,7 +18,10 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiAward,
-  FiX
+  FiX,
+  FiSearch,
+  FiArrowUp,
+  FiArrowDown
 } from 'react-icons/fi'
 
 export default function TransactionsPage() {
@@ -32,9 +35,13 @@ export default function TransactionsPage() {
     category: '',
     status: '',
     emp_code: '',
+    branch_code: '',
+    search: '', // Search by investor name/ID or receipt ID
     size: 20,
     sort: 'created_at:desc'
   })
+  const [branches, setBranches] = useState([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
     total: 0,
@@ -68,13 +75,17 @@ export default function TransactionsPage() {
     setError('')
     
     try {
-      // Create a clean query object with only the filters we need
+      // Create a clean query object with all filters
       const query = {
         from: filters.from,
         to: filters.to,
         category: filters.category || undefined,
         status: filters.status || undefined,
-        page: pagination.page
+        search: filters.search || undefined,
+        branch_code: filters.branch_code || undefined,
+        sort: filters.sort || 'created_at:desc',
+        page: pagination.page,
+        size: filters.size || 20
       }
       
       // Remove undefined values
@@ -98,7 +109,10 @@ export default function TransactionsPage() {
           to: filters.to,
           category: filters.category || undefined,
           status: filters.status || undefined,
-          page: pagination.page
+          search: filters.search || undefined,
+          sort: filters.sort || 'created_at:desc',
+          page: pagination.page,
+          size: filters.size || 20
         }
         // Remove undefined values
         Object.keys(empQuery).forEach(key => empQuery[key] === undefined && delete empQuery[key])
@@ -164,14 +178,34 @@ export default function TransactionsPage() {
     }
   }
 
+  // Load branches for admin users
+  useEffect(() => {
+    if (isAdmin && token) {
+      loadBranches()
+    }
+  }, [isAdmin, token])
+
+  const loadBranches = async () => {
+    if (!token) return
+    setLoadingBranches(true)
+    try {
+      const branchesData = await api.listBranches(token)
+      setBranches(Array.isArray(branchesData) ? branchesData : [])
+    } catch (err) {
+      console.error('Failed to load branches:', err)
+    } finally {
+      setLoadingBranches(false)
+    }
+  }
+
   useEffect(() => {
     // Reset to page 1 when any filter changes
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [filters.from, filters.to, filters.category, filters.status, filters.emp_code])
+  }, [filters.from, filters.to, filters.category, filters.status, filters.emp_code, filters.branch_code, filters.search, filters.sort])
 
   useEffect(() => {
     loadReceipts()
-  }, [token, filters.from, filters.to, filters.category, filters.status, filters.emp_code, pagination.page])
+  }, [token, filters.from, filters.to, filters.category, filters.status, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
 
   // Check for success/error messages from receipt creation
   useEffect(() => {
@@ -417,10 +451,11 @@ export default function TransactionsPage() {
       const query = {
         from: filters.from,
         to: filters.to,
-        branch_code: user?.branch_code || undefined,
+        branch_code: isAdmin ? (filters.branch_code || user?.branch_code || undefined) : (user?.branch_code || undefined),
         emp_code: isAdmin ? (filters.emp_code || undefined) : undefined,
         status: filters.status || undefined,
-        category: filters.category || undefined
+        category: filters.category || undefined,
+        search: filters.search || undefined
       }
       Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
       const blob = await api.exportTransactions(token, query)
@@ -434,10 +469,11 @@ export default function TransactionsPage() {
       const qs = new URLSearchParams({
         from: filters.from,
         to: filters.to,
-        ...(user?.branch_code ? { branch_code: user.branch_code } : {}),
+        ...(isAdmin && filters.branch_code ? { branch_code: filters.branch_code } : (user?.branch_code ? { branch_code: user.branch_code } : {})),
         ...(isAdmin && filters.emp_code ? { emp_code: filters.emp_code } : {}),
         ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.category ? { category: filters.category } : {})
+        ...(filters.category ? { category: filters.category } : {}),
+        ...(filters.search ? { search: filters.search } : {})
       }).toString()
 
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/export/transactions?${qs}`, {
@@ -538,8 +574,26 @@ export default function TransactionsPage() {
       <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
         <div className="flex items-center mb-3 sm:mb-4">
           <FiFilter className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 mr-2" />
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Filters & Search</h3>
         </div>
+        
+        {/* Search Bar */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Search</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <FiSearch className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+            </div>
+            <input
+              type="text"
+              value={filters.search}
+              onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              placeholder="Search by investor name, investor ID, or receipt ID..."
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">From Date</label>
@@ -596,20 +650,94 @@ export default function TransactionsPage() {
             </select>
           </div>
         </div>
+
+        {/* Admin Filters Row */}
         {isAdmin && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch</label>
+              <select
+                value={filters.branch_code}
+                onChange={e => setFilters(prev => ({ ...prev, branch_code: e.target.value }))}
+                disabled={loadingBranches}
+                className="w-full p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 disabled:opacity-50"
+              >
+                <option value="">All Branches</option>
+                {branches.map(branch => (
+                  <option key={branch.branch_code || branch.id} value={branch.branch_code || branch.id}>
+                    {branch.branch_name || branch.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Employee Code</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiUser className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                </div>
+                <input
+                  type="text"
+                  value={filters.emp_code}
+                  onChange={e => setFilters(prev => ({ ...prev, emp_code: e.target.value }))}
+                  placeholder="Filter by employee code"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Sort By</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="flex flex-col">
+                    <FiArrowUp className="h-2 w-2 text-gray-400 dark:text-dark-400" />
+                    <FiArrowDown className="h-2 w-2 text-gray-400 dark:text-dark-400 -mt-0.5" />
+                  </div>
+                </div>
+                <select
+                  value={filters.sort}
+                  onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 appearance-none"
+                >
+                  <option value="created_at:desc">Newest First</option>
+                  <option value="created_at:asc">Oldest First</option>
+                  <option value="date:desc">Date (Newest)</option>
+                  <option value="date:asc">Date (Oldest)</option>
+                  <option value="receipt_no:asc">Receipt # (A-Z)</option>
+                  <option value="receipt_no:desc">Receipt # (Z-A)</option>
+                  <option value="amount:desc">Amount (High to Low)</option>
+                  <option value="amount:asc">Amount (Low to High)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Employee Sort Option */}
+        {!isAdmin && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Employee Code</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Sort By</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiUser className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                <div className="flex flex-col">
+                  <FiArrowUp className="h-2 w-2 text-gray-400 dark:text-dark-400" />
+                  <FiArrowDown className="h-2 w-2 text-gray-400 dark:text-dark-400 -mt-0.5" />
+                </div>
               </div>
-              <input
-                type="text"
-                value={filters.emp_code}
-                onChange={e => setFilters(prev => ({ ...prev, emp_code: e.target.value }))}
-                placeholder="Filter by employee"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
-              />
+              <select
+                value={filters.sort}
+                onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 appearance-none"
+              >
+                <option value="created_at:desc">Newest First</option>
+                <option value="created_at:asc">Oldest First</option>
+                <option value="date:desc">Date (Newest)</option>
+                <option value="date:asc">Date (Oldest)</option>
+                <option value="receipt_no:asc">Receipt # (A-Z)</option>
+                <option value="receipt_no:desc">Receipt # (Z-A)</option>
+                <option value="amount:desc">Amount (High to Low)</option>
+                <option value="amount:asc">Amount (Low to High)</option>
+              </select>
             </div>
           </div>
         )}

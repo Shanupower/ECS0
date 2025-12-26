@@ -17,9 +17,19 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
     const issuer_key = issuer?._key || issuer?.issuer_key
     if (!token || !issuer_key) return
     setLoading(true)
+    // Reset selection when loading new schemes
+    setSelectedScheme(null)
     try {
       const result = await api.getFDSchemesByIssuer(token, issuer_key)
-      setSchemes(Array.isArray(result) ? result : [])
+      const schemesArray = Array.isArray(result) ? result : []
+      
+      // Ensure schemes have unique identifiers - combine scheme_id with tenure range to handle duplicates
+      const schemesWithUniqueId = schemesArray.map((scheme, index) => ({
+        ...scheme,
+        _uniqueId: `${scheme.scheme_id}_${index}_${scheme.min_tenure_months}_${scheme.max_tenure_months}_${scheme.is_cumulative ? 'cum' : 'noncum'}`
+      }))
+      
+      setSchemes(schemesWithUniqueId)
     } catch (error) {
       console.error('Failed to load FD schemes:', error)
     } finally {
@@ -34,9 +44,38 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
       )
     : schemes
 
+  const handleSchemeSelect = async (scheme) => {
+    // Fetch full scheme with rate slabs if not already included
+    if (!scheme.rate_slabs && token && issuer) {
+      try {
+        const issuer_key = issuer?._key || issuer?.issuer_key
+        const fullScheme = await api.getFDScheme(token, issuer_key, scheme.scheme_id)
+        // Preserve the _uniqueId from the original scheme
+        setSelectedScheme({
+          ...fullScheme,
+          _uniqueId: scheme._uniqueId
+        })
+      } catch (error) {
+        console.error('Failed to load scheme details:', error)
+        // Fallback to basic scheme if fetch fails
+        setSelectedScheme(scheme)
+      }
+    } else {
+      // Scheme already has rate_slabs or we can't fetch, use as-is
+      setSelectedScheme(scheme)
+    }
+  }
+
   const handleNext = () => {
     if (!selectedScheme) return
     onNext(selectedScheme)
+  }
+
+  // Helper function to check if a scheme is selected (using unique identifier)
+  const isSchemeSelected = (scheme) => {
+    if (!selectedScheme) return false
+    // Use unique identifier for comparison to handle duplicate scheme_ids
+    return selectedScheme._uniqueId === scheme._uniqueId
   }
 
   return (
@@ -74,13 +113,27 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
               No schemes found
             </div>
           ) : (
-            filteredSchemes.map((scheme) => (
+            filteredSchemes.map((scheme) => {
+              const isSelected = isSchemeSelected(scheme)
+              // Get available tenure months from rate slabs - ONLY for specific tenures (min === max)
+              const availableTenures = scheme.rate_slabs 
+                ? scheme.rate_slabs
+                    .filter(slab => 
+                      slab.is_active !== false && 
+                      slab.tenure_min_months === slab.tenure_max_months // Only specific tenures
+                    )
+                    .map(slab => slab.tenure_min_months) // Since min === max, just use that value
+                    .filter((v, i, a) => a.indexOf(v) === i) // Remove duplicates
+                    .sort((a, b) => a - b)
+                : []
+              
+              return (
               <button
-                key={scheme.scheme_id}
+                key={scheme._uniqueId || scheme.scheme_id}
                 type="button"
-                onClick={() => setSelectedScheme(scheme)}
+                onClick={() => handleSchemeSelect(scheme)}
                 className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
-                  selectedScheme?.scheme_id === scheme.scheme_id
+                  isSelected
                     ? 'border-red-600 bg-red-50 dark:bg-red-900/20'
                     : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
                 }`}
@@ -108,8 +161,14 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
                 )}
 
                 <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                  <span className="font-medium">Tenure:</span> {scheme.min_tenure_months} - {scheme.max_tenure_months} months
+                  <span className="font-medium">Tenure Range:</span> {scheme.min_tenure_months} - {scheme.max_tenure_months} months
                 </div>
+
+                {availableTenures.length > 0 && (
+                  <div className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                    <span className="font-medium">Available Tenures:</span> {availableTenures.join(', ')} months
+                  </div>
+                )}
 
                 {scheme.lock_in_months > 0 && (
                   <div className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
@@ -117,7 +176,7 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
                   </div>
                 )}
               </button>
-            ))
+            )})
           )}
         </div>
       )}

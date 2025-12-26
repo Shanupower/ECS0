@@ -85,6 +85,21 @@ export default function PrintReceipt({ data = {} }) {
         <div className="card">
           <h3>FD / Bonds / NCD</h3>
           {line('Type', data.fdType)}
+          {(data.fd_transaction_type || data.txn_type) && line('Transaction Type', data.fd_transaction_type || data.txn_type || 'Fresh')}
+          {data.fd_transaction_type === 'Renewal' && data.fd_renewal_investment_type && (
+            <>
+              {line('Renewal Investment', 
+                data.fd_renewal_investment_type === 'same' ? 'Same Amount' :
+                data.fd_renewal_investment_type === 'increased' ? 'Increased Amount' :
+                data.fd_renewal_investment_type === 'decreased' ? 'Decreased Amount' :
+                data.fd_renewal_investment_type
+              )}
+              {data.fd_renewal_additional_amount && line(
+                data.fd_renewal_investment_type === 'increased' ? 'Additional Amount' : 'Withdrawal Amount',
+                fmtAmt(data.fd_renewal_additional_amount)
+              )}
+            </>
+          )}
           <div className="two">
             {line('Client Type', data.clientType)}
             {line('Deposit Period (Y/M)', data.depositPeriodYM)}

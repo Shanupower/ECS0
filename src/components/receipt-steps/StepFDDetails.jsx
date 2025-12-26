@@ -11,6 +11,9 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   const [renewal, setRenewal] = useState(false)
   const [form15g15h, setForm15g15h] = useState(false)
   const [applicationNumber, setApplicationNumber] = useState('')
+  const [fdTransactionType, setFdTransactionType] = useState('Fresh') // Fresh or Renewal
+  const [renewalInvestmentType, setRenewalInvestmentType] = useState('same') // same, increased, decreased
+  const [renewalAdditionalAmount, setRenewalAdditionalAmount] = useState('') // Additional amount for increased/decreased
   
   // Auto-computed fields
   const [lockedInterestRatePa, setLockedInterestRatePa] = useState(null)
@@ -22,15 +25,88 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   
   const [rateCalculation, setRateCalculation] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [rateError, setRateError] = useState(null)
+  const [availableTenures, setAvailableTenures] = useState([])
+  const [fullScheme, setFullScheme] = useState(scheme) // Store full scheme with rate_slabs
+
+  // Fetch full scheme with rate_slabs if not already included
+  useEffect(() => {
+    const fetchFullScheme = async () => {
+      if (!scheme?.scheme_id || !token || !issuer) return
+      
+      // If scheme already has rate_slabs, use it
+      if (scheme.rate_slabs && Array.isArray(scheme.rate_slabs) && scheme.rate_slabs.length > 0) {
+        setFullScheme(scheme)
+        return
+      }
+      
+      // Otherwise, fetch full scheme details
+      try {
+        const issuer_key = issuer?._key || issuer?.issuer_key
+        const fetchedScheme = await api.getFDScheme(token, issuer_key, scheme.scheme_id)
+        setFullScheme(fetchedScheme)
+      } catch (error) {
+        console.error('Failed to fetch full scheme:', error)
+        setFullScheme(scheme) // Fallback to original scheme
+      }
+    }
+    
+    fetchFullScheme()
+  }, [scheme?.scheme_id, token, issuer])
 
   // Auto-set payout frequency to "On Maturity" for cumulative schemes
   useEffect(() => {
-    if (scheme?.is_cumulative && !payoutFrequency) {
+    if (fullScheme?.is_cumulative && !payoutFrequency) {
       setPayoutFrequency('On Maturity')
-    } else if (scheme?.is_cumulative && payoutFrequency !== 'On Maturity') {
+    } else if (fullScheme?.is_cumulative && payoutFrequency !== 'On Maturity') {
       setPayoutFrequency('On Maturity')
     }
-  }, [scheme?.is_cumulative])
+  }, [fullScheme?.is_cumulative])
+
+  // Reset renewal investment fields when switching from Renewal to Fresh
+  useEffect(() => {
+    if (fdTransactionType === 'Fresh') {
+      setRenewalInvestmentType('same')
+      setRenewalAdditionalAmount('')
+    }
+  }, [fdTransactionType])
+
+  // Extract available tenures from rate slabs based on payout frequency
+  // Only show available tenures for slabs where min_tenure === max_tenure (specific tenures)
+  useEffect(() => {
+    // Wait for payout frequency to be set (especially for cumulative schemes)
+    if (!payoutFrequency) {
+      setAvailableTenures([])
+      return
+    }
+
+    // Use fullScheme instead of scheme to ensure we have rate_slabs
+    const schemeToUse = fullScheme || scheme
+
+    if (schemeToUse?.rate_slabs && Array.isArray(schemeToUse.rate_slabs) && schemeToUse.rate_slabs.length > 0) {
+      const tenures = new Set()
+      
+      // Get all active rate slabs matching the payout frequency
+      const matchingSlabs = schemeToUse.rate_slabs.filter(slab => {
+        const isActive = slab.is_active !== false
+        const matchesFrequency = slab.payout_frequency_type === payoutFrequency
+        // Only include slabs where min === max (specific tenures, not ranges)
+        const isSpecificTenure = slab.tenure_min_months === slab.tenure_max_months
+        return isActive && matchesFrequency && isSpecificTenure
+      })
+      
+      // Extract the specific tenure months (where min === max)
+      matchingSlabs.forEach(slab => {
+        // Since min === max, we just add that single value
+        tenures.add(slab.tenure_min_months)
+      })
+      
+      const sortedTenures = Array.from(tenures).sort((a, b) => a - b)
+      setAvailableTenures(sortedTenures)
+    } else {
+      setAvailableTenures([])
+    }
+  }, [fullScheme?.rate_slabs, payoutFrequency, fullScheme?.scheme_id])
 
   useEffect(() => {
     calculateRate()
@@ -45,14 +121,20 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   }, [bookingDate, tenureMonths])
 
   const calculateRate = async () => {
-    if (!tenureMonths || !payoutFrequency || !token || !scheme?.scheme_id) return
+    const schemeToUse = fullScheme || scheme
+    if (!tenureMonths || !payoutFrequency || !token || !schemeToUse?.scheme_id) {
+      setRateError(null)
+      setRateCalculation(null)
+      return
+    }
 
     setLoading(true)
+    setRateError(null) // Clear previous errors
     try {
       const issuer_key = issuer?._key || issuer?.issuer_key
       const result = await api.calculateFDRate(token, {
         issuer_key: issuer_key,
-        scheme_id: scheme.scheme_id,
+        scheme_id: schemeToUse.scheme_id,
         tenure_months: parseInt(tenureMonths),
         payout_frequency: payoutFrequency,
         senior_citizen: seniorCitizen,
@@ -63,6 +145,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
       setRateCalculation(result)
       setLockedInterestRatePa(result.total_rate_pa)
       setEffectiveYieldPa(result.effective_yield_pa || result.total_rate_pa)
+      setRateError(null) // Clear error on success
       
       // Calculate maturity/payout amounts
       if (principalAmount) {
@@ -71,7 +154,8 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
         const months = parseInt(tenureMonths)
         const years = months / 12
         
-        if (scheme.is_cumulative) {
+        const schemeToUse = fullScheme || scheme
+        if (schemeToUse.is_cumulative) {
           // Cumulative - interest compounded
           const maturity = principal * Math.pow(1 + rate, years)
           setExpectedMaturityValue(maturity)
@@ -86,6 +170,14 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
     } catch (error) {
       console.error('Failed to calculate rate:', error)
       setRateCalculation(null)
+      setLockedInterestRatePa(null)
+      // Set user-friendly error message
+      const errorMessage = error.message || error.error || error.detail || String(error)
+      if (errorMessage.includes('No matching rate slab') || errorMessage.includes('rate slab')) {
+        setRateError(`No rate slab found for ${tenureMonths} months with ${payoutFrequency} payout frequency. Please select a different tenure.`)
+      } else {
+        setRateError('Failed to calculate interest rate. Please check your inputs.')
+      }
     } finally {
       setLoading(false)
     }
@@ -96,14 +188,15 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   }, [principalAmount])
 
   const handleNext = () => {
+    const schemeToUse = fullScheme || scheme
     const issuer_key = issuer?._key || issuer?.issuer_key
     const fdData = {
       fd_issuer_key: issuer_key,
       fd_issuer_name: issuer.short_name,
       fd_issuer_type: issuer.type,
-      fd_scheme_id: scheme.scheme_id,
-      fd_scheme_name: scheme.scheme_name,
-      fd_is_cumulative: scheme.is_cumulative,
+      fd_scheme_id: schemeToUse.scheme_id,
+      fd_scheme_name: schemeToUse.scheme_name,
+      fd_is_cumulative: schemeToUse.is_cumulative,
       fd_deposit_amount: parseFloat(principalAmount),
       fd_tenure_months: parseInt(tenureMonths),
       fd_payout_frequency: payoutFrequency,
@@ -118,22 +211,57 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
       fd_senior_citizen_bonus: rateCalculation?.bonuses?.senior_citizen,
       fd_women_bonus: rateCalculation?.bonuses?.women,
       fd_renewal_bonus: rateCalculation?.bonuses?.renewal,
-      fd_tds_applicable: scheme.tds_applicable,
-      fd_form_15g_15h: scheme.show_form15g15h_option && form15g15h,
-      fd_application_number: applicationNumber
+      fd_tds_applicable: schemeToUse.tds_applicable,
+      fd_form_15g_15h: schemeToUse.show_form15g15h_option && form15g15h,
+      fd_application_number: applicationNumber,
+      fd_transaction_type: fdTransactionType, // Fresh or Renewal
+      fd_renewal_investment_type: fdTransactionType === 'Renewal' ? renewalInvestmentType : null,
+      fd_renewal_additional_amount: fdTransactionType === 'Renewal' && renewalAdditionalAmount ? parseFloat(renewalAdditionalAmount) : null
     }
     onNext(fdData)
   }
 
   const canProceed = () => {
+    // Use fullScheme if available, otherwise fallback to scheme
+    const schemeToUse = fullScheme || scheme
+    
+    // Basic field validation
     if (!principalAmount || !tenureMonths || !payoutFrequency || !applicationNumber) return false
-    const minAmount = scheme?.min_amount || issuer?.min_deposit_amount || 0
+    
+    // Amount validation
+    const minAmount = schemeToUse?.min_amount || issuer?.min_deposit_amount || 0
     if (parseFloat(principalAmount) < minAmount) return false
     if (issuer?.max_deposit_amount && parseFloat(principalAmount) > issuer.max_deposit_amount) return false
-    if (!scheme) return false
-    if (parseInt(tenureMonths) < scheme.min_tenure_months) return false
-    if (parseInt(tenureMonths) > scheme.max_tenure_months) return false
-    // Don't block if rate is still loading, allow proceeding anyway
+    
+    // Scheme validation
+    if (!schemeToUse) return false
+    
+    // Basic tenure range validation
+    const tenure = parseInt(tenureMonths)
+    if (tenure < schemeToUse.min_tenure_months) return false
+    if (tenure > schemeToUse.max_tenure_months) return false
+    
+    // CRITICAL: Validate that a rate slab exists for this specific tenure
+    if (availableTenures.length > 0) {
+      if (!availableTenures.includes(tenure)) {
+        return false // No rate slab for this tenure
+      }
+    }
+    
+    // Check if rate calculation was successful (additional validation)
+    if (!rateCalculation || !rateCalculation.total_rate_pa) return false
+    
+    // Renewal investment validation
+    if (fdTransactionType === 'Renewal') {
+      if (renewalInvestmentType === 'increased' || renewalInvestmentType === 'decreased') {
+        if (!renewalAdditionalAmount || parseFloat(renewalAdditionalAmount) <= 0) return false
+        if (renewalInvestmentType === 'decreased' && parseFloat(renewalAdditionalAmount) > parseFloat(principalAmount)) return false
+      }
+    }
+    
+    // Don't allow proceeding if rate is still loading
+    if (loading) return false
+    
     return true
   }
 
@@ -233,6 +361,27 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Tenure (months) <span className="text-red-500">*</span>
           </label>
+          
+          {/* Show available tenures as clickable buttons if they're specific (not continuous) */}
+          {availableTenures.length > 0 && availableTenures.length <= 20 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {availableTenures.map(months => (
+                <button
+                  key={months}
+                  type="button"
+                  onClick={() => setTenureMonths(months.toString())}
+                  className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+                    parseInt(tenureMonths) === months
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {months}M
+                </button>
+              ))}
+            </div>
+          )}
+          
           <input
             type="number"
             value={tenureMonths}
@@ -240,11 +389,41 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             placeholder="Enter tenure"
             min={scheme.min_tenure_months}
             max={scheme.max_tenure_months}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
+              tenureMonths && availableTenures.length > 0 && !availableTenures.includes(parseInt(tenureMonths))
+                ? 'border-red-500 dark:border-red-500'
+                : 'border-gray-300 dark:border-gray-600'
+            }`}
           />
+          
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Range: {scheme.min_tenure_months} - {scheme.max_tenure_months} months ({Math.floor(scheme.min_tenure_months/12)} - {Math.floor(scheme.max_tenure_months/12)} years)
+            {availableTenures.length > 0 ? (
+              <>
+                Available tenures: {availableTenures.join(', ')} months
+                {availableTenures.length <= 20 && ' (click buttons above)'}
+              </>
+            ) : (
+              <>
+                Range: {scheme.min_tenure_months} - {scheme.max_tenure_months} months ({Math.floor(scheme.min_tenure_months/12)} - {Math.floor(scheme.max_tenure_months/12)} years)
+              </>
+            )}
           </p>
+          
+          {/* Show error if tenure is not in available list */}
+          {tenureMonths && availableTenures.length > 0 && !availableTenures.includes(parseInt(tenureMonths)) && (
+            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+              ⚠️ No rate slab available for {tenureMonths} months. Please select from available tenures above.
+            </p>
+          )}
+          
+          {/* Show rate calculation error */}
+          {rateError && (
+            <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                ⚠️ {rateError}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Payout Frequency */}
@@ -274,6 +453,115 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             </p>
           )}
         </div>
+
+        {/* Transaction Type (Fresh/Renewal) */}
+        <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Transaction Type <span className="text-red-500">*</span>
+          </label>
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="fdTransactionType"
+                value="Fresh"
+                checked={fdTransactionType === 'Fresh'}
+                onChange={(e) => setFdTransactionType(e.target.value)}
+                className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Fresh</span>
+            </label>
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="fdTransactionType"
+                value="Renewal"
+                checked={fdTransactionType === 'Renewal'}
+                onChange={(e) => setFdTransactionType(e.target.value)}
+                className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Renewal</span>
+            </label>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            Select whether this is a fresh FD or renewal of an existing FD (for reporting and filtering)
+          </p>
+        </div>
+
+        {/* Renewal Investment Options - Only show when Renewal is selected */}
+        {fdTransactionType === 'Renewal' && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Renewal Investment Option <span className="text-red-500">*</span>
+            </label>
+            <div className="space-y-3">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="renewalInvestmentType"
+                  value="same"
+                  checked={renewalInvestmentType === 'same'}
+                  onChange={(e) => {
+                    setRenewalInvestmentType(e.target.value)
+                    setRenewalAdditionalAmount('')
+                  }}
+                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                />
+                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Same Amount (Renew with existing principal)</span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="renewalInvestmentType"
+                  value="increased"
+                  checked={renewalInvestmentType === 'increased'}
+                  onChange={(e) => setRenewalInvestmentType(e.target.value)}
+                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                />
+                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Increased Amount (Add additional investment)</span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="renewalInvestmentType"
+                  value="decreased"
+                  checked={renewalInvestmentType === 'decreased'}
+                  onChange={(e) => setRenewalInvestmentType(e.target.value)}
+                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                />
+                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Decreased Amount (Withdraw partial amount)</span>
+              </label>
+            </div>
+            
+            {/* Additional Amount Input for Increased/Decreased */}
+            {(renewalInvestmentType === 'increased' || renewalInvestmentType === 'decreased') && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {renewalInvestmentType === 'increased' ? 'Additional Investment Amount' : 'Withdrawal Amount'} (₹) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={renewalAdditionalAmount}
+                  onChange={(e) => setRenewalAdditionalAmount(e.target.value)}
+                  placeholder={`Enter ${renewalInvestmentType === 'increased' ? 'additional' : 'withdrawal'} amount`}
+                  min="0"
+                  step="0.01"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+                {renewalInvestmentType === 'increased' && renewalAdditionalAmount && principalAmount && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Total Renewal Amount: ₹{(parseFloat(principalAmount) + parseFloat(renewalAdditionalAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                )}
+                {renewalInvestmentType === 'decreased' && renewalAdditionalAmount && principalAmount && parseFloat(renewalAdditionalAmount) > parseFloat(principalAmount) && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                    ⚠️ Withdrawal amount cannot exceed principal amount
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Bonuses */}
         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">

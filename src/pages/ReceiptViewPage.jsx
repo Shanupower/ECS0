@@ -341,6 +341,9 @@ export default function ReceiptViewPage() {
     fd_tds_applicable: receipt.fd_tds_applicable,
     fd_form_15g_15h: receipt.fd_form_15g_15h,
     fd_application_number: receipt.fd_application_number,
+    fd_transaction_type: receipt.fd_transaction_type,
+    fd_renewal_investment_type: receipt.fd_renewal_investment_type,
+    fd_renewal_additional_amount: receipt.fd_renewal_additional_amount,
   }
 
   return (
@@ -611,6 +614,31 @@ export default function ReceiptViewPage() {
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Application/FD Number</div>
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.fd_application_number}</div>
+                      </div>
+                    )}
+                    {(transformedReceipt.fd_transaction_type || transformedReceipt.txn_type) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Type</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
+                          {transformedReceipt.fd_transaction_type || transformedReceipt.txn_type || 'Fresh'}
+                        </div>
+                      </div>
+                    )}
+                    {transformedReceipt.fd_transaction_type === 'Renewal' && transformedReceipt.fd_renewal_investment_type && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Renewal Investment</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
+                          {transformedReceipt.fd_renewal_investment_type === 'same' ? 'Same Amount' :
+                           transformedReceipt.fd_renewal_investment_type === 'increased' ? 'Increased Amount' :
+                           transformedReceipt.fd_renewal_investment_type === 'decreased' ? 'Decreased Amount' :
+                           transformedReceipt.fd_renewal_investment_type}
+                        </div>
+                        {transformedReceipt.fd_renewal_additional_amount && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {transformedReceipt.fd_renewal_investment_type === 'increased' ? 'Additional: ' : 'Withdrawal: '}
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(transformedReceipt.fd_renewal_additional_amount)}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

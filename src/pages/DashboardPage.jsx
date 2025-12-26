@@ -304,7 +304,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                  <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold"> </span>
+                  <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold">₹</span>
                 </div>
               </div>
             </div>

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { normalizeBranchForDB, normalizeBranchForEmployee, normalizeBranchForAPI, getAllValidBranches } from '../utils/branchMapping'
 import SearchableSelect from '../components/SearchableSelect'
+import MultiSelect from '../components/MultiSelect'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 import { 
   FiUsers, 
@@ -20,7 +21,7 @@ import {
 } from 'react-icons/fi'
 
 export default function ClientManagementPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const canDelete = user?.role === 'admin' || user?.role === 'manager'
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(false)
@@ -50,22 +51,50 @@ export default function ClientManagementPage() {
     pin: '',
     country: 'India',
     date_of_birth: '',
-    branch: ''
+    branches: [] // Changed from branch to branches (array)
   })
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [pincodeSuggestions, setPincodeSuggestions] = useState([])
   const [showPincodeDropdown, setShowPincodeDropdown] = useState(false)
   const [mediaFiles, setMediaFiles] = useState([])
+  const [availableBranches, setAvailableBranches] = useState([]) // Branches fetched from API
 
   const pageSize = 50 // Increased from 10 to show more customers per page
 
+  // Fetch branches from API on component mount
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        if (token) {
+          const branches = await api.listBranches(token)
+          // Map branches to options format, using branch_name as both label and value
+          const branchOptions = branches.map(branch => ({
+            label: branch.branch_name,
+            value: branch.branch_name
+          }))
+          setAvailableBranches(branchOptions)
+        }
+      } catch (err) {
+        console.error('Failed to fetch branches:', err)
+        // Fallback to hardcoded list if API fails
+        setAvailableBranches(getAllValidBranches().map(branch => ({ label: branch, value: branch })))
+      }
+    }
+    if (token) {
+      fetchBranches()
+    }
+  }, [token])
+
   // Auto-populate branch from user context
   useEffect(() => {
-    if (user && !formData.branch) {
-      setFormData(prev => ({
-        ...prev,
-        branch: user.branch || user.branch_name || ''
-      }))
+    if (user && formData.branches.length === 0) {
+      const userBranch = user.branch || user.branch_name || ''
+      if (userBranch) {
+        setFormData(prev => ({
+          ...prev,
+          branches: [userBranch]
+        }))
+      }
     }
   }, [user])
 
@@ -275,10 +304,16 @@ export default function ClientManagementPage() {
         formDataToSend.append('media', file)
       })
       
-      // Add metadata with normalized branch name
-      const selectedBranch = formData.branch || user?.branch || 'UNASSIGNED'
-      const normalizedBranch = normalizeBranchForDB(selectedBranch)
-      formDataToSend.append('relationship_manager', normalizedBranch)
+      // Add branches array - normalize each branch
+      const branches = formData.branches && formData.branches.length > 0 
+        ? formData.branches.map(b => normalizeBranchForDB(b))
+        : [normalizeBranchForDB(user?.branch || user?.branch_name || 'UNASSIGNED')]
+      
+      // Send branches array - FormData with bracket notation for arrays (Express/multer will parse as array)
+      branches.forEach((branch) => {
+        formDataToSend.append('branches[]', branch)
+      })
+      
       formDataToSend.append('created_by', user?.emp_code || user?.username)
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/customers`, {
@@ -322,13 +357,10 @@ export default function ClientManagementPage() {
     try {
       const token = localStorage.getItem('ecs_token')
       
-      // Prepare update data - normalize branch to DB format and send as relationship_manager
+      // Prepare update data with normalized branches
       const updateData = { ...formData }
-      if (updateData.branch) {
-        const normalizedBranch = normalizeBranchForAPI(updateData.branch)
-        updateData.relationship_manager = normalizedBranch
-        // Remove branch field as backend expects relationship_manager
-        delete updateData.branch
+      if (updateData.branches && updateData.branches.length > 0) {
+        updateData.branches = updateData.branches.map(b => normalizeBranchForAPI(b))
       }
       
       await api.updateCustomer(token, selectedCustomer.investor_id, updateData)
@@ -380,7 +412,7 @@ export default function ClientManagementPage() {
       pin: '',
       country: 'India',
       date_of_birth: '',
-      branch: ''
+      branches: []
     })
     setPincodeSuggestions([])
     setShowPincodeDropdown(false)
@@ -391,8 +423,13 @@ export default function ClientManagementPage() {
   const openEditModal = (customer) => {
     setSelectedCustomer(customer)
     // Convert DB format (relationship_manager) to employee format for dropdown
+    // Handle both single branch (string) and multiple branches (array)
     const dbBranch = customer.relationship_manager || ''
-    const employeeBranch = normalizeBranchForEmployee(dbBranch)
+    const branchesArray = Array.isArray(dbBranch) 
+      ? dbBranch.map(b => normalizeBranchForEmployee(b))
+      : dbBranch 
+        ? [normalizeBranchForEmployee(dbBranch)] 
+        : []
     setFormData({
       title: customer.title || '',
       name: customer.name || '',
@@ -407,7 +444,7 @@ export default function ClientManagementPage() {
       pin: customer.pin || '',
       country: customer.country || 'India',
       date_of_birth: customer.date_of_birth || '',
-      branch: employeeBranch
+      branches: branchesArray
     })
     setShowEditModal(true)
   }
@@ -608,7 +645,11 @@ export default function ClientManagementPage() {
                             <span className="font-medium">PAN:</span> {customer.pan || 'N/A'}
                           </div>
                           <div className="text-xs text-gray-600 dark:text-dark-300">
-                            <span className="font-medium">Branch:</span> {customer.relationship_manager || 'N/A'}
+                            <span className="font-medium">Branch(es):</span> {
+                              Array.isArray(customer.relationship_manager)
+                                ? customer.relationship_manager.join(', ')
+                                : customer.relationship_manager || 'N/A'
+                            }
                           </div>
                         </div>
                       </div>
@@ -692,7 +733,9 @@ export default function ClientManagementPage() {
                         {customer.pan || 'N/A'}
                       </td>
                       <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-900 dark:text-white truncate">
-                        {customer.relationship_manager || 'N/A'}
+                        {Array.isArray(customer.relationship_manager)
+                          ? customer.relationship_manager.join(', ')
+                          : customer.relationship_manager || 'N/A'}
                       </td>
                       <td className="px-4 lg:px-6 py-3 lg:py-4 text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-1 lg:space-x-2">
@@ -775,6 +818,7 @@ export default function ClientManagementPage() {
           handleMediaUpload={handleMediaUpload}
           removeMediaFile={removeMediaFile}
           getFileIcon={getFileIcon}
+          availableBranches={availableBranches}
         />
       )}
 
@@ -796,6 +840,7 @@ export default function ClientManagementPage() {
           handleMediaUpload={handleMediaUpload}
           removeMediaFile={removeMediaFile}
           getFileIcon={getFileIcon}
+          availableBranches={availableBranches}
         />
       )}
 
@@ -826,7 +871,8 @@ function CustomerModal({
   mediaFiles,
   handleMediaUpload,
   removeMediaFile,
-  getFileIcon
+  getFileIcon,
+  availableBranches = []
 }) {
   const pincodeDropdownRef = useRef(null)
 
@@ -1093,14 +1139,17 @@ function CustomerModal({
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
-                Branch *
+                Branch(es) *
               </label>
-              <SearchableSelect
-                options={getAllValidBranches().map(branch => ({ label: branch, value: branch }))}
-                value={formData.branch}
-                onChange={(value) => setFormData(prev => ({ ...prev, branch: value }))}
-                placeholder="Select branch"
+              <MultiSelect
+                options={availableBranches.length > 0 ? availableBranches : getAllValidBranches().map(branch => ({ label: branch, value: branch }))}
+                value={formData.branches}
+                onChange={(branches) => setFormData(prev => ({ ...prev, branches: branches || [] }))}
+                placeholder="Select one or more branches"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                You can select multiple branches for this customer
+              </p>
             </div>
           </div>
 
@@ -1232,8 +1281,12 @@ function ViewCustomerModal({ customer, onClose }) {
                   <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.email || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Branch:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.relationship_manager || 'N/A'}</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Branch(es):</span>
+                  <span className="ml-2 text-sm text-gray-900 dark:text-white">
+                    {Array.isArray(customer.relationship_manager)
+                      ? customer.relationship_manager.join(', ')
+                      : customer.relationship_manager || 'N/A'}
+                  </span>
                 </div>
               </div>
             </div>
