@@ -1,6 +1,29 @@
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
+// Token expiration callback - will be set by AuthContext
+let tokenExpirationCallback = null
+
+export function setTokenExpirationCallback(callback) {
+  tokenExpirationCallback = callback
+}
+
 function authHeaders(token){ return token ? { Authorization: `Bearer ${token}` } : {} }
+
+function checkTokenExpiration(res, data) {
+  // Check if it's a 401 error and token expiration
+  if (res.status === 401) {
+    const isTokenExpired = 
+      (typeof data === 'object' && data !== null && 
+       (data.detail?.toLowerCase().includes('expired') || 
+        data.detail?.toLowerCase().includes('token has expired') ||
+        data.error?.toLowerCase().includes('unauthorized'))) ||
+      (typeof data === 'string' && data.toLowerCase().includes('expired'))
+    
+    if (isTokenExpired && tokenExpirationCallback) {
+      tokenExpirationCallback()
+    }
+  }
+}
 
 async function req(path,{method='GET',token,json,query}={}){
   const qs = query ? '?' + new URLSearchParams(query).toString() : ''
@@ -15,6 +38,8 @@ async function req(path,{method='GET',token,json,query}={}){
   const ct=res.headers.get('content-type')||''
   const data= ct.includes('application/json')?await res.json():await res.text()
   if(!res.ok) {
+    // Check for token expiration before throwing error
+    checkTokenExpiration(res, data)
     const error = new Error(data.detail || data.error || data.message || res.statusText)
     // Preserve full error object for field-specific error handling
     if (typeof data === 'object' && data !== null) {
@@ -39,7 +64,11 @@ async function reqWithFiles(path,{method='POST',token,formData,query}={}){
   })
   const ct=res.headers.get('content-type')||''
   const data= ct.includes('application/json')?await res.json():await res.text()
-  if(!res.ok) throw new Error(data.error||data.message||res.statusText)
+  if(!res.ok) {
+    // Check for token expiration before throwing error
+    checkTokenExpiration(res, data)
+    throw new Error(data.error||data.message||res.statusText)
+  }
   return data
 }
 
@@ -141,10 +170,13 @@ export const api={
   
   // Issues endpoints
   createIssue:(t,data,files)=>{
-    if (files && files.length > 0) {
+    // Check if files exists - could be a single file or an array
+    if (files) {
       // For issues, use the first file with 'screenshot' field name
-      const file = Array.isArray(files) ? files[0] : files
-      return reqWithFiles('/api/issues',{method:'POST',token:t,formData:createIssueFormData(data,file)})
+      const file = Array.isArray(files) ? (files.length > 0 ? files[0] : null) : files
+      if (file) {
+        return reqWithFiles('/api/issues',{method:'POST',token:t,formData:createIssueFormData(data,file)})
+      }
     }
     return req('/api/issues',{method:'POST',token:t,json:data})
   },
@@ -182,6 +214,33 @@ export const api={
   expandPreview:(t,data)=>req('/api/schemes/expand-preview',{method:'POST',token:t,json:data}),
   commitVariants:(t,data)=>req('/api/schemes/commit-variants',{method:'POST',token:t,json:data}),
   checkDuplicate:(t,params)=>req('/api/schemes/check-duplicate',{token:t,query:params}),
+  exportSchemesExcel:(t,amc_code)=>{
+    const qs = amc_code ? `?amc_code=${encodeURIComponent(amc_code)}` : ''
+    return fetch(`${BASE}/api/schemes/export/excel${qs}`, {
+      headers: authHeaders(t)
+    }).then(async res => {
+      if (!res.ok) {
+        // Check for token expiration
+        if (res.status === 401) {
+          const text = await res.text()
+          let data
+          try {
+            data = JSON.parse(text)
+          } catch {
+            data = text
+          }
+          checkTokenExpiration(res, data)
+        }
+        throw new Error('Export failed')
+      }
+      return res.blob()
+    })
+  },
+  importSchemesExcel:(t,file)=>{
+    const formData = new FormData()
+    formData.append('excelFile', file)
+    return reqWithFiles('/api/schemes/import/excel',{method:'POST',token:t,formData})
+  },
   
   // FD Schemes endpoints (nested structure)
   listFDIssuers:(t)=>req('/api/fd-schemes/issuers',{token:t}),
@@ -198,5 +257,32 @@ export const api={
   deleteFDScheme:(t,issuer_key,scheme_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'DELETE',token:t}),
   createFDRateSlab:(t,issuer_key,scheme_id,slabData)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab`,{method:'POST',token:t,json:slabData}),
   updateFDRateSlab:(t,issuer_key,scheme_id,slab_id,data)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab/${slab_id}`,{method:'PUT',token:t,json:data}),
-  deleteFDRateSlab:(t,issuer_key,scheme_id,slab_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab/${slab_id}`,{method:'DELETE',token:t})
+  deleteFDRateSlab:(t,issuer_key,scheme_id,slab_id)=>req(`/api/fd-schemes/issuer/${issuer_key}/scheme/${scheme_id}/slab/${slab_id}`,{method:'DELETE',token:t}),
+  exportFDSchemesExcel:(t,issuer_key)=>{
+    const qs = issuer_key ? `?issuer_key=${encodeURIComponent(issuer_key)}` : ''
+    return fetch(`${BASE}/api/fd-schemes/export/excel${qs}`, {
+      headers: authHeaders(t)
+    }).then(async res => {
+      if (!res.ok) {
+        // Check for token expiration
+        if (res.status === 401) {
+          const text = await res.text()
+          let data
+          try {
+            data = JSON.parse(text)
+          } catch {
+            data = text
+          }
+          checkTokenExpiration(res, data)
+        }
+        throw new Error('Export failed')
+      }
+      return res.blob()
+    })
+  },
+  importFDSchemesExcel:(t,file)=>{
+    const formData = new FormData()
+    formData.append('excelFile', file)
+    return reqWithFiles('/api/fd-schemes/import/excel',{method:'POST',token:t,formData})
+  }
 }

@@ -15,6 +15,7 @@ import ClientManagementPage from './pages/ClientManagementPage.jsx'
 import SchemeManagementPage from './pages/SchemeManagementPage.jsx'
 import IssuesPage from './pages/IssuesPage.jsx'
 import MyIssuesPage from './pages/MyIssuesPage.jsx'
+import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 
 // Page Transition Wrapper
 function PageTransition({ children }) {
@@ -50,9 +51,11 @@ function ClientRoute({children}){
   return (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'employee') ? children : <Navigate to="/dashboard"/>
 }
 
-export default function App(){
-  return <DarkModeProvider>
-    <AuthProvider>
+function AppContent() {
+  const { isTokenExpired, clearTokenExpiration } = useAuth()
+  
+  return (
+    <>
       <Routes>
         <Route path="/login" element={<LoginPage/>}/>
         <Route path="/" element={<PrivateRoute><Layout/></PrivateRoute>}>
@@ -102,6 +105,15 @@ export default function App(){
           />
         </Route>
       </Routes>
+      <TokenExpiredModal isOpen={isTokenExpired} onClose={clearTokenExpiration} />
+    </>
+  )
+}
+
+export default function App(){
+  return <DarkModeProvider>
+    <AuthProvider>
+      <AppContent />
     </AuthProvider>
   </DarkModeProvider>
 }

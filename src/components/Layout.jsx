@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../api'
 import Logo from './Logo'
 import DarkModeToggle from './DarkModeToggle'
 import ReportIssueModal from './ReportIssueModal'
@@ -23,14 +24,35 @@ import {
 } from 'react-icons/fi'
 
 export default function Layout(){
-  const { user,logout }=useAuth()
+  const { user, logout, token }=useAuth()
   const navigate=useNavigate()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isReportIssueModalOpen, setIsReportIssueModalOpen] = useState(false)
+  const [pendingIssuesCount, setPendingIssuesCount] = useState(0)
   const dropdownRef = useRef(null)
   
   const handleLogout=()=>{logout();navigate('/login')}
+
+  // Load pending issues count for admin
+  useEffect(() => {
+    if (user?.role === 'admin' && token) {
+      const loadPendingIssues = async () => {
+        try {
+          const result = await api.listIssues(token, { page: '1', size: '1000', status: 'all' })
+          const issues = Array.isArray(result.items) ? result.items : []
+          const pending = issues.filter(i => i.status === 'open' || i.status === 'in_progress').length
+          setPendingIssuesCount(pending)
+        } catch (err) {
+          console.error('Failed to load pending issues:', err)
+        }
+      }
+      loadPendingIssues()
+      // Refresh every 30 seconds
+      const interval = setInterval(loadPendingIssues, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [user?.role, token])
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -134,15 +156,25 @@ export default function Layout(){
               )
             }
             
+            // Check if this is the "All Issues" link for admin and show badge
+            const showBadge = item.to === '/issues' && isAdmin && pendingIssuesCount > 0
+            
             return (
               <Link 
                 key={item.to}
-                className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-dark-200 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-400 rounded-lg transition-colors duration-200 group" 
+                className="flex items-center justify-between px-4 py-3 text-gray-700 dark:text-dark-200 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-400 rounded-lg transition-colors duration-200 group relative" 
                 to={item.to}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Icon className="w-5 h-5 group-hover:text-red-600 dark:group-hover:text-red-400" />
-                <span className="font-medium">{item.label}</span>
+                <div className="flex items-center space-x-3">
+                  <Icon className="w-5 h-5 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                  <span className="font-medium">{item.label}</span>
+                </div>
+                {showBadge && (
+                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                    {pendingIssuesCount > 99 ? '99+' : pendingIssuesCount}
+                  </span>
+                )}
               </Link>
             )
           })}

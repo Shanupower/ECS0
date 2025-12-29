@@ -9,7 +9,9 @@ import {
   FiRefreshCw,
   FiArrowLeft,
   FiTag,
-  FiSearch
+  FiSearch,
+  FiDownload,
+  FiUpload
 } from 'react-icons/fi'
 
 export default function SchemeManagementPage() {
@@ -36,6 +38,11 @@ export default function SchemeManagementPage() {
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   // Utility function to trim all string values in an object (including nested arrays/objects)
   const trimFormData = (obj) => {
@@ -187,6 +194,108 @@ useEffect(() => {
       }
     }
   }, [fdSlabFormData.base_interest_rate_pa, fdSlabFormData.compounding_frequency, selectedFdScheme?.is_cumulative])
+
+  // Export schemes to Excel (MF)
+  const handleExportSchemes = async (amcCode = null) => {
+    setExporting(true)
+    try {
+      const blob = await api.exportSchemesExcel(token, amcCode)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `schemes-export-${amcCode || 'all'}-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      alert('Schemes exported successfully!')
+    } catch (err) {
+      alert('Failed to export schemes: ' + err.message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Export FD schemes to Excel
+  const handleExportFDSchemes = async (issuerKey = null) => {
+    setExporting(true)
+    try {
+      const blob = await api.exportFDSchemesExcel(token, issuerKey)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `fd-schemes-export-${issuerKey || 'all'}-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      alert('FD Schemes exported successfully!')
+    } catch (err) {
+      alert('Failed to export FD schemes: ' + err.message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Handle import file selection
+  const handleImportFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (!file.name.match(/\.(xlsx|xls)$/i)) {
+        alert('Please select an Excel file (.xlsx or .xls)')
+        return
+      }
+      setImportFile(file)
+    }
+  }
+
+  // Import schemes from Excel
+  const handleImportSchemes = async () => {
+    if (!importFile) {
+      alert('Please select an Excel file to import')
+      return
+    }
+
+    if (!confirm('This will update existing schemes based on the Excel file. Continue?')) {
+      return
+    }
+
+    setImporting(true)
+    setImportResult(null)
+    try {
+      let result
+      if (activeTab === 'MF') {
+        result = await api.importSchemesExcel(token, importFile)
+        if (result.updated > 0 && selectedAmc) {
+          await loadSchemes(selectedAmc.amc_code)
+        }
+      } else {
+        result = await api.importFDSchemesExcel(token, importFile)
+        if (result.updated > 0 && selectedFdIssuer) {
+          const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+          if (issuerKey) {
+            await loadFDSchemes(issuerKey)
+          }
+        }
+      }
+      
+      setImportResult(result)
+      
+      if (result.updated > 0) {
+        alert(`Import completed! Updated: ${result.updated}, Failed: ${result.failed}`)
+      } else {
+        alert('No schemes were updated. Please check the file format.')
+      }
+      
+      // Reset file input
+      setImportFile(null)
+      setShowImportModal(false)
+    } catch (err) {
+      alert('Failed to import schemes: ' + err.message)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const loadAMCs = async () => {
     if (!token) return
@@ -1136,17 +1245,30 @@ useEffect(() => {
                 Legal Name: {selectedFdIssuer.legal_name} | Type: {selectedFdIssuer.type}
               </p>
             </div>
-            <button
-              onClick={() => {
-                resetFDSchemeForm()
-                setEditingFDScheme(null)
-                setShowFDSchemeForm(true)
-              }}
-              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add Scheme
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
+                  handleExportFDSchemes(issuerKey)
+                }}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export'}
+              </button>
+              <button
+                onClick={() => {
+                  resetFDSchemeForm()
+                  setEditingFDScheme(null)
+                  setShowFDSchemeForm(true)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Scheme
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1580,17 +1702,27 @@ useEffect(() => {
               </p>
             </div>
             
-            <button
-              onClick={() => {
-                resetSchemeForm()
-                setShowSchemeForm(true)
-                setEditingScheme(null)
-              }}
-              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add Scheme
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => handleExportSchemes(selectedAmc.amc_code)}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export'}
+              </button>
+              <button
+                onClick={() => {
+                  resetSchemeForm()
+                  setShowSchemeForm(true)
+                  setEditingScheme(null)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Scheme
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2385,17 +2517,34 @@ useEffect(() => {
       <div className="flex items-center justify-between mb-4">
         {activeTab === 'MF' ? (
           <>
-            <button
-              onClick={() => {
-                resetAMCForm()
-                setShowAMCForm(true)
-                setEditingAMC(null)
-              }}
-              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add AMC
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  resetAMCForm()
+                  setShowAMCForm(true)
+                  setEditingAMC(null)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add AMC
+              </button>
+              <button
+                onClick={() => handleExportSchemes()}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export All'}
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FiUpload className="w-4 h-4 mr-2" />
+                Import
+              </button>
+            </div>
             <button
               onClick={loadAMCs}
               disabled={loading}
@@ -2407,25 +2556,42 @@ useEffect(() => {
           </>
         ) : (
           <>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  resetFDIssuerForm()
+                  setShowFDIssuerForm(true)
+                  setEditingFDIssuer(null)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add FD Issuer
+              </button>
+              <button
+                onClick={() => handleExportFDSchemes()}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export All'}
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FiUpload className="w-4 h-4 mr-2" />
+                Import
+              </button>
+            </div>
             <button
-              onClick={() => {
-                resetFDIssuerForm()
-                setShowFDIssuerForm(true)
-                setEditingFDIssuer(null)
-              }}
-              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              onClick={loadFDIssuers}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add FD Issuer
+              <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
-          <button
-            onClick={loadFDIssuers}
-            disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
           </>
         )}
       </div>
@@ -3090,6 +3256,114 @@ useEffect(() => {
               </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                Import Schemes from Excel
+              </h2>
+              
+              <div className="space-y-4 mb-6">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                    <strong>Instructions:</strong>
+                  </p>
+                  <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-1 list-disc list-inside">
+                    <li>Download the export template first to see the correct format</li>
+                    {activeTab === 'MF' ? (
+                      <>
+                        <li>Only edit the unlocked columns (Category, NAV, CC%, SI%, etc.)</li>
+                        <li>Do not modify Scheme Code, AMC Code, or other locked fields</li>
+                        <li>The import will update existing schemes based on Scheme Code</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Only edit the unlocked columns (Description, Payout Frequency, CC%, SI%, Bonuses, etc.)</li>
+                        <li>Do not modify Issuer Key, Scheme ID, Scheme Name, or Is Cumulative fields</li>
+                        <li>The import will update existing schemes based on Issuer Key and Scheme ID</li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Select Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleImportFileChange}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  {importFile && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      Selected: {importFile.name}
+                    </p>
+                  )}
+                </div>
+
+                {importResult && (
+                  <div className={`p-4 rounded-lg ${
+                    importResult.failed > 0 
+                      ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                      : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      importResult.failed > 0 
+                        ? 'text-yellow-800 dark:text-yellow-300'
+                        : 'text-green-800 dark:text-green-300'
+                    }`}>
+                      Import Results:
+                    </p>
+                    <ul className="text-xs mt-1 space-y-1">
+                      <li>Total: {importResult.total}</li>
+                      <li>Updated: {importResult.updated}</li>
+                      <li>Failed: {importResult.failed}</li>
+                    </ul>
+                    {importResult.errors && importResult.errors.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="text-xs cursor-pointer">View Errors</summary>
+                        <ul className="text-xs mt-1 space-y-1 max-h-32 overflow-y-auto">
+                          {importResult.errors.slice(0, 10).map((err, idx) => (
+                            <li key={idx} className="text-red-600 dark:text-red-400">
+                              Row {err.row}: {err.error}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportModal(false)
+                    setImportFile(null)
+                    setImportResult(null)
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImportSchemes}
+                  disabled={!importFile || importing}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {importing ? 'Importing...' : 'Import'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

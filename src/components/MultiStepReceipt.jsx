@@ -2,10 +2,11 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PrintReceipt from './PrintReceipt.jsx'
 import SearchableSelect from './SearchableSelect.jsx'
+import ReportIssueModal from './ReportIssueModal.jsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { normalizeBranchForAPI } from '../utils/branchMapping'
-import { FiPlus, FiX, FiUpload, FiFile, FiTrash2 } from 'react-icons/fi'
+import { FiPlus, FiX, FiUpload, FiFile, FiTrash2, FiAlertCircle, FiHelpCircle } from 'react-icons/fi'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 import StepMFScheme from './receipt-steps/StepMFScheme.jsx'
 import StepInvestmentType from './receipt-steps/StepInvestmentType.jsx'
@@ -1232,6 +1233,13 @@ export default function MultiStepReceipt() {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState('')
+  const [showFailurePopup, setShowFailurePopup] = useState(false)
+  const [showIssueModal, setShowIssueModal] = useState(false)
+  const [stuckTimer, setStuckTimer] = useState(null)
+  const [failureScreenshot, setFailureScreenshot] = useState(null)
+  const [failureDetails, setFailureDetails] = useState(null)
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
+  const [saveErrorObj, setSaveErrorObj] = useState(null)
 
   // Auto-populate employee data from user context
   useEffect(() => {
@@ -1243,6 +1251,126 @@ export default function MultiStepReceipt() {
       })
     }
   }, [user])
+
+  // Monitor for stuck users - show popup after 2 minutes on same step
+  useEffect(() => {
+    if (step > 1 && step < 7) {
+      // Clear existing timer
+      if (stuckTimer) {
+        clearTimeout(stuckTimer)
+      }
+      
+      // Set new timer for 2 minutes
+      const timer = setTimeout(() => {
+        setShowFailurePopup(true)
+      }, 120000) // 2 minutes
+      
+      setStuckTimer(timer)
+      
+      return () => {
+        clearTimeout(timer)
+      }
+    } else {
+      // Clear timer if on first or last step
+      if (stuckTimer) {
+        clearTimeout(stuckTimer)
+        setStuckTimer(null)
+      }
+      setShowFailurePopup(false)
+    }
+  }, [step])
+
+  // Show failure popup when there's a save error
+  useEffect(() => {
+    if (saveError && typeof saveError === 'string') {
+      setShowFailurePopup(true)
+    }
+  }, [saveError])
+
+  // Function to capture screenshot of the current page
+  const captureScreenshot = async () => {
+    try {
+      // Dynamically import html2canvas
+      const html2canvas = (await import('html2canvas')).default
+      
+      // Capture the entire document body
+      const canvas = await html2canvas(document.body, {
+        useCORS: true,
+        logging: false,
+        scale: 0.75, // Reduce size for better performance
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight
+      })
+      
+      // Convert canvas to blob
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            // Create a File object from blob
+            const file = new File([blob], `receipt-failure-${Date.now()}.png`, { type: 'image/png' })
+            resolve(file)
+          } else {
+            resolve(null)
+          }
+        }, 'image/png', 0.8)
+      })
+    } catch (error) {
+      console.error('Failed to capture screenshot:', error)
+      return null
+    }
+  }
+
+  // Function to generate failure details for issue report
+  const generateFailureDetails = (error, receiptData) => {
+    const title = `Receipt Creation Failed - ${error.message || 'Unknown Error'}`
+    
+    let description = `**Receipt Creation Failure Report**\n\n`
+    description += `**Error Message:** ${error.message || 'Unknown error occurred'}\n\n`
+    description += `**Timestamp:** ${new Date().toISOString()}\n\n`
+    description += `**User Details:**\n`
+    description += `- Employee Code: ${user?.emp_code || 'N/A'}\n`
+    description += `- Employee Name: ${user?.name || 'N/A'}\n`
+    description += `- Branch: ${user?.branch || user?.branch_name || 'N/A'}\n\n`
+    
+    if (receiptData) {
+      description += `**Receipt Details:**\n`
+      description += `- Receipt Number: ${receiptData.receiptNo || 'N/A'}\n`
+      description += `- Date: ${receiptData.date || 'N/A'}\n`
+      description += `- Product Type: ${receiptData.productType || receiptData.product_category || 'N/A'}\n`
+      description += `- Investor ID: ${receiptData.investorId || 'N/A'}\n`
+      description += `- Investor Name: ${receiptData.investorName || 'N/A'}\n`
+      if (receiptData.investmentAmount || receiptData.investment_amount || receiptData.fd_deposit_amount) {
+        description += `- Investment Amount: ₹${receiptData.investmentAmount || receiptData.investment_amount || receiptData.fd_deposit_amount}\n`
+      }
+      description += `- Current Step: ${step}\n\n`
+    }
+    
+    description += `**Steps Taken:**\n`
+    description += `1. Selected Employee: ${empSeed.employeeName || empSeed.empCode || 'N/A'}\n`
+    description += `2. Selected Investor: ${investorSeed.investorInfo?.investorName || investorSeed.investorId || 'N/A'}\n`
+    description += `3. Selected Product Type: ${productTypeSeed || 'N/A'}\n`
+    if (productTypeSeed === 'MF') {
+      description += `4. Selected MF Scheme: ${mfSchemeSeed?.selectedScheme?.scheme_name || mfSchemeSeed?.selectedScheme?.display_name || 'N/A'}\n`
+      description += `5. Investment Type: ${investmentTypeSeed || 'N/A'}\n`
+    } else if (productTypeSeed === 'FD') {
+      description += `4. Selected FD Issuer: ${fdIssuerSeed?.issuer_name || 'N/A'}\n`
+      description += `5. Selected FD Scheme: ${fdSchemeSeed?.scheme_name || 'N/A'}\n`
+    }
+    description += `6. Reached Final Step: Yes\n`
+    description += `7. Attempted to Save: Yes\n\n`
+    
+    description += `**Error Details:**\n`
+    if (error.stack) {
+      description += `\`\`\`\n${error.stack}\n\`\`\`\n\n`
+    }
+    
+    description += `**Browser Information:**\n`
+    description += `- User Agent: ${navigator.userAgent}\n`
+    description += `- Screen Resolution: ${window.screen.width}x${window.screen.height}\n`
+    description += `- Viewport: ${window.innerWidth}x${window.innerHeight}\n`
+    
+    return { title, description }
+  }
 
   const buildBase = () => {
     const base = {
@@ -1324,11 +1452,28 @@ export default function MultiStepReceipt() {
       setFinalData(null)
       setSupportingDocument(null)
       setSaveError('')
+      setSaveErrorObj(null)
+      setFailureScreenshot(null)
+      setFailureDetails(null)
       
       // Navigate to transactions page immediately
       navigate('/transactions')
     } catch (err) {
       console.error('Save error:', err)
+      
+      // Store error object for later use (only capture screenshot if user wants to report)
+      setSaveErrorObj(err)
+      
+      // Set user-friendly error message
+      let userFriendlyError = ''
+      if (err.message && err.message.includes('WARN_DATA_TRUNCATED')) {
+        userFriendlyError = 'Data was too large and was truncated. Please reduce the amount of data or contact support.'
+      } else if (err.message && err.message.includes('save_failed')) {
+        userFriendlyError = 'Failed to save receipt. The data may be too large or contain invalid characters.'
+      } else {
+        userFriendlyError = err.message || 'Failed to save receipt'
+      }
+      setSaveError(userFriendlyError)
       
       // Store error message in localStorage for toast notification
       const errorMessage = err.message || 'Failed to save receipt'
@@ -1339,24 +1484,150 @@ export default function MultiStepReceipt() {
       // Show error message to user
       setSaveSuccess('')
       
-      // Handle specific error types
-      if (err.message && err.message.includes('WARN_DATA_TRUNCATED')) {
-        setSaveError('Data was too large and was truncated. Please reduce the amount of data or contact support.')
-      } else if (err.message && err.message.includes('save_failed')) {
-        setSaveError('Failed to save receipt. The data may be too large or contain invalid characters.')
-      } else {
-        setSaveError(err.message || 'Failed to save receipt')
-      }
-      
-      // Navigate to transactions page even on error to show error toast
-      navigate('/transactions')
+      // Show failure popup instead of navigating immediately
+      setShowFailurePopup(true)
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+      {/* Failure Popup */}
+      {showFailurePopup && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  saveError 
+                    ? 'bg-red-100 dark:bg-red-900/30' 
+                    : 'bg-blue-100 dark:bg-blue-900/30'
+                }`}>
+                  <FiAlertCircle className={`w-5 h-5 ${
+                    saveError 
+                      ? 'text-red-600 dark:text-red-400' 
+                      : 'text-blue-600 dark:text-blue-400'
+                  }`} />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                  {saveError ? 'Receipt Creation Failed' : 'Feeling Stuck?'}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                  {saveError 
+                    ? 'We encountered an issue while creating your receipt. Would you like to report this problem?'
+                    : 'It looks like you\'ve been on this step for a while. Are you having trouble understanding what to do next or unable to proceed? We\'re here to help!'}
+                </p>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={async () => {
+                      // Only capture screenshot and generate details if user wants to report
+                      setIsCapturingScreenshot(true)
+                      
+                      try {
+                        // Capture screenshot
+                        const screenshot = await captureScreenshot()
+                        setFailureScreenshot(screenshot)
+                        
+                        // Generate failure details
+                        if (saveErrorObj) {
+                          // For actual save errors
+                          const failureInfo = generateFailureDetails(saveErrorObj, finalData)
+                          setFailureDetails(failureInfo)
+                        } else {
+                          // For stuck users
+                          const failureInfo = {
+                            title: `Stuck on Receipt Creation - Step ${step}`,
+                            description: `**User Stuck on Receipt Creation**\n\n` +
+                              `**Issue:** User has been on step ${step} for more than 2 minutes\n\n` +
+                              `**User Details:**\n` +
+                              `- Employee Code: ${user?.emp_code || 'N/A'}\n` +
+                              `- Employee Name: ${user?.name || 'N/A'}\n` +
+                              `- Branch: ${user?.branch || user?.branch_name || 'N/A'}\n\n` +
+                              `**Current Progress:**\n` +
+                              `- Current Step: ${step}\n` +
+                              `- Product Type: ${productTypeSeed || 'Not selected'}\n` +
+                              `- Investor Selected: ${investorSeed.investorId ? 'Yes' : 'No'}\n\n` +
+                              `**Browser Information:**\n` +
+                              `- User Agent: ${navigator.userAgent}\n` +
+                              `- Screen Resolution: ${window.screen.width}x${window.screen.height}\n` +
+                              `- Viewport: ${window.innerWidth}x${window.innerHeight}\n`
+                          }
+                          setFailureDetails(failureInfo)
+                        }
+                      } catch (error) {
+                        console.error('Failed to capture screenshot:', error)
+                        // Still show modal even if screenshot fails
+                      } finally {
+                        setIsCapturingScreenshot(false)
+                        setShowIssueModal(true)
+                        setShowFailurePopup(false)
+                      }
+                    }}
+                    disabled={isCapturingScreenshot}
+                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center space-x-1 disabled:cursor-not-allowed"
+                  >
+                    {isCapturingScreenshot ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                        <span>Preparing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiHelpCircle size={14} />
+                        <span>Report Issue</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowFailurePopup(false)
+                      if (saveError) {
+                        // Navigate to transactions on dismiss if there was an error
+                        navigate('/transactions')
+                      }
+                    }}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowFailurePopup(false)
+                  if (saveError) {
+                    navigate('/transactions')
+                  }
+                }}
+                className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Issue Modal */}
+      <ReportIssueModal 
+        isOpen={showIssueModal} 
+        onClose={() => {
+          setShowIssueModal(false)
+          // Reset failure data after closing
+          setFailureScreenshot(null)
+          setFailureDetails(null)
+          setSaveErrorObj(null)
+        }}
+        initialData={failureDetails ? {
+          title: failureDetails.title,
+          description: failureDetails.description,
+          priority: 'high',
+          screenshot: failureScreenshot
+        } : null}
+      />
 
       {step === 1 && (
         <StepEmployee

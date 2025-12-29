@@ -26,7 +26,8 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   const [rateCalculation, setRateCalculation] = useState(null)
   const [loading, setLoading] = useState(false)
   const [rateError, setRateError] = useState(null)
-  const [availableTenures, setAvailableTenures] = useState([])
+  const [availableTenures, setAvailableTenures] = useState([]) // Specific tenures for button display
+  const [availableRateSlabs, setAvailableRateSlabs] = useState([]) // All matching rate slabs (specific + ranges)
   const [fullScheme, setFullScheme] = useState(scheme) // Store full scheme with rate_slabs
 
   // Fetch full scheme with rate_slabs if not already included
@@ -72,11 +73,12 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
   }, [fdTransactionType])
 
   // Extract available tenures from rate slabs based on payout frequency
-  // Only show available tenures for slabs where min_tenure === max_tenure (specific tenures)
+  // Store both specific tenures (for button display) and all matching slabs (for validation)
   useEffect(() => {
     // Wait for payout frequency to be set (especially for cumulative schemes)
     if (!payoutFrequency) {
       setAvailableTenures([])
+      setAvailableRateSlabs([])
       return
     }
 
@@ -86,25 +88,30 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
     if (schemeToUse?.rate_slabs && Array.isArray(schemeToUse.rate_slabs) && schemeToUse.rate_slabs.length > 0) {
       const tenures = new Set()
       
-      // Get all active rate slabs matching the payout frequency
+      // Get all active rate slabs matching the payout frequency (both specific and ranges)
       const matchingSlabs = schemeToUse.rate_slabs.filter(slab => {
         const isActive = slab.is_active !== false
         const matchesFrequency = slab.payout_frequency_type === payoutFrequency
-        // Only include slabs where min === max (specific tenures, not ranges)
-        const isSpecificTenure = slab.tenure_min_months === slab.tenure_max_months
-        return isActive && matchesFrequency && isSpecificTenure
+        return isActive && matchesFrequency
       })
       
-      // Extract the specific tenure months (where min === max)
+      // Store all matching slabs for validation
+      setAvailableRateSlabs(matchingSlabs)
+      
+      // Extract specific tenure months (where min === max) for button display
       matchingSlabs.forEach(slab => {
-        // Since min === max, we just add that single value
-        tenures.add(slab.tenure_min_months)
+        if (slab.tenure_min_months === slab.tenure_max_months) {
+          // Specific tenure - add to button list
+          tenures.add(slab.tenure_min_months)
+        }
+        // Range slabs (min !== max) are stored in availableRateSlabs but not shown as buttons
       })
       
       const sortedTenures = Array.from(tenures).sort((a, b) => a - b)
       setAvailableTenures(sortedTenures)
     } else {
       setAvailableTenures([])
+      setAvailableRateSlabs([])
     }
   }, [fullScheme?.rate_slabs, payoutFrequency, fullScheme?.scheme_id])
 
@@ -241,10 +248,14 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
     if (tenure < schemeToUse.min_tenure_months) return false
     if (tenure > schemeToUse.max_tenure_months) return false
     
-    // CRITICAL: Validate that a rate slab exists for this specific tenure
-    if (availableTenures.length > 0) {
-      if (!availableTenures.includes(tenure)) {
-        return false // No rate slab for this tenure
+    // CRITICAL: Validate that a rate slab exists for this tenure (check both specific and ranges)
+    if (availableRateSlabs.length > 0) {
+      const hasMatchingSlab = availableRateSlabs.some(slab => {
+        // Check if tenure falls within this slab's range
+        return tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months
+      })
+      if (!hasMatchingSlab) {
+        return false // No rate slab covers this tenure
       }
     }
     
@@ -390,7 +401,10 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             min={scheme.min_tenure_months}
             max={scheme.max_tenure_months}
             className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
-              tenureMonths && availableTenures.length > 0 && !availableTenures.includes(parseInt(tenureMonths))
+              tenureMonths && availableRateSlabs.length > 0 && !availableRateSlabs.some(slab => {
+                const tenure = parseInt(tenureMonths)
+                return tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months
+              })
                 ? 'border-red-500 dark:border-red-500'
                 : 'border-gray-300 dark:border-gray-600'
             }`}
@@ -399,8 +413,19 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {availableTenures.length > 0 ? (
               <>
-                Available tenures: {availableTenures.join(', ')} months
+                Available specific tenures: {availableTenures.join(', ')} months
                 {availableTenures.length <= 20 && ' (click buttons above)'}
+                {availableRateSlabs.some(slab => slab.tenure_min_months !== slab.tenure_max_months) && (
+                  <span className="block mt-1">Range slabs also available - enter any tenure within valid ranges</span>
+                )}
+              </>
+            ) : availableRateSlabs.length > 0 ? (
+              <>
+                Available ranges: {availableRateSlabs.map(slab => 
+                  slab.tenure_min_months === slab.tenure_max_months 
+                    ? `${slab.tenure_min_months}M`
+                    : `${slab.tenure_min_months}-${slab.tenure_max_months}M`
+                ).join(', ')}
               </>
             ) : (
               <>
@@ -409,10 +434,13 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             )}
           </p>
           
-          {/* Show error if tenure is not in available list */}
-          {tenureMonths && availableTenures.length > 0 && !availableTenures.includes(parseInt(tenureMonths)) && (
+          {/* Show error if tenure is not covered by any available slab */}
+          {tenureMonths && availableRateSlabs.length > 0 && !availableRateSlabs.some(slab => {
+            const tenure = parseInt(tenureMonths)
+            return tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months
+          }) && (
             <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-              ⚠️ No rate slab available for {tenureMonths} months. Please select from available tenures above.
+              ⚠️ No rate slab available for {tenureMonths} months. Please enter a tenure within the available ranges.
             </p>
           )}
           
