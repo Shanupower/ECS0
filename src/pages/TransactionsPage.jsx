@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
+import { normalizeReceiptsArray } from '../utils/receiptNormalizer'
 import { 
   FiClock, 
   FiFilter, 
@@ -36,6 +37,7 @@ export default function TransactionsPage() {
     to: new Date().toISOString().slice(0, 10), // Today
     category: '',
     status: '',
+    mode: '', // Mode filter for MF transactions (SIP, SWP, STP, Lump Sum, Switch Over)
     emp_code: '',
     branch_code: '',
     search: '', // Search by investor name/ID or receipt ID
@@ -87,6 +89,7 @@ export default function TransactionsPage() {
         to: filters.to,
         category: filters.category || undefined,
         status: filters.status || undefined,
+        mode: filters.mode || undefined,
         search: filters.search || undefined,
         branch_code: filters.branch_code || undefined,
         sort: filters.sort || 'created_at:desc',
@@ -115,6 +118,7 @@ export default function TransactionsPage() {
           to: filters.to,
           category: filters.category || undefined,
           status: filters.status || undefined,
+          mode: filters.mode || undefined,
           search: filters.search || undefined,
           sort: filters.sort || 'created_at:desc',
           page: pagination.page,
@@ -149,7 +153,7 @@ export default function TransactionsPage() {
         }))
       }
 
-      // Load media files for each receipt
+      // Load media files for each receipt and normalize fields
       const receiptsWithMedia = await Promise.all(
         receiptsData.map(async (receipt) => {
           try {
@@ -174,7 +178,9 @@ export default function TransactionsPage() {
         })
       )
       
-      setReceipts(receiptsWithMedia)
+      // Normalize all receipts to use consistent field names (backward compatibility)
+      const normalizedReceipts = normalizeReceiptsArray(receiptsWithMedia)
+      setReceipts(normalizedReceipts)
     } catch (err) {
       console.error('Error loading receipts:', err)
       setError(err.message || 'Failed to load receipts')
@@ -207,11 +213,11 @@ export default function TransactionsPage() {
   useEffect(() => {
     // Reset to page 1 when any filter changes
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [filters.from, filters.to, filters.category, filters.status, filters.emp_code, filters.branch_code, filters.search, filters.sort])
+  }, [filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort])
 
   useEffect(() => {
     loadReceipts()
-  }, [token, filters.from, filters.to, filters.category, filters.status, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
+  }, [token, filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
 
   // Check for success/error messages from receipt creation
   useEffect(() => {
@@ -396,13 +402,14 @@ export default function TransactionsPage() {
   const handleEdit = (receipt) => {
     setSelectedReceipt(receipt)
     // Pre-populate edit data with current receipt values
-    setEditData({
+      // Receipt is already normalized, so we can use snake_case fields directly
+      setEditData({
       date: receipt.date || '',
-      investment_amount: receipt.investment_amount || receipt.investmentAmount || receipt.fd_deposit_amount || '',
-      scheme_name: receipt.scheme_name || receipt.schemeName || receipt.fd_scheme_name || '',
-      folio_policy_no: receipt.folio_policy_no || receipt.folioPolicyNo || '',
+      investment_amount: receipt.investment_amount || receipt.fd_deposit_amount || '',
+      scheme_name: receipt.scheme_name || receipt.fd_scheme_name || '',
+      folio_policy_no: receipt.folio_policy_no || '',
       mode: receipt.mode || '',
-      txn_type: receipt.txn_type || receipt.txnType || '',
+      txn_type: receipt.txn_type || '',
       // Add more fields as needed
     })
     setShowEditModal(true)
@@ -494,6 +501,82 @@ export default function TransactionsPage() {
     return new Date(dateString).toLocaleDateString('en-IN')
   }
 
+  // Helper function to check if this is a switch over transaction
+  // Note: receipts are already normalized, so we only need to check snake_case fields
+  const isSwitchOver = (receipt) => {
+    // Check transaction type
+    const txnType = receipt.txn_type || ''
+    const isSwitchOverType = txnType === 'Switch Over' || txnType === 'SwitchOver' || txnType === 'SWITCH_OVER' || txnType === 'switch_over'
+    
+    // Also check if switch_to_scheme_name exists (alternative detection method)
+    const hasSwitchToScheme = receipt.switch_to_scheme_name
+    
+    return isSwitchOverType || !!hasSwitchToScheme
+  }
+
+  // Helper function to get the correct scheme name for display
+  // For switch over transactions, show the "to" scheme, not the "from" scheme
+  // Note: receipts are already normalized, so we only need to check snake_case fields
+  const getDisplaySchemeName = (receipt) => {
+    // For switch over transactions, show switch_to_scheme_name
+    if (isSwitchOver(receipt)) {
+      return receipt.switch_to_scheme_name || receipt.scheme_name || receipt.fd_scheme_name || 'N/A'
+    }
+    // For regular transactions, show the normal scheme name
+    return receipt.fd_scheme_name || receipt.scheme_name || 'N/A'
+  }
+
+  // Helper function to get mode from receipt
+  // Note: receipts are already normalized, so we only need to check snake_case fields
+  const getMode = (receipt) => {
+    // First check if mode is explicitly stored
+    let mode = receipt.mode || ''
+    
+    // If mode is not found, try to infer from transaction type
+    if (!mode && receipt.product_category === 'MF') {
+      const txnType = receipt.txn_type || ''
+      
+      // Map transaction types to modes
+      if (txnType === 'SIP') {
+        mode = 'SIP'
+      } else if (txnType === 'SWP') {
+        mode = 'SWP'
+      } else if (txnType === 'STP') {
+        mode = 'STP'
+      } else if (txnType === 'Lumpsum' || txnType === 'Lump Sum') {
+        mode = 'Lump Sum'
+      } else if (isSwitchOver(receipt)) {
+        // Switch over is typically lump sum
+        mode = 'Lump Sum'
+      } else if (receipt.sip_frequency) {
+        mode = 'SIP'
+      } else if (receipt.swp_frequency) {
+        mode = 'SWP'
+      } else if (receipt.stp_frequency) {
+        mode = 'STP'
+      } else {
+        // Default to Lump Sum for MF if no other indicators
+        mode = 'Lump Sum'
+      }
+    }
+    
+    return mode
+  }
+
+  // Helper function to get mode display with description
+  const getModeDisplay = (receipt) => {
+    const mode = getMode(receipt)
+    if (!mode) return ''
+    
+    // For switch over, include mode in description
+    if (isSwitchOver(receipt)) {
+      return ` • ${mode}`
+    }
+    
+    // For other transactions, just return mode
+    return mode
+  }
+
   const getStatusBadge = (receipt) => {
     if (receipt.deleted_at) {
       return (
@@ -541,6 +624,7 @@ export default function TransactionsPage() {
         emp_code: isAdmin ? (filters.emp_code || undefined) : undefined,
         status: filters.status || undefined,
         category: filters.category || undefined,
+        mode: filters.mode || undefined,
         search: filters.search || undefined
       }
       Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
@@ -559,6 +643,7 @@ export default function TransactionsPage() {
         ...(isAdmin && filters.emp_code ? { emp_code: filters.emp_code } : {}),
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.category ? { category: filters.category } : {}),
+        ...(filters.mode ? { mode: filters.mode } : {}),
         ...(filters.search ? { search: filters.search } : {})
       }).toString()
 
@@ -715,7 +800,7 @@ export default function TransactionsPage() {
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Category</label>
             <select
               value={filters.category}
-              onChange={e => setFilters(prev => ({ ...prev, category: e.target.value }))}
+              onChange={e => setFilters(prev => ({ ...prev, category: e.target.value, mode: e.target.value !== 'MF' ? '' : prev.mode }))}
               className="w-full p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
             >
               <option value="">All Categories</option>
@@ -739,6 +824,25 @@ export default function TransactionsPage() {
             </select>
           </div>
         </div>
+
+        {/* Mode Filter - Only show when MF category is selected */}
+        {filters.category === 'MF' && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Mode</label>
+            <select
+              value={filters.mode}
+              onChange={e => setFilters(prev => ({ ...prev, mode: e.target.value }))}
+              className="w-full sm:w-auto sm:min-w-[200px] p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+            >
+              <option value="">All Modes</option>
+              <option value="Lump Sum">Lump Sum</option>
+              <option value="SIP">SIP</option>
+              <option value="SWP">SWP</option>
+              <option value="STP">STP</option>
+              <option value="Switch Over">Switch Over</option>
+            </select>
+          </div>
+        )}
 
         {/* Admin Filters Row */}
         {isAdmin && (
@@ -901,9 +1005,15 @@ export default function TransactionsPage() {
                     {/* Product Info */}
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{getDisplaySchemeName(receipt)}</p>
                       <div className="flex items-center gap-1 flex-wrap">
                         <p className="text-xs text-gray-600 dark:text-gray-400">{getCategoryDisplayName(receipt.product_category)}</p>
+                        {getMode(receipt) && receipt.product_category === 'MF' && (
+                          <>
+                            <span className="text-gray-400 dark:text-dark-500">•</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">{getMode(receipt)}</span>
+                          </>
+                        )}
                         {receipt.scheme_option && receipt.product_category === 'MF' && (
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
                             receipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
@@ -1042,13 +1152,19 @@ export default function TransactionsPage() {
                               <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.investor_id || receipt.investorId}</div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <div className="text-xs font-medium text-gray-700 dark:text-dark-300 truncate" title={receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName}>
-                                {receipt.fd_scheme_name || receipt.scheme_name || receipt.schemeName || 'N/A'}
+                              <div className="text-xs font-medium text-gray-700 dark:text-dark-300 truncate" title={getDisplaySchemeName(receipt)}>
+                                {getDisplaySchemeName(receipt)}
                               </div>
                               <span className="text-gray-400 dark:text-dark-500">•</span>
                               <span className="text-xs text-gray-600 dark:text-dark-400">
                                 {getCategoryDisplayName(receipt.product_category)}
                               </span>
+                              {getMode(receipt) && receipt.product_category === 'MF' && (
+                                <>
+                                  <span className="text-gray-400 dark:text-dark-500">•</span>
+                                  <span className="text-xs text-gray-600 dark:text-dark-400">{getMode(receipt)}</span>
+                                </>
+                              )}
                               {receipt.scheme_option && receipt.product_category === 'MF' && (
                                 <>
                                   <span className="text-gray-400 dark:text-dark-500">•</span>

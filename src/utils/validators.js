@@ -136,31 +136,175 @@ export function validateRequired(value, fieldName) {
 }
 
 /**
- * Validate customer creation form
+ * Helper function to normalize values for comparison
  */
-export function validateCustomerForm(formData) {
+function normalizeValue(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value.trim()
+  if (Array.isArray(value)) {
+    // Sort arrays for consistent comparison
+    const sorted = value.map(v => normalizeValue(v)).filter(v => v !== '').sort()
+    return sorted.join(',')
+  }
+  return String(value)
+}
+
+/**
+ * Normalize branch data for comparison (handles relationship_manager field)
+ */
+function normalizeBranchForComparison(branches, originalRelationshipManager) {
+  // Normalize form branches (array)
+  const formBranches = Array.isArray(branches) 
+    ? branches.map(b => normalizeValue(b)).filter(b => b !== '').sort()
+    : []
+  
+  // Normalize original relationship_manager (could be string or array)
+  const originalBranches = originalRelationshipManager
+    ? (Array.isArray(originalRelationshipManager)
+        ? originalRelationshipManager.map(b => normalizeValue(b)).filter(b => b !== '').sort()
+        : [normalizeValue(originalRelationshipManager)].filter(b => b !== ''))
+    : []
+  
+  return {
+    form: formBranches.join(','),
+    original: originalBranches.join(',')
+  }
+}
+
+/**
+ * Check if a field value has changed
+ */
+function hasFieldChanged(newValue, oldValue) {
+  return normalizeValue(newValue) !== normalizeValue(oldValue)
+}
+
+/**
+ * Validate customer creation form
+ * @param {Object} formData - The form data to validate
+ * @param {boolean} isEdit - Whether this is an edit operation
+ * @param {Object} originalData - Original customer data (for edit mode, to detect changes)
+ */
+export function validateCustomerForm(formData, isEdit = false, originalData = null) {
   const errors = []
   
-  // Required fields
-  const nameValidation = validateRequired(formData.name, 'Customer name')
-  if (!nameValidation.valid) errors.push(nameValidation.error)
+  // For edits, only validate fields that have actually changed
+  // For creates, validate required fields
   
-  const emailValidation = validateEmail(formData.email, true)
-  if (!emailValidation.valid) errors.push(emailValidation.error)
+  // Name validation
+  if (isEdit && originalData) {
+    // For edit: only validate if name has changed AND has a value
+    if (hasFieldChanged(formData.name, originalData.name)) {
+      // Only validate if the new value is not empty
+      if (formData.name && formData.name.trim()) {
+        const nameValidation = validateRequired(formData.name, 'Customer name')
+        if (!nameValidation.valid) errors.push(nameValidation.error)
+      }
+      // If changed to empty, that's okay - we don't validate empty fields on edit
+    }
+  } else if (isEdit) {
+    // For edit without original data: only validate if name is provided
+    if (formData.name && formData.name.trim()) {
+      const nameValidation = validateRequired(formData.name, 'Customer name')
+      if (!nameValidation.valid) errors.push(nameValidation.error)
+    }
+  } else {
+    // For create: name is required
+    const nameValidation = validateRequired(formData.name, 'Customer name')
+    if (!nameValidation.valid) errors.push(nameValidation.error)
+  }
   
-  const mobileValidation = validateMobile(formData.mobile, true)
-  if (!mobileValidation.valid) errors.push(mobileValidation.error)
+  // Email validation
+  if (isEdit && originalData) {
+    // For edit: only validate if email has changed AND has a value
+    if (hasFieldChanged(formData.email, originalData.email)) {
+      // Only validate if the new value is not empty
+      if (formData.email && formData.email.trim()) {
+        const emailValidation = validateEmail(formData.email, false)
+        if (!emailValidation.valid) errors.push(emailValidation.error)
+      }
+      // If changed to empty, that's okay - we don't validate empty fields on edit
+    }
+  } else if (isEdit) {
+    // For edit without original data: only validate if email is provided
+    if (formData.email && formData.email.trim()) {
+      const emailValidation = validateEmail(formData.email, false)
+      if (!emailValidation.valid) errors.push(emailValidation.error)
+    }
+  } else {
+    // For create: email is required
+    const emailValidation = validateEmail(formData.email, true)
+    if (!emailValidation.valid) errors.push(emailValidation.error)
+  }
   
-  const panValidation = validatePAN(formData.pan, true)
-  if (!panValidation.valid) errors.push(panValidation.error)
+  // Mobile validation
+  if (isEdit && originalData) {
+    // For edit: only validate if mobile has changed AND has a value
+    if (hasFieldChanged(formData.mobile, originalData.mobile)) {
+      // Only validate if the new value is not empty
+      if (formData.mobile && formData.mobile.trim()) {
+        const mobileValidation = validateMobile(formData.mobile, false)
+        if (!mobileValidation.valid) errors.push(mobileValidation.error)
+      }
+      // If changed to empty, that's okay - we don't validate empty fields on edit
+    }
+  } else if (isEdit) {
+    // For edit without original data: only validate if mobile is provided
+    if (formData.mobile && formData.mobile.trim()) {
+      const mobileValidation = validateMobile(formData.mobile, false)
+      if (!mobileValidation.valid) errors.push(mobileValidation.error)
+    }
+  } else {
+    // For create: mobile is required
+    const mobileValidation = validateMobile(formData.mobile, true)
+    if (!mobileValidation.valid) errors.push(mobileValidation.error)
+  }
   
-  // Optional fields with format validation
-  if (formData.aadhar_number) {
+  // PAN validation
+  if (isEdit && originalData) {
+    // For edit: only validate if PAN has changed AND has a value
+    if (hasFieldChanged(formData.pan, originalData.pan)) {
+      // Only validate if the new value is not empty
+      if (formData.pan && formData.pan.trim()) {
+        const panValidation = validatePAN(formData.pan, false)
+        if (!panValidation.valid) errors.push(panValidation.error)
+      }
+      // If changed to empty, that's okay - we don't validate empty fields on edit
+    }
+  } else if (isEdit) {
+    // For edit without original data: only validate if PAN is provided
+    if (formData.pan && formData.pan.trim()) {
+      const panValidation = validatePAN(formData.pan, false)
+      if (!panValidation.valid) errors.push(panValidation.error)
+    }
+  } else {
+    // For create: PAN is required
+    const panValidation = validatePAN(formData.pan, true)
+    if (!panValidation.valid) errors.push(panValidation.error)
+  }
+  
+  // Optional fields with format validation (only validate if changed and provided)
+  if (isEdit && originalData) {
+    // Only validate if aadhar has changed
+    if (hasFieldChanged(formData.aadhar_number, originalData.aadhar_number)) {
+      if (formData.aadhar_number && formData.aadhar_number.trim()) {
+        const aadharValidation = validateAadhar(formData.aadhar_number, false)
+        if (!aadharValidation.valid) errors.push(aadharValidation.error)
+      }
+    }
+  } else if (formData.aadhar_number && formData.aadhar_number.trim()) {
     const aadharValidation = validateAadhar(formData.aadhar_number, false)
     if (!aadharValidation.valid) errors.push(aadharValidation.error)
   }
   
-  if (formData.pin) {
+  if (isEdit && originalData) {
+    // Only validate if pin has changed
+    if (hasFieldChanged(formData.pin, originalData.pin)) {
+      if (formData.pin && formData.pin.trim()) {
+        const pinValidation = validatePIN(formData.pin, false)
+        if (!pinValidation.valid) errors.push(pinValidation.error)
+      }
+    }
+  } else if (formData.pin && formData.pin.trim()) {
     const pinValidation = validatePIN(formData.pin, false)
     if (!pinValidation.valid) errors.push(pinValidation.error)
   }

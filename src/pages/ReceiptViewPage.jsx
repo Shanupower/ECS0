@@ -4,6 +4,7 @@ import { FiArrowLeft, FiPrinter, FiDownload, FiFile, FiImage, FiEye } from 'reac
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
+import { normalizeReceiptFields } from '../utils/receiptNormalizer'
 
 export default function ReceiptViewPage() {
   const { id } = useParams()
@@ -40,7 +41,9 @@ export default function ReceiptViewPage() {
         receiptData = result.data
       }
       
-      setReceipt(receiptData)
+      // Normalize receipt fields for backward compatibility
+      const normalizedReceipt = normalizeReceiptFields(receiptData)
+      setReceipt(normalizedReceipt)
     } catch (err) {
       console.error('Error loading receipt:', err)
       
@@ -260,52 +263,68 @@ export default function ReceiptViewPage() {
     )
   }
 
-  // Transform API data to match PrintReceipt component expectations
+  // Transform normalized receipt data to camelCase for PrintReceipt component
+  // Receipt is already normalized (snake_case), so we just need to map to camelCase
   const transformedReceipt = {
-    receiptNo: receipt.receipt_no || receipt.receiptNo,
+    // Receipt identification
+    receiptNo: receipt.receipt_no,
     date: receipt.date,
     branch: receipt.branch,
-    employeeName: receipt.employee_name || receipt.employeeName,
-    empCode: receipt.emp_code || receipt.empCode,
-    investorId: receipt.investor_id || receipt.investorId,
-    investorName: receipt.investor_name || receipt.investorName,
-    investorAddress: receipt.investor_address || receipt.investorAddress,
-    pinCode: receipt.pin_code || receipt.pinCode,
+    
+    // Employee
+    employeeName: receipt.employee_name,
+    empCode: receipt.emp_code,
+    
+    // Investor
+    investorId: receipt.investor_id,
+    investorName: receipt.investor_name,
+    investorAddress: receipt.investor_address,
+    pinCode: receipt.pin_code,
     pan: receipt.pan,
     email: receipt.email,
+    
+    // Product and transaction
     product_category: receipt.product_category,
     txnCategory: receipt.txnCategory ? [receipt.txnCategory] : [],
-    txnType: receipt.txn_type || receipt.txnType,
+    txnType: receipt.txn_type,
     mode: receipt.mode,
-    sip_stp_swp_period: receipt.period_installments || receipt.sip_stp_swp_period,
-    noOfInstallments: receipt.installments_count || receipt.noOfInstallments,
-    from: receipt.from_text || receipt.from,
-    to: receipt.to_text || receipt.to,
-    unitsOrAmount: receipt.units_or_amount || receipt.unitsOrAmount,
-    investmentAmount: receipt.investment_amount || receipt.investmentAmount,
-    schemeName: receipt.scheme_name || receipt.schemeName,
-    schemeOption: receipt.scheme_option || receipt.schemeOption,
-    folioPolicyNo: receipt.folio_policy_no || receipt.folioPolicyNo,
-    fdType: receipt.fd_type || receipt.fdType,
-    clientType: receipt.client_type || receipt.clientType,
-    depositPeriodYM: receipt.deposit_period_ym || receipt.depositPeriodYM,
-    roi: receipt.roi_percent || receipt.roi,
-    interestPayable: receipt.interest_payable || receipt.interestPayable,
-    interestFrequency: receipt.interest_frequency || receipt.interestFrequency,
-    instrumentType: receipt.instrument_type || receipt.instrumentType,
-    instrumentNo: receipt.instrument_no || receipt.instrumentNo,
-    instrumentDate: receipt.instrument_date || receipt.instrumentDate,
-    bankName: receipt.bank_name || receipt.bankName,
-    bankBranch: receipt.bank_branch || receipt.bankBranch,
+    
+    // Investment details
+    sip_stp_swp_period: receipt.period_installments,
+    noOfInstallments: receipt.installments_count,
+    from: receipt.from_text,
+    to: receipt.to_text,
+    unitsOrAmount: receipt.units_or_amount,
+    investmentAmount: receipt.investment_amount,
+    
+    // Scheme/Product
+    schemeName: receipt.scheme_name,
+    schemeOption: receipt.scheme_option,
+    folioPolicyNo: receipt.folio_policy_no,
+    
+    // FD/Bonds fields
+    fdType: receipt.fd_type,
+    clientType: receipt.client_type,
+    depositPeriodYM: receipt.deposit_period_ym,
+    roi: receipt.roi_percent,
+    interestPayable: receipt.interest_payable,
+    interestFrequency: receipt.interest_frequency,
+    instrumentType: receipt.instrument_type,
+    instrumentNo: receipt.instrument_no,
+    instrumentDate: receipt.instrument_date,
+    bankName: receipt.bank_name,
+    bankBranch: receipt.bank_branch,
     fdr_demat_policy: receipt.fdr_demat_policy,
-    renewalDueDate: receipt.renewal_due_date || receipt.renewalDueDate,
-    maturityAmount: receipt.maturity_amount || receipt.maturityAmount,
-    renewalAmount: receipt.renewal_amount || receipt.renewalAmount,
+    renewalDueDate: receipt.renewal_due_date,
+    maturityAmount: receipt.maturity_amount,
+    renewalAmount: receipt.renewal_amount,
+    
     // SIP fields
     sip_frequency: receipt.sip_frequency,
     sip_start_date: receipt.sip_start_date,
     sip_end_date: receipt.sip_end_date,
     sip_is_perpetual: receipt.sip_is_perpetual,
+    
     // STP fields
     stp_target_scheme_code: receipt.stp_target_scheme_code,
     stp_target_scheme_name: receipt.stp_target_scheme_name,
@@ -313,10 +332,20 @@ export default function ReceiptViewPage() {
     stp_start_date: receipt.stp_start_date,
     stp_amount: receipt.stp_amount,
     stp_original_amount: receipt.stp_original_amount,
+    
     // SWP fields
     swp_frequency: receipt.swp_frequency,
     swp_start_date: receipt.swp_start_date,
     swp_amount: receipt.swp_amount,
+    
+    // Switch Over fields
+    switch_from_scheme_code: receipt.switch_from_scheme_code,
+    switch_from_scheme_name: receipt.switch_from_scheme_name,
+    switch_to_scheme_code: receipt.switch_to_scheme_code,
+    switch_to_scheme_name: receipt.switch_to_scheme_name,
+    switch_type: receipt.switch_type,
+    switch_value: receipt.switch_value,
+    
     // FD-specific fields
     fd_issuer_key: receipt.fd_issuer_key,
     fd_issuer_name: receipt.fd_issuer_name,

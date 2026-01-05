@@ -76,7 +76,7 @@ export const API_BRANCH_MAPPINGS = {
   'CHANDA NAGAR': 'HABSIGUDA',
   'NELLORE': 'VIJAYAWADA',
   'GUNTUR': 'VIJAYAWADA',
-  'SECUNDERABAD': 'HABSIGUDA',
+  'SECUNDERABAD': 'SECUNDERABAD',
   'REGD -  HEAD OFFICE': 'HO',
   'HEAD OFFICE Capital Marketing': 'HO',
   'HEAD OFFICE Marketing R.O.T.S.': 'HO',
@@ -111,12 +111,37 @@ export function normalizeBranchForEmployee(branchName) {
   const entry = Object.entries(BRANCH_MAPPINGS).find(([key, value]) => value === branchName)
   if (entry) return entry[0]
   
-  // Then try API_BRANCH_MAPPINGS reverse lookup (more comprehensive)
+  // Try API_BRANCH_MAPPINGS reverse lookup (more comprehensive)
   // Find all entries where the value matches the DB format
-  const apiEntry = Object.entries(API_BRANCH_MAPPINGS).find(([key, value]) => 
-    value === branchName && getAllValidBranches().includes(key)
+  // This handles cases like SECUNDERABAD -> HABSIGUDA, MEHDIPATNAM -> HABSIGUDA, etc.
+  // We check ALL mappings first, even if branchName is in valid branches,
+  // to preserve the original selection (e.g., SECUNDERABAD instead of HABSIGUDA)
+  const apiEntries = Object.entries(API_BRANCH_MAPPINGS).filter(([key, value]) => 
+    value === branchName
   )
-  if (apiEntry) return apiEntry[0]
+  
+  if (apiEntries.length > 0) {
+    // Filter out entries where key equals value (like HABSIGUDA: HABSIGUDA)
+    // when there are other mappings, to prefer more specific ones
+    const specificEntries = apiEntries.filter(([key, value]) => key !== value)
+    const entriesToUse = specificEntries.length > 0 ? specificEntries : apiEntries
+    
+    // Prefer entries that are in valid branches list
+    const validEntries = entriesToUse.filter(([key]) => getAllValidBranches().includes(key))
+    if (validEntries.length > 0) {
+      // If multiple valid mappings exist, prefer the one that matches the branchName exactly (case-insensitive)
+      const exactMatch = validEntries.find(([key]) => key.toLowerCase() === branchName.toLowerCase())
+      if (exactMatch) return exactMatch[0]
+      // Otherwise return the first valid mapping (this preserves selections like SECUNDERABAD)
+      return validEntries[0][0]
+    }
+    // If no valid entries, return the first specific mapping (preserves aliases like SECUNDERABAD)
+    if (entriesToUse.length > 0) {
+      return entriesToUse[0][0]
+    }
+    // Fallback to first entry if no specific mappings
+    return apiEntries[0][0]
+  }
   
   // If the branchName is already in employee format, return it
   if (getAllValidBranches().includes(branchName)) {
@@ -260,6 +285,7 @@ export function getAllValidBranches() {
     'MALKAJGIRI',
     'MALLESWARAM',
     'RAJAHMUNDRY',
+    'SECUNDERABAD',
     'SUCHITRA',
     'TRIMULGHERRY',
     'VIJAYAWADA',

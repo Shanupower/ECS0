@@ -40,16 +40,22 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       investmentAmount: amount // Also add camelCase for validation compatibility
     }
 
-    if (investmentType === 'SIP') {
+    // Set mode based on investment type
+    if (investmentType === 'Lumpsum') {
+      transactionData.mode = 'Lump Sum'
+    } else if (investmentType === 'SIP') {
+      transactionData.mode = 'SIP'
       transactionData.sip_frequency = frequency
       transactionData.sip_start_date = startDate
       transactionData.sip_end_date = isPerpetual ? null : endDate
       transactionData.sip_is_perpetual = isPerpetual
     } else if (investmentType === 'SWP') {
+      transactionData.mode = 'SWP'
       transactionData.swp_frequency = frequency
       transactionData.swp_start_date = startDate
       transactionData.swp_amount = amount
     } else if (investmentType === 'STP') {
+      transactionData.mode = 'STP'
       const target = schemes.find(s => s.scheme_code === targetScheme)
       transactionData.stp_target_scheme_code = target?.scheme_code
       transactionData.stp_target_scheme_name = target?.scheme_name
@@ -58,6 +64,9 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       transactionData.stp_amount = amount
       transactionData.stp_original_amount = stpOriginalAmount
     } else if (investmentType === 'Switch Over') {
+      // For switch over, mode is typically 'Lump Sum' unless it's part of a SIP/SWP/STP switch
+      transactionData.mode = 'Lump Sum' // Default, can be overridden if needed
+      transactionData.txn_type = 'Switch Over' // Explicitly set transaction type
       const target = schemes.find(s => s.scheme_code === targetScheme)
       transactionData.switch_from_scheme_code = selectedScheme.scheme_code
       transactionData.switch_from_scheme_name = selectedScheme.scheme_name

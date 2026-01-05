@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { normalizeBranchForDB, getAllValidBranches } from '../utils/branchMapping'
+import { normalizeBranchForDB, normalizeBranchForEmployee, normalizeBranchForAPI, getAllValidBranches } from '../utils/branchMapping'
 import SearchableSelect from '../components/SearchableSelect'
 import MultiSelect from '../components/MultiSelect'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
@@ -51,7 +51,8 @@ export default function CustomerManagementPage() {
     pin: '',
     country: 'India',
     date_of_birth: '',
-    branches: [] // Changed from branch to branches (array)
+    branches: [], // Changed from branch to branches (array)
+    minors: [] // Array of minors
   })
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [pincodeSuggestions, setPincodeSuggestions] = useState([])
@@ -304,15 +305,20 @@ export default function CustomerManagementPage() {
         formDataToSend.append('media', file)
       })
       
-      // Add branches array - normalize each branch
+      // Add branches array - normalize each branch to API format
       const branches = formData.branches && formData.branches.length > 0 
-        ? formData.branches.map(b => normalizeBranchForDB(b))
-        : [normalizeBranchForDB(user?.branch || user?.branch_name || 'UNASSIGNED')]
+        ? formData.branches.map(b => normalizeBranchForAPI(b))
+        : [normalizeBranchForAPI(user?.branch || user?.branch_name || 'UNASSIGNED')]
       
       // Send branches array - FormData with bracket notation for arrays (Express/multer will parse as array)
       branches.forEach((branch) => {
         formDataToSend.append('branches[]', branch)
       })
+      
+      // Add minors array if present
+      if (formData.minors && formData.minors.length > 0) {
+        formDataToSend.append('minors', JSON.stringify(formData.minors))
+      }
       
       formDataToSend.append('created_by', user?.emp_code || user?.username)
       
@@ -346,8 +352,8 @@ export default function CustomerManagementPage() {
   const handleEditCustomer = async (e) => {
     e.preventDefault()
     
-    // Validate form (for update, only validate filled fields)
-    const validation = validateCustomerForm(formData)
+    // Validate form (for update, only validate fields that have changed)
+    const validation = validateCustomerForm(formData, true, selectedCustomer) // Pass original customer data
     if (!validation.valid) {
       setError(validation.errors.join('. '))
       return
@@ -357,11 +363,12 @@ export default function CustomerManagementPage() {
     try {
       const token = localStorage.getItem('ecs_token')
       
-      // Prepare update data with normalized branches
+      // Prepare update data with normalized branches to API format
       const updateData = { ...formData }
       if (updateData.branches && updateData.branches.length > 0) {
-        updateData.branches = updateData.branches.map(b => normalizeBranchForDB(b))
+        updateData.branches = updateData.branches.map(b => normalizeBranchForAPI(b))
       }
+      // Minors array is already in the correct format
       
       await api.updateCustomer(token, selectedCustomer.investor_id, updateData)
 
@@ -412,7 +419,8 @@ export default function CustomerManagementPage() {
       pin: '',
       country: 'India',
       date_of_birth: '',
-      branches: []
+      branches: [],
+      minors: []
     })
     setPincodeSuggestions([])
     setShowPincodeDropdown(false)
@@ -422,6 +430,18 @@ export default function CustomerManagementPage() {
   // Open edit modal
   const openEditModal = (customer) => {
     setSelectedCustomer(customer)
+    // Convert DB format (relationship_manager) to employee format for dropdown
+    // Handle both single branch (string) and multiple branches (array)
+    const dbBranch = customer.relationship_manager || ''
+    const branchesArray = Array.isArray(dbBranch) 
+      ? dbBranch.map(b => normalizeBranchForEmployee(b))
+      : dbBranch 
+        ? [normalizeBranchForEmployee(dbBranch)] 
+        : []
+    
+    // Extract DOB - handle null, undefined, or alternative field names
+    const dob = customer.date_of_birth || customer.dob || customer.dateOfBirth || ''
+    
     setFormData({
       title: customer.title || '',
       name: customer.name || '',
@@ -435,12 +455,9 @@ export default function CustomerManagementPage() {
       state: customer.state || '',
       pin: customer.pin || '',
       country: customer.country || 'India',
-      date_of_birth: customer.date_of_birth || '',
-      branches: Array.isArray(customer.relationship_manager) 
-        ? customer.relationship_manager 
-        : customer.relationship_manager 
-          ? [customer.relationship_manager] 
-          : []
+      date_of_birth: dob,
+      branches: branchesArray,
+      minors: customer.minors || []
     })
     setShowEditModal(true)
   }
@@ -629,6 +646,11 @@ export default function CustomerManagementPage() {
                           <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
                             {customer.name || 'N/A'}
                           </h4>
+                          {customer.minors && customer.minors.length > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                              {customer.minors.length} minor{customer.minors.length > 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                         <div className="mt-1 text-xs text-gray-500 dark:text-dark-400">
                           ID: {customer.investor_id}
@@ -707,8 +729,15 @@ export default function CustomerManagementPage() {
                     <tr key={customer.investor_id} className="hover:bg-gray-50 dark:hover:bg-dark-700">
                       <td className="px-4 lg:px-6 py-3 lg:py-4">
                         <div>
+                          <div className="flex items-center space-x-2">
                           <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                             {customer.name || 'N/A'}
+                            </div>
+                            {customer.minors && customer.minors.length > 0 && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                {customer.minors.length} minor{customer.minors.length > 1 ? 's' : ''}
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-dark-400">
                             ID: {customer.investor_id}
@@ -1149,6 +1178,341 @@ function CustomerModal({
             </div>
           </div>
 
+          {/* Minors Section */}
+          <div className="space-y-6 pt-8 border-t-2 border-gray-200 dark:border-dark-600 mt-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 p-5 rounded-xl border-2 border-blue-200 dark:border-blue-800 shadow-sm">
+              <div className="flex-1">
+                <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center mb-2">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg mr-3">
+                    <FiUsers className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  Minors (Children/Wards)
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300 ml-12">
+                  Add minors attached to this customer. Each minor will have their own unique investor ID.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (formData.minors && formData.minors.length >= 10) {
+                    alert('Maximum 10 minors can be added per customer')
+                    return
+                  }
+                  setFormData(prev => ({
+                    ...prev,
+                    minors: [...(prev.minors || []), {
+                      name: '',
+                      date_of_birth: '',
+                      pan: '',
+                      relationship_type: 'child',
+                      use_same_address: true,
+                      address1: '',
+                      address2: '',
+                      address3: '',
+                      city: '',
+                      state: '',
+                      pin: '',
+                      father_name: '',
+                      mother_name: ''
+                    }]
+                  }))
+                }}
+                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Minor
+              </button>
+            </div>
+
+            {formData.minors && formData.minors.length > 0 ? (
+              <div className="space-y-5">
+                {formData.minors.map((minor, index) => (
+                  <div key={index} className="border-2 border-gray-200 dark:border-dark-600 rounded-xl p-5 bg-white dark:bg-dark-800 shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-200 dark:border-dark-700">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                          {index + 1}
+                        </div>
+                        <h5 className="text-base font-semibold text-gray-900 dark:text-white">
+                          Minor {index + 1} Details
+                        </h5>
+                        {minor.relationship_type && (
+                          <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                            {minor.relationship_type === 'child' ? 'Child' : 'Ward'}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to remove Minor ${index + 1}?`)) {
+                            setFormData(prev => ({
+                              ...prev,
+                              minors: prev.minors.filter((_, i) => i !== index)
+                            }))
+                          }
+                        }}
+                        className="p-2 text-red-600 dark:text-red-400 hover:text-white hover:bg-red-600 dark:hover:bg-red-600 rounded-lg transition-colors duration-200"
+                        title="Remove Minor"
+                      >
+                        <FiTrash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                          Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={minor.name || ''}
+                          onChange={(e) => {
+                            const newMinors = [...formData.minors]
+                            newMinors[index].name = e.target.value
+                            setFormData(prev => ({ ...prev, minors: newMinors }))
+                          }}
+                          required
+                          placeholder="Enter minor's full name"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                          Date of Birth <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={minor.date_of_birth || ''}
+                          onChange={(e) => {
+                            const newMinors = [...formData.minors]
+                            newMinors[index].date_of_birth = e.target.value
+                            setFormData(prev => ({ ...prev, minors: newMinors }))
+                          }}
+                          required
+                          max={new Date().toISOString().split('T')[0]}
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                          PAN Number <span className="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={minor.pan || ''}
+                          onChange={(e) => {
+                            const newMinors = [...formData.minors]
+                            newMinors[index].pan = e.target.value.toUpperCase()
+                            setFormData(prev => ({ ...prev, minors: newMinors }))
+                          }}
+                          maxLength="10"
+                          placeholder="ABCDE1234F"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                          Relationship Type <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={minor.relationship_type || 'child'}
+                          onChange={(e) => {
+                            const newMinors = [...formData.minors]
+                            newMinors[index].relationship_type = e.target.value
+                            setFormData(prev => ({ ...prev, minors: newMinors }))
+                          }}
+                          required
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        >
+                          <option value="child">Parent-Child</option>
+                          <option value="ward">Guardian-Ward</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <div className="p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg">
+                          <label className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={minor.use_same_address !== false}
+                              onChange={(e) => {
+                                const newMinors = [...formData.minors]
+                                newMinors[index].use_same_address = e.target.checked
+                                if (e.target.checked) {
+                                  // Copy parent's address
+                                  newMinors[index].address1 = formData.address1
+                                  newMinors[index].address2 = formData.address2
+                                  newMinors[index].address3 = formData.address3
+                                  newMinors[index].city = formData.city
+                                  newMinors[index].state = formData.state
+                                  newMinors[index].pin = formData.pin
+                                }
+                                setFormData(prev => ({ ...prev, minors: newMinors }))
+                              }}
+                              className="w-5 h-5 rounded border-2 border-gray-300 dark:border-dark-600 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
+                            />
+                            <div>
+                              <span className="text-sm font-semibold text-gray-900 dark:text-white block">
+                                Use same address as major customer
+                              </span>
+                              <span className="text-xs text-gray-600 dark:text-gray-400">
+                                Address will be automatically copied from parent
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {minor.use_same_address === false && (
+                        <div className="md:col-span-2 space-y-4 pt-2 border-t border-gray-200 dark:border-dark-700">
+                          <div className="flex items-center mb-3">
+                            <div className="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+                            <span className="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Different Address</span>
+                            <div className="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                              Address Line 1
+                            </label>
+                            <input
+                              type="text"
+                              value={minor.address1 || ''}
+                              onChange={(e) => {
+                                const newMinors = [...formData.minors]
+                                newMinors[index].address1 = e.target.value
+                                setFormData(prev => ({ ...prev, minors: newMinors }))
+                              }}
+                              placeholder="Enter address line 1"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                              Address Line 2
+                            </label>
+                            <input
+                              type="text"
+                              value={minor.address2 || ''}
+                              onChange={(e) => {
+                                const newMinors = [...formData.minors]
+                                newMinors[index].address2 = e.target.value
+                                setFormData(prev => ({ ...prev, minors: newMinors }))
+                              }}
+                              placeholder="Enter address line 2"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                              City
+                            </label>
+                            <input
+                              type="text"
+                              value={minor.city || ''}
+                              onChange={(e) => {
+                                const newMinors = [...formData.minors]
+                                newMinors[index].city = e.target.value
+                                setFormData(prev => ({ ...prev, minors: newMinors }))
+                              }}
+                              placeholder="Enter city"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                              State
+                            </label>
+                            <input
+                              type="text"
+                              value={minor.state || ''}
+                              onChange={(e) => {
+                                const newMinors = [...formData.minors]
+                                newMinors[index].state = e.target.value
+                                setFormData(prev => ({ ...prev, minors: newMinors }))
+                              }}
+                              placeholder="Enter state"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                              PIN Code
+                            </label>
+                            <input
+                              type="text"
+                              value={minor.pin || ''}
+                              onChange={(e) => {
+                                const newMinors = [...formData.minors]
+                                newMinors[index].pin = e.target.value.replace(/\D/g, '').slice(0, 6)
+                                setFormData(prev => ({ ...prev, minors: newMinors }))
+                              }}
+                              maxLength="6"
+                              placeholder="6 digits"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                          Father's Name <span className="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={minor.father_name || ''}
+                          onChange={(e) => {
+                            const newMinors = [...formData.minors]
+                            newMinors[index].father_name = e.target.value
+                            setFormData(prev => ({ ...prev, minors: newMinors }))
+                          }}
+                          placeholder="Enter father's name"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                          Mother's Name <span className="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={minor.mother_name || ''}
+                          onChange={(e) => {
+                            const newMinors = [...formData.minors]
+                            newMinors[index].mother_name = e.target.value
+                            setFormData(prev => ({ ...prev, minors: newMinors }))
+                          }}
+                          placeholder="Enter mother's name"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 px-4 bg-gray-50 dark:bg-dark-700 rounded-lg border-2 border-dashed border-gray-300 dark:border-dark-600">
+                <FiUsers className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  No minors added yet
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500">
+                  Click "Add Minor" above to add a child or ward to this customer
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Media Upload Section */}
           <div className="space-y-4 pt-4">
             <div>
@@ -1345,6 +1709,63 @@ function ViewCustomerModal({ customer, onClose }) {
               </div>
             </div>
           </div>
+
+          {/* Minors Section */}
+          {customer.minors && customer.minors.length > 0 && (
+            <div className="pt-6 border-t border-gray-200 dark:border-dark-700">
+              <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-4">
+                Minors ({customer.minors.length})
+              </h4>
+              <div className="space-y-4">
+                {customer.minors.map((minor, index) => (
+                  <div key={minor.investor_id || index} className="border border-gray-200 dark:border-dark-600 rounded-lg p-4 bg-gray-50 dark:bg-dark-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Name:</span>
+                        <span className="ml-2 text-sm text-gray-900 dark:text-white">{minor.name || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Investor ID:</span>
+                        <span className="ml-2 text-sm text-gray-900 dark:text-white">{minor.investor_id || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Date of Birth:</span>
+                        <span className="ml-2 text-sm text-gray-900 dark:text-white">{minor.date_of_birth || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dark-300">PAN:</span>
+                        <span className="ml-2 text-sm text-gray-900 dark:text-white">{minor.pan || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Relationship:</span>
+                        <span className="ml-2 text-sm text-gray-900 dark:text-white capitalize">
+                          {minor.relationship_type === 'child' ? 'Parent-Child' : minor.relationship_type === 'ward' ? 'Guardian-Ward' : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Address:</span>
+                        <span className="ml-2 text-sm text-gray-900 dark:text-white">
+                          {minor.use_same_address ? 'Same as parent' : `${minor.address1 || ''} ${minor.city || ''} ${minor.state || ''}`.trim() || 'N/A'}
+                        </span>
+                      </div>
+                      {minor.father_name && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Father Name:</span>
+                          <span className="ml-2 text-sm text-gray-900 dark:text-white">{minor.father_name}</span>
+                        </div>
+                      )}
+                      {minor.mother_name && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 dark:text-dark-300">Mother Name:</span>
+                          <span className="ml-2 text-sm text-gray-900 dark:text-white">{minor.mother_name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           
           <div className="flex justify-end pt-4">
             <button

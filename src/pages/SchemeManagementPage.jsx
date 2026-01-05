@@ -24,6 +24,9 @@ export default function SchemeManagementPage() {
   const [fdRateSlabs, setFdRateSlabs] = useState([])
   const [ncdBondIssuers, setNcdBondIssuers] = useState([])
   const [ncdBondSchemes, setNcdBondSchemes] = useState([])
+  const [insuranceIssuers, setInsuranceIssuers] = useState([])
+  const [insuranceProducts, setInsuranceProducts] = useState([])
+  const [insuranceRiders, setInsuranceRiders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedAmc, setSelectedAmc] = useState(null)
@@ -31,6 +34,8 @@ export default function SchemeManagementPage() {
   const [selectedFdScheme, setSelectedFdScheme] = useState(null)
   const [selectedNcdBondIssuer, setSelectedNcdBondIssuer] = useState(null)
   const [selectedNcdBondScheme, setSelectedNcdBondScheme] = useState(null)
+  const [selectedInsuranceIssuer, setSelectedInsuranceIssuer] = useState(null)
+  const [selectedInsuranceProduct, setSelectedInsuranceProduct] = useState(null)
   const [showAMCForm, setShowAMCForm] = useState(false)
   const [showSchemeForm, setShowSchemeForm] = useState(false)
   const [showFDIssuerForm, setShowFDIssuerForm] = useState(false)
@@ -38,11 +43,17 @@ export default function SchemeManagementPage() {
   const [showFDSlabForm, setShowFDSlabForm] = useState(false)
   const [showNcdBondIssuerForm, setShowNcdBondIssuerForm] = useState(false)
   const [showNcdBondSchemeForm, setShowNcdBondSchemeForm] = useState(false)
+  const [showInsuranceIssuerForm, setShowInsuranceIssuerForm] = useState(false)
+  const [showInsuranceProductForm, setShowInsuranceProductForm] = useState(false)
+  const [showInsuranceRiderForm, setShowInsuranceRiderForm] = useState(false)
   const [editingFDIssuer, setEditingFDIssuer] = useState(null)
   const [editingFDScheme, setEditingFDScheme] = useState(null)
   const [editingFDSlab, setEditingFDSlab] = useState(null)
   const [editingNcdBondIssuer, setEditingNcdBondIssuer] = useState(null)
   const [editingNcdBondScheme, setEditingNcdBondScheme] = useState(null)
+  const [editingInsuranceIssuer, setEditingInsuranceIssuer] = useState(null)
+  const [editingInsuranceProduct, setEditingInsuranceProduct] = useState(null)
+  const [editingInsuranceRider, setEditingInsuranceRider] = useState(null)
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -193,6 +204,8 @@ export default function SchemeManagementPage() {
       loadFDIssuers()
     } else if (activeTab === 'NCDBond') {
       loadNcdBondIssuers()
+    } else if (activeTab === 'Insurance') {
+      loadInsuranceIssuers()
     }
   }, [token, isAdmin, activeTab])
 
@@ -1196,8 +1209,86 @@ useEffect(() => {
 
   // Note: NCDs/Bonds don't use rate slabs - they have fixed coupon rates
 
+  // Insurance loading functions
+  const loadInsuranceIssuers = async () => {
+    if (!token) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.listInsuranceIssuers(token)
+      setInsuranceIssuers(Array.isArray(result) ? result : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load insurance issuers')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadInsuranceProducts = async (issuer_key) => {
+    if (!token || !issuer_key) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.getInsuranceProducts(token, issuer_key)
+      setInsuranceProducts(Array.isArray(result) ? result : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load insurance products')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadInsuranceRiders = async (issuer_key, product_id) => {
+    if (!token || !issuer_key || !product_id) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.getInsuranceRiders(token, issuer_key, product_id)
+      setInsuranceRiders(Array.isArray(result) ? result : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load riders')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedInsuranceIssuer) {
+      setInsuranceProducts([])
+      setSelectedInsuranceProduct(null)
+      setInsuranceRiders([])
+      return
+    }
+    
+    const issuerKey = selectedInsuranceIssuer._key || selectedInsuranceIssuer.issuer_key
+    if (!issuerKey) return
+    
+    loadInsuranceProducts(issuerKey)
+  }, [selectedInsuranceIssuer, token])
+
+  useEffect(() => {
+    if (!selectedInsuranceProduct || !selectedInsuranceIssuer) {
+      setInsuranceRiders([])
+      return
+    }
+    
+    const issuerKey = selectedInsuranceIssuer._key || selectedInsuranceIssuer.issuer_key
+    const productId = selectedInsuranceProduct.product_id
+    if (!issuerKey || !productId) return
+    
+    loadInsuranceRiders(issuerKey, productId)
+  }, [selectedInsuranceProduct, selectedInsuranceIssuer, token])
+
   const filteredNcdBondIssuers = ncdBondIssuers
   const filteredNcdBondSchemes = ncdBondSchemes
+  const filteredInsuranceIssuers = insuranceIssuers
+  const filteredInsuranceProducts = insuranceProducts
 
   if (!isAdmin) {
     return (

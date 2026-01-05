@@ -13,12 +13,14 @@ import {
   FiMail,
   FiMapPin,
   FiShield,
-  FiSearch
+  FiSearch,
+  FiChevronDown
 } from 'react-icons/fi'
 
 export default function UserManagementPage() {
   const { token, user } = useAuth()
   const [users, setUsers] = useState([])
+  const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -39,6 +41,7 @@ export default function UserManagementPage() {
   useEffect(() => {
     if (!isAdmin) return
     loadUsers()
+    loadBranches()
   }, [token, isAdmin])
 
   const loadUsers = async () => {
@@ -54,6 +57,18 @@ export default function UserManagementPage() {
       setError(err.message || 'Failed to load users')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadBranches = async () => {
+    if (!token) return
+    
+    try {
+      const branchesData = await api.listBranches(token)
+      setBranches(Array.isArray(branchesData) ? branchesData : [])
+    } catch (err) {
+      console.error('Failed to load branches:', err)
+      // Don't show error to user, just log it
     }
   }
 
@@ -384,17 +399,45 @@ export default function UserManagementPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Branch</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
                     <FiMapPin className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                   </div>
-                  <input
-                    type="text"
+                  <select
                     value={formData.branch}
-                    onChange={e => setFormData(prev => ({ ...prev, branch: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                    onChange={e => {
+                      setFormData(prev => ({ ...prev, branch: e.target.value }))
+                      if (fieldErrors.branch) {
+                        setFieldErrors(prev => {
+                          const newErrors = { ...prev }
+                          delete newErrors.branch
+                          return newErrors
+                        })
+                      }
+                    }}
+                    className={`w-full pl-10 pr-10 py-3 border ${
+                      fieldErrors.branch 
+                        ? 'border-red-500 dark:border-red-500' 
+                        : 'border-gray-300 dark:border-gray-600'
+                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 appearance-none cursor-pointer`}
                     required
-                  />
+                  >
+                    <option value="">Select a branch</option>
+                    {branches.map((branch) => (
+                      <option key={branch.branch_code || branch.branch_name} value={branch.branch_name}>
+                        {branch.branch_name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <FiChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                  </div>
                 </div>
+                {fieldErrors.branch && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    {fieldErrors.branch}
+                  </p>
+                )}
               </div>
               
               <div>

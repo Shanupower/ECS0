@@ -309,5 +309,58 @@ export const api={
     const formData = new FormData()
     formData.append('excelFile', file)
     return reqWithFiles('/api/ncd-bonds-schemes/import/excel',{method:'POST',token:t,formData})
+  },
+  
+  // Insurance Schemes endpoints (nested structure: issuer -> products -> riders)
+  listInsuranceIssuers:(t)=>req('/api/insurance-schemes/issuers',{token:t}),
+  getInsuranceIssuer:(t,issuer_key)=>req(`/api/insurance-schemes/issuer/${issuer_key}`,{token:t}),
+  getInsuranceProducts:(t,issuer_key,active_only='true')=>req(`/api/insurance-schemes/issuer/${issuer_key}/products`,{token:t,query:{active_only}}),
+  getInsuranceProduct:(t,issuer_key,product_id)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}`,{token:t}),
+  getInsuranceRiders:(t,issuer_key,product_id)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}/riders`,{token:t}),
+  createInsuranceIssuer:(t,data)=>req('/api/insurance-schemes/issuer',{method:'POST',token:t,json:data}),
+  updateInsuranceIssuer:(t,issuer_key,data)=>req(`/api/insurance-schemes/issuer/${issuer_key}`,{method:'PUT',token:t,json:data}),
+  deleteInsuranceIssuer:(t,issuer_key)=>req(`/api/insurance-schemes/issuer/${issuer_key}`,{method:'DELETE',token:t}),
+  createInsuranceProduct:(t,issuer_key,data)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product`,{method:'POST',token:t,json:data}),
+  updateInsuranceProduct:(t,issuer_key,product_id,data)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}`,{method:'PUT',token:t,json:data}),
+  deleteInsuranceProduct:(t,issuer_key,product_id)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}`,{method:'DELETE',token:t}),
+  createInsuranceRider:(t,issuer_key,product_id,data)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}/rider`,{method:'POST',token:t,json:data}),
+  updateInsuranceRider:(t,issuer_key,product_id,rider_id,data)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}/rider/${rider_id}`,{method:'PUT',token:t,json:data}),
+  deleteInsuranceRider:(t,issuer_key,product_id,rider_id)=>req(`/api/insurance-schemes/issuer/${issuer_key}/product/${product_id}/rider/${rider_id}`,{method:'DELETE',token:t}),
+  exportInsuranceSchemesExcel:(t,issuer_key)=>{
+    const qs = issuer_key ? `?issuer_key=${encodeURIComponent(issuer_key)}` : ''
+    return fetch(BASE+`/api/insurance-schemes/export/excel${qs}`,{
+      method:'GET',
+      headers: authHeaders(t)
+    }).then(async res => {
+      if (!res.ok) {
+        if (res.status === 401 && tokenExpirationCallback) {
+          tokenExpirationCallback()
+        }
+        let errorMessage = 'Export failed'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorData.detail || errorMessage
+        } catch (e) {
+          errorMessage = res.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const contentDisposition = res.headers.get('content-disposition')
+      const filename = contentDisposition ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') : 'insurance-schemes-export.xlsx'
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    })
+  },
+  importInsuranceSchemesExcel:(t,file)=>{
+    const formData = new FormData()
+    formData.append('excelFile', file)
+    return reqWithFiles('/api/insurance-schemes/import/excel',{method:'POST',token:t,formData})
   }
 }
