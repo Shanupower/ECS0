@@ -1,6 +1,6 @@
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
-// Token expiration callback - will be set by AuthContext
+// Token expiration callback
 let tokenExpirationCallback = null
 
 export function setTokenExpirationCallback(callback) {
@@ -8,22 +8,6 @@ export function setTokenExpirationCallback(callback) {
 }
 
 function authHeaders(token){ return token ? { Authorization: `Bearer ${token}` } : {} }
-
-function checkTokenExpiration(res, data) {
-  // Check if it's a 401 error and token expiration
-  if (res.status === 401) {
-    const isTokenExpired = 
-      (typeof data === 'object' && data !== null && 
-       (data.detail?.toLowerCase().includes('expired') || 
-        data.detail?.toLowerCase().includes('token has expired') ||
-        data.error?.toLowerCase().includes('unauthorized'))) ||
-      (typeof data === 'string' && data.toLowerCase().includes('expired'))
-    
-    if (isTokenExpired && tokenExpirationCallback) {
-      tokenExpirationCallback()
-    }
-  }
-}
 
 async function req(path,{method='GET',token,json,query}={}){
   const qs = query ? '?' + new URLSearchParams(query).toString() : ''
@@ -38,8 +22,10 @@ async function req(path,{method='GET',token,json,query}={}){
   const ct=res.headers.get('content-type')||''
   const data= ct.includes('application/json')?await res.json():await res.text()
   if(!res.ok) {
-    // Check for token expiration before throwing error
-    checkTokenExpiration(res, data)
+    // Check for 401 (unauthorized) - token expired or invalid
+    if (res.status === 401 && tokenExpirationCallback) {
+      tokenExpirationCallback()
+    }
     const error = new Error(data.detail || data.error || data.message || res.statusText)
     // Preserve full error object for field-specific error handling
     if (typeof data === 'object' && data !== null) {
@@ -65,8 +51,10 @@ async function reqWithFiles(path,{method='POST',token,formData,query}={}){
   const ct=res.headers.get('content-type')||''
   const data= ct.includes('application/json')?await res.json():await res.text()
   if(!res.ok) {
-    // Check for token expiration before throwing error
-    checkTokenExpiration(res, data)
+    // Check for 401 (unauthorized) - token expired or invalid
+    if (res.status === 401 && tokenExpirationCallback) {
+      tokenExpirationCallback()
+    }
     throw new Error(data.error||data.message||res.statusText)
   }
   return data
@@ -220,18 +208,18 @@ export const api={
       headers: authHeaders(t)
     }).then(async res => {
       if (!res.ok) {
-        // Check for token expiration
-        if (res.status === 401) {
-          const text = await res.text()
-          let data
-          try {
-            data = JSON.parse(text)
-          } catch {
-            data = text
-          }
-          checkTokenExpiration(res, data)
+        // Check for 401 (unauthorized) - token expired or invalid
+        if (res.status === 401 && tokenExpirationCallback) {
+          tokenExpirationCallback()
         }
-        throw new Error('Export failed')
+        let errorMessage = 'Export failed'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorData.detail || errorData.message || errorMessage
+        } catch (e) {
+          errorMessage = res.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
       return res.blob()
     })
@@ -264,18 +252,17 @@ export const api={
       headers: authHeaders(t)
     }).then(async res => {
       if (!res.ok) {
-        // Check for token expiration
-        if (res.status === 401) {
-          const text = await res.text()
-          let data
-          try {
-            data = JSON.parse(text)
-          } catch {
-            data = text
-          }
-          checkTokenExpiration(res, data)
+        if (res.status === 401 && tokenExpirationCallback) {
+          tokenExpirationCallback()
         }
-        throw new Error('Export failed')
+        let errorMessage = 'Export failed'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorData.detail || errorData.message || errorMessage
+        } catch (e) {
+          errorMessage = res.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
       return res.blob()
     })
@@ -284,5 +271,43 @@ export const api={
     const formData = new FormData()
     formData.append('excelFile', file)
     return reqWithFiles('/api/fd-schemes/import/excel',{method:'POST',token:t,formData})
+  },
+  
+  // NCD/Bond Schemes endpoints (nested structure)
+  listNCDBondIssuers:(t)=>req('/api/ncd-bonds-schemes/issuers',{token:t}),
+  getNCDBondIssuer:(t,issuer_key)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}`,{token:t}),
+  getNCDBondSchemesByIssuer:(t,issuer_key)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/schemes`,{token:t}),
+  getNCDBondScheme:(t,issuer_key,scheme_id)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{token:t}),
+  createNCDBondIssuer:(t,data)=>req('/api/ncd-bonds-schemes/issuer',{method:'POST',token:t,json:data}),
+  updateNCDBondIssuer:(t,issuer_key,data)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}`,{method:'PUT',token:t,json:data}),
+  deleteNCDBondIssuer:(t,issuer_key)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}`,{method:'DELETE',token:t}),
+  createNCDBondScheme:(t,issuer_key,schemeData)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme`,{method:'POST',token:t,json:schemeData}),
+  updateNCDBondScheme:(t,issuer_key,scheme_id,data)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'PUT',token:t,json:data}),
+  deleteNCDBondScheme:(t,issuer_key,scheme_id)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'DELETE',token:t}),
+  exportNCDBondSchemesExcel:(t,issuer_key)=>{
+    const qs = issuer_key ? `?issuer_key=${encodeURIComponent(issuer_key)}` : ''
+    return fetch(`${BASE}/api/ncd-bonds-schemes/export/excel${qs}`, {
+      headers: authHeaders(t)
+    }).then(async res => {
+      if (!res.ok) {
+        if (res.status === 401 && tokenExpirationCallback) {
+          tokenExpirationCallback()
+        }
+        let errorMessage = 'Export failed'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorData.detail || errorData.message || errorMessage
+        } catch (e) {
+          errorMessage = res.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+      return res.blob()
+    })
+  },
+  importNCDBondSchemesExcel:(t,file)=>{
+    const formData = new FormData()
+    formData.append('excelFile', file)
+    return reqWithFiles('/api/ncd-bonds-schemes/import/excel',{method:'POST',token:t,formData})
   }
 }

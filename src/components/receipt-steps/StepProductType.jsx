@@ -30,7 +30,7 @@ function StepProductType({ onBack, onNext }) {
       label: 'Bonds', 
       icon: '📊',
       description: 'Government and corporate bonds for stable returns',
-      enabled: false
+      enabled: true
     }
   ]
 

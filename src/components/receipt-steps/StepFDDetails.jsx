@@ -282,40 +282,6 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Enter deposit details and review calculation</p>
 
       <div className="space-y-6">
-        {/* Scheme Profitability (CC/SI) */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Scheme Profitability</h4>
-          <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
-            <div>
-              <span className="font-medium text-gray-700 dark:text-gray-300">CC %</span>
-              <span className="ml-2 text-gray-600 dark:text-gray-400">
-                {scheme?.cc !== undefined ? `${Number(scheme.cc).toFixed(2)} %` : '0.00 %'}
-              </span>
-            </div>
-            <div>
-              <span className="font-medium text-gray-700 dark:text-gray-300">SI % (Admin Only)</span>
-              <span className="ml-2 text-gray-600 dark:text-gray-400">
-                {scheme?.si !== undefined ? `${Number(scheme.si).toFixed(2)} %` : '0.00 %'}
-              </span>
-            </div>
-            {principalAmount && (
-              <>
-                <div>
-                  <span className="font-medium text-gray-700 dark:text-gray-300">Estimated CC</span>
-                  <span className="ml-2 text-gray-600 dark:text-gray-400">
-                    ₹{(Number(principalAmount || 0) * (Number(scheme?.cc || 0) / 100)).toFixed(2)}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-700 dark:text-gray-300">Estimated SI</span>
-                  <span className="ml-2 text-gray-600 dark:text-gray-400">
-                    ₹{(Number(principalAmount || 0) * (Number(scheme?.si || 0) / 100)).toFixed(2)}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
         {/* Booking Date */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

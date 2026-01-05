@@ -22,19 +22,27 @@ export default function SchemeManagementPage() {
   const [fdIssuers, setFdIssuers] = useState([])
   const [fdSchemes, setFdSchemes] = useState([])
   const [fdRateSlabs, setFdRateSlabs] = useState([])
+  const [ncdBondIssuers, setNcdBondIssuers] = useState([])
+  const [ncdBondSchemes, setNcdBondSchemes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedAmc, setSelectedAmc] = useState(null)
   const [selectedFdIssuer, setSelectedFdIssuer] = useState(null)
   const [selectedFdScheme, setSelectedFdScheme] = useState(null)
+  const [selectedNcdBondIssuer, setSelectedNcdBondIssuer] = useState(null)
+  const [selectedNcdBondScheme, setSelectedNcdBondScheme] = useState(null)
   const [showAMCForm, setShowAMCForm] = useState(false)
   const [showSchemeForm, setShowSchemeForm] = useState(false)
   const [showFDIssuerForm, setShowFDIssuerForm] = useState(false)
   const [showFDSchemeForm, setShowFDSchemeForm] = useState(false)
   const [showFDSlabForm, setShowFDSlabForm] = useState(false)
+  const [showNcdBondIssuerForm, setShowNcdBondIssuerForm] = useState(false)
+  const [showNcdBondSchemeForm, setShowNcdBondSchemeForm] = useState(false)
   const [editingFDIssuer, setEditingFDIssuer] = useState(null)
   const [editingFDScheme, setEditingFDScheme] = useState(null)
   const [editingFDSlab, setEditingFDSlab] = useState(null)
+  const [editingNcdBondIssuer, setEditingNcdBondIssuer] = useState(null)
+  const [editingNcdBondScheme, setEditingNcdBondScheme] = useState(null)
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -103,6 +111,42 @@ export default function SchemeManagementPage() {
     schemes: []
   })
   
+  // NCD/Bond Form Data States
+  const [ncdBondIssuerFormData, setNcdBondIssuerFormData] = useState({
+    legal_name: '',
+    short_name: '',
+    type: 'NCD',
+    credit_rating_agency: '',
+    credit_rating: '',
+    is_active: true
+  })
+  
+  const [ncdBondSchemeFormData, setNcdBondSchemeFormData] = useState({
+    scheme_id: '',
+    scheme_name: '',
+    isin: '',
+    description_short: '',
+    coupon_rate: 0,
+    face_value: 1000,
+    issue_date: '',
+    maturity_date: '',
+    is_variable_rate: false,
+    listing_status: 'Listed',
+    credit_rating: '',
+    min_investment: 10000,
+    interest_payment_frequency: 'Quarterly',
+    is_secured: true,
+    early_redemption_allowed: false,
+    early_redemption_terms: '',
+    put_option_available: false,
+    call_option_available: false,
+    currency: 'INR',
+    issue_size: '',
+    is_active: true,
+    cc: 0,
+    si: 0
+  })
+  
   const [fdSchemeFormData, setFdSchemeFormData] = useState({
     scheme_id: '',
     scheme_name: '',
@@ -147,6 +191,8 @@ export default function SchemeManagementPage() {
       loadAMCs()
     } else if (activeTab === 'FD') {
       loadFDIssuers()
+    } else if (activeTab === 'NCDBond') {
+      loadNcdBondIssuers()
     }
   }, [token, isAdmin, activeTab])
 
@@ -173,6 +219,21 @@ useEffect(() => {
 }, [selectedFdIssuer, token])
 
 useEffect(() => {
+  if (!selectedNcdBondIssuer) {
+    setNcdBondSchemes([])
+    setSelectedNcdBondScheme(null)
+    return
+  }
+  
+  const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
+  if (!issuerKey) return
+  
+  // Reset scheme selection whenever issuer context changes
+  setSelectedNcdBondScheme(null)
+  loadNcdBondSchemes(issuerKey)
+}, [selectedNcdBondIssuer, token])
+
+useEffect(() => {
   if (!selectedFdScheme) {
     setFdRateSlabs([])
     return
@@ -197,9 +258,16 @@ useEffect(() => {
 
   // Export schemes to Excel (MF)
   const handleExportSchemes = async (amcCode = null) => {
+    if (!token) {
+      alert('Please login to export schemes')
+      return
+    }
     setExporting(true)
     try {
       const blob = await api.exportSchemesExcel(token, amcCode)
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty file received from server')
+      }
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -210,7 +278,8 @@ useEffect(() => {
       document.body.removeChild(a)
       alert('Schemes exported successfully!')
     } catch (err) {
-      alert('Failed to export schemes: ' + err.message)
+      console.error('Export error:', err)
+      alert('Failed to export schemes: ' + (err.message || 'Unknown error'))
     } finally {
       setExporting(false)
     }
@@ -218,9 +287,16 @@ useEffect(() => {
 
   // Export FD schemes to Excel
   const handleExportFDSchemes = async (issuerKey = null) => {
+    if (!token) {
+      alert('Please login to export FD schemes')
+      return
+    }
     setExporting(true)
     try {
       const blob = await api.exportFDSchemesExcel(token, issuerKey)
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty file received from server')
+      }
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -231,7 +307,37 @@ useEffect(() => {
       document.body.removeChild(a)
       alert('FD Schemes exported successfully!')
     } catch (err) {
-      alert('Failed to export FD schemes: ' + err.message)
+      console.error('Export error:', err)
+      alert('Failed to export FD schemes: ' + (err.message || 'Unknown error'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Export NCD/Bond schemes to Excel
+  const handleExportNcdBondSchemes = async (issuerKey = null) => {
+    if (!token) {
+      alert('Please login to export NCD/Bond schemes')
+      return
+    }
+    setExporting(true)
+    try {
+      const blob = await api.exportNCDBondSchemesExcel(token, issuerKey)
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty file received from server')
+      }
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ncd-bond-schemes-export-${issuerKey || 'all'}-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      alert('NCD/Bond Schemes exported successfully!')
+    } catch (err) {
+      console.error('Export error:', err)
+      alert('Failed to export NCD/Bond schemes: ' + (err.message || 'Unknown error'))
     } finally {
       setExporting(false)
     }
@@ -624,6 +730,17 @@ useEffect(() => {
     }
   }
   
+  const handleDeleteNcdBondIssuer = async (issuer_key) => {
+    if (!confirm('Are you sure you want to delete this NCD/Bond issuer and all its schemes?')) return
+    try {
+      await api.deleteNCDBondIssuer(token, issuer_key)
+      await loadNcdBondIssuers()
+      setSelectedNcdBondIssuer(null)
+    } catch (err) {
+      alert('Failed to delete NCD/Bond issuer: ' + err.message)
+    }
+  }
+  
   const handleCreateFDScheme = async (e) => {
     e.preventDefault()
     if (!selectedFdIssuer) {
@@ -822,6 +939,148 @@ useEffect(() => {
       is_active: slab.is_active !== undefined ? slab.is_active : true
     })
   }
+  
+  // NCD/Bond Handler Functions
+  const openNcdBondIssuerEdit = (issuer) => {
+    setEditingNcdBondIssuer(issuer)
+    setNcdBondIssuerFormData({
+      legal_name: issuer.legal_name || '',
+      short_name: issuer.short_name || '',
+      type: issuer.type || 'NCD',
+      credit_rating_agency: issuer.credit_rating_agency || '',
+      credit_rating: issuer.credit_rating || '',
+      is_active: issuer.is_active !== undefined ? issuer.is_active : true
+    })
+  }
+  
+  const openNcdBondSchemeEdit = (scheme) => {
+    setEditingNcdBondScheme(scheme)
+    setNcdBondSchemeFormData({
+      scheme_id: scheme.scheme_id || '',
+      scheme_name: scheme.scheme_name || '',
+      isin: scheme.isin || '',
+      description_short: scheme.description_short || scheme.description || '',
+      coupon_rate: scheme.coupon_rate || 0,
+      face_value: scheme.face_value || 1000,
+      issue_date: scheme.issue_date || '',
+      maturity_date: scheme.maturity_date || '',
+      is_variable_rate: scheme.is_variable_rate || false,
+      listing_status: scheme.listing_status || 'Listed',
+      credit_rating: scheme.credit_rating || '',
+      min_investment: scheme.min_investment || 10000,
+      interest_payment_frequency: scheme.interest_payment_frequency || 'Quarterly',
+      is_secured: scheme.is_secured !== undefined ? scheme.is_secured : true,
+      early_redemption_allowed: scheme.early_redemption_allowed || false,
+      early_redemption_terms: scheme.early_redemption_terms || '',
+      put_option_available: scheme.put_option_available || false,
+      call_option_available: scheme.call_option_available || false,
+      currency: scheme.currency || 'INR',
+      issue_size: scheme.issue_size || '',
+      is_active: scheme.is_active !== undefined ? scheme.is_active : true,
+      cc: scheme.cc || 0,
+      si: scheme.si || 0
+    })
+  }
+  
+  const resetNcdBondIssuerForm = () => {
+    setNcdBondIssuerFormData({
+      legal_name: '',
+      short_name: '',
+      type: 'NCD',
+      credit_rating_agency: '',
+      credit_rating: '',
+      is_active: true
+    })
+  }
+  
+  const resetNcdBondSchemeForm = () => {
+    setNcdBondSchemeFormData({
+      scheme_id: '',
+      scheme_name: '',
+      isin: '',
+      description_short: '',
+      coupon_rate: 0,
+      face_value: 1000,
+      issue_date: '',
+      maturity_date: '',
+      is_variable_rate: false,
+      listing_status: 'Listed',
+      credit_rating: '',
+      min_investment: 10000,
+      interest_payment_frequency: 'Quarterly',
+      is_secured: true,
+      early_redemption_allowed: false,
+      early_redemption_terms: '',
+      put_option_available: false,
+      call_option_available: false,
+      currency: 'INR',
+      issue_size: '',
+      is_active: true,
+      cc: 0,
+      si: 0
+    })
+  }
+  
+  const handleCreateNcdBondIssuer = async (e) => {
+    e.preventDefault()
+    try {
+      const trimmedData = trimFormData(ncdBondIssuerFormData)
+      await api.createNCDBondIssuer(token, trimmedData)
+      await loadNcdBondIssuers()
+      setShowNcdBondIssuerForm(false)
+      resetNcdBondIssuerForm()
+    } catch (err) {
+      alert('Failed to create NCD/Bond issuer: ' + err.message)
+    }
+  }
+  
+  const handleUpdateNcdBondIssuer = async (e) => {
+    e.preventDefault()
+    try {
+      const trimmedData = trimFormData(ncdBondIssuerFormData)
+      await api.updateNCDBondIssuer(token, editingNcdBondIssuer._key, trimmedData)
+      await loadNcdBondIssuers()
+      setEditingNcdBondIssuer(null)
+      setShowNcdBondIssuerForm(false)
+      resetNcdBondIssuerForm()
+    } catch (err) {
+      alert('Failed to update NCD/Bond issuer: ' + err.message)
+    }
+  }
+  
+  const handleCreateNcdBondScheme = async (e) => {
+    e.preventDefault()
+    if (!selectedNcdBondIssuer) {
+      alert('Please select an NCD/Bond issuer first')
+      return
+    }
+    try {
+      const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
+      const trimmedData = trimFormData(ncdBondSchemeFormData)
+      await api.createNCDBondScheme(token, issuerKey, trimmedData)
+      await loadNcdBondSchemes(issuerKey)
+      setShowNcdBondSchemeForm(false)
+      resetNcdBondSchemeForm()
+    } catch (err) {
+      alert('Failed to create NCD/Bond scheme: ' + err.message)
+    }
+  }
+  
+  const handleUpdateNcdBondScheme = async (e) => {
+    e.preventDefault()
+    if (!selectedNcdBondIssuer || !editingNcdBondScheme) return
+    try {
+      const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
+      const trimmedData = trimFormData(ncdBondSchemeFormData)
+      await api.updateNCDBondScheme(token, issuerKey, editingNcdBondScheme.scheme_id, trimmedData)
+      await loadNcdBondSchemes(issuerKey)
+      setEditingNcdBondScheme(null)
+      setShowNcdBondSchemeForm(false)
+      resetNcdBondSchemeForm()
+    } catch (err) {
+      alert('Failed to update NCD/Bond scheme: ' + err.message)
+    }
+  }
 
   // FD Management Functions
   const loadFDIssuers = async () => {
@@ -902,6 +1161,44 @@ useEffect(() => {
   const filteredFdIssuers = fdIssuers // Can add search later
   const filteredFdSchemes = fdSchemes // Can add search later
 
+  // NCD/Bond Management Functions
+  const loadNcdBondIssuers = async () => {
+    if (!token) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.listNCDBondIssuers(token)
+      setNcdBondIssuers(Array.isArray(result) ? result : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load NCD/Bond issuers')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadNcdBondSchemes = async (issuer_key) => {
+    if (!token || !issuer_key) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.getNCDBondSchemesByIssuer(token, issuer_key)
+      setNcdBondSchemes(Array.isArray(result) ? result : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load NCD/Bond schemes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Note: NCDs/Bonds don't use rate slabs - they have fixed coupon rates
+
+  const filteredNcdBondIssuers = ncdBondIssuers
+  const filteredNcdBondSchemes = ncdBondSchemes
+
   if (!isAdmin) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -910,6 +1207,515 @@ useEffect(() => {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
           <p className="text-gray-600 dark:text-gray-400">This page is only available for administrators.</p>
         </div>
+      </div>
+    )
+  }
+
+  // NCD/Bond Detail View (Schemes Table)
+  if (activeTab === 'NCDBond' && selectedNcdBondIssuer) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <button
+            onClick={() => setSelectedNcdBondIssuer(null)}
+            className="inline-flex items-center mb-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <FiArrowLeft className="w-4 h-4 mr-2" />
+            Back to NCD/Bond Issuers
+          </button>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {selectedNcdBondIssuer.short_name}
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Legal Name: {selectedNcdBondIssuer.legal_name} | Type: {selectedNcdBondIssuer.type || 'NCD/Bond'}
+              </p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
+                  handleExportNcdBondSchemes(issuerKey)
+                }}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export'}
+              </button>
+              <button
+                onClick={() => {
+                  resetNcdBondSchemeForm()
+                  setEditingNcdBondScheme(null)
+                  setShowNcdBondSchemeForm(true)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Scheme
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* NCD/Bond Schemes Table */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Scheme Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    ISIN
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Coupon Rate
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Maturity Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    </td>
+                  </tr>
+                ) : filteredNcdBondSchemes.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No NCD/Bond schemes available.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredNcdBondSchemes.map((scheme) => (
+                    <tr key={scheme.scheme_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{scheme.scheme_name}</div>
+                        {scheme.description && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{scheme.description}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {scheme.isin || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {scheme.coupon_rate !== undefined ? `${scheme.coupon_rate}%` : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {scheme.maturity_date ? new Date(scheme.maturity_date).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          scheme.is_active !== false
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                        }`}>
+                          {scheme.is_active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            try {
+                              openNcdBondSchemeEdit(scheme)
+                              setShowNcdBondSchemeForm(true)
+                            } catch (error) {
+                              console.error('Error opening scheme edit:', error)
+                              alert('Error opening edit form: ' + error.message)
+                            }
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          <FiEdit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            if (confirm('Are you sure you want to delete this scheme?')) {
+                              try {
+                                const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
+                                await api.deleteNCDBondScheme(token, issuerKey, scheme.scheme_id)
+                                await loadNcdBondSchemes(issuerKey)
+                              } catch (err) {
+                                setError(err.message || 'Failed to delete scheme')
+                              }
+                            }
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* NCD/Bond Scheme Form Modal - Inside Schemes View */}
+        {showNcdBondSchemeForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  {editingNcdBondScheme ? 'Edit NCD/Bond Scheme' : 'Add New NCD/Bond Scheme'}
+                </h2>
+                <form onSubmit={editingNcdBondScheme ? handleUpdateNcdBondScheme : handleCreateNcdBondScheme} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Scheme ID <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={ncdBondSchemeFormData.scheme_id}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_id: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., ADANI_NCD_SERIES_A"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Scheme Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={ncdBondSchemeFormData.scheme_name}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., Adani Enterprises NCD Series A"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      ISIN <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={12}
+                      value={ncdBondSchemeFormData.isin}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, isin: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., INE01XX07026"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Short Description
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondSchemeFormData.description_short}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, description_short: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Brief description for display"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Coupon Rate (%) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        value={ncdBondSchemeFormData.coupon_rate}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, coupon_rate: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 8.50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Face Value (₹) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        value={ncdBondSchemeFormData.face_value}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, face_value: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 1000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Issue Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={ncdBondSchemeFormData.issue_date}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Maturity Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={ncdBondSchemeFormData.maturity_date}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Interest Payment Frequency
+                      </label>
+                      <select
+                        value={ncdBondSchemeFormData.interest_payment_frequency}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, interest_payment_frequency: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="Monthly">Monthly</option>
+                        <option value="Quarterly">Quarterly</option>
+                        <option value="Half-Yearly">Half-Yearly</option>
+                        <option value="Annual">Annual</option>
+                        <option value="Cumulative">Cumulative</option>
+                        <option value="At Maturity">At Maturity</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Credit Rating
+                      </label>
+                      <input
+                        type="text"
+                        value={ncdBondSchemeFormData.credit_rating}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, credit_rating: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., AAA, AA+"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Listing Status
+                      </label>
+                      <select
+                        value={ncdBondSchemeFormData.listing_status}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, listing_status: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="Listed">Listed</option>
+                        <option value="Unlisted">Unlisted</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Min Investment (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={ncdBondSchemeFormData.min_investment}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, min_investment: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 10000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Currency
+                      </label>
+                      <input
+                        type="text"
+                        value={ncdBondSchemeFormData.currency}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, currency: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., INR"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Issue Size
+                      </label>
+                      <input
+                        type="text"
+                        value={ncdBondSchemeFormData.issue_size}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_size: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., ₹500 Crores"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CC %
+                      </label>
+                      <input
+                        type="number"
+                        step="0.00001"
+                        value={ncdBondSchemeFormData.cc}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, cc: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        SI %
+                      </label>
+                      <input
+                        type="number"
+                        step="0.00001"
+                        value={ncdBondSchemeFormData.si}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, si: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 0.2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={ncdBondSchemeFormData.is_variable_rate}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, is_variable_rate: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Variable Rate
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={ncdBondSchemeFormData.is_secured}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, is_secured: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Secured
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={ncdBondSchemeFormData.early_redemption_allowed}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, early_redemption_allowed: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Early Redemption Allowed
+                      </label>
+                    </div>
+                    {ncdBondSchemeFormData.early_redemption_allowed && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Early Redemption Terms
+                        </label>
+                        <input
+                          type="text"
+                          value={ncdBondSchemeFormData.early_redemption_terms}
+                          onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, early_redemption_terms: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder="e.g., After 12 months with penalty"
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={ncdBondSchemeFormData.put_option_available}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, put_option_available: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Put Option Available
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={ncdBondSchemeFormData.call_option_available}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, call_option_available: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Call Option Available
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={ncdBondSchemeFormData.is_active}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, is_active: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Is Active
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNcdBondSchemeForm(false)
+                        setEditingNcdBondScheme(null)
+                        resetNcdBondSchemeForm()
+                      }}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editingNcdBondScheme ? 'Update Scheme' : 'Add Scheme'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -2441,6 +3247,16 @@ useEffect(() => {
             >
               Fixed Deposit
             </button>
+            <button 
+              onClick={() => setActiveTab('NCDBond')}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'NCDBond'
+                  ? 'text-gray-900 dark:text-white border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              NCD/Bonds
+            </button>
           </div>
         </div>
       </div>
@@ -2554,7 +3370,7 @@ useEffect(() => {
               Refresh
             </button>
           </>
-        ) : (
+        ) : activeTab === 'FD' ? (
           <>
             <div className="flex items-center space-x-3">
               <button
@@ -2593,7 +3409,46 @@ useEffect(() => {
               Refresh
             </button>
           </>
-        )}
+        ) : activeTab === 'NCDBond' ? (
+          <>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  resetNcdBondIssuerForm()
+                  setShowNcdBondIssuerForm(true)
+                  setEditingNcdBondIssuer(null)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add NCD/Bond Issuer
+              </button>
+              <button
+                onClick={() => handleExportNcdBondSchemes()}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export All'}
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FiUpload className="w-4 h-4 mr-2" />
+                Import
+              </button>
+            </div>
+            <button
+              onClick={loadNcdBondIssuers}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </>
+        ) : null}
       </div>
 
       {/* Conditional Table */}
@@ -2683,7 +3538,7 @@ useEffect(() => {
           </table>
         </div>
       </div>
-      ) : (
+      ) : activeTab === 'FD' && !selectedFdIssuer ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -2780,7 +3635,98 @@ useEffect(() => {
             </table>
           </div>
         </div>
-      )}
+      ) : activeTab === 'NCDBond' && !selectedNcdBondIssuer ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Issuer Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Rating
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    </td>
+                  </tr>
+                ) : filteredNcdBondIssuers.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No NCD/Bond issuers available.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredNcdBondIssuers.map((issuer, idx) => (
+                    <tr 
+                      key={issuer._key || idx} 
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      onClick={() => setSelectedNcdBondIssuer(issuer)}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {issuer.short_name}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{issuer.legal_name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                          {issuer.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {issuer.credit_rating ? `${issuer.credit_rating_agency} - ${issuer.credit_rating}` : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedNcdBondIssuer(issuer)
+                          }}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          View Schemes
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openNcdBondIssuerEdit(issuer)
+                            setShowNcdBondIssuerForm(true)
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          <FiEdit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteNcdBondIssuer(issuer._key)
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {/* FD Issuer Form Modal */}
       {showFDIssuerForm && (
@@ -3364,6 +4310,475 @@ useEffect(() => {
                   {importing ? 'Importing...' : 'Import'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* NCD/Bond Issuer Form Modal */}
+      {showNcdBondIssuerForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                {editingNcdBondIssuer ? 'Edit NCD/Bond Issuer' : 'Add New NCD/Bond Issuer'}
+              </h2>
+              <form onSubmit={editingNcdBondIssuer ? handleUpdateNcdBondIssuer : handleCreateNcdBondIssuer} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Legal Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={ncdBondIssuerFormData.legal_name}
+                      onChange={(e) => setNcdBondIssuerFormData({ ...ncdBondIssuerFormData, legal_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Short Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={ncdBondIssuerFormData.short_name}
+                      onChange={(e) => setNcdBondIssuerFormData({ ...ncdBondIssuerFormData, short_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={ncdBondIssuerFormData.type}
+                      onChange={(e) => setNcdBondIssuerFormData({ ...ncdBondIssuerFormData, type: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="NCD">NCD</option>
+                      <option value="Bond">Bond</option>
+                      <option value="Government Bond">Government Bond</option>
+                      <option value="Corporate Bond">Corporate Bond</option>
+                      <option value="Infrastructure Bond">Infrastructure Bond</option>
+                      <option value="Bank Bond">Bank Bond</option>
+                      <option value="Housing Finance NCD">Housing Finance NCD</option>
+                      <option value="NBFC NCD">NBFC NCD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Credit Rating Agency
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondIssuerFormData.credit_rating_agency}
+                      onChange={(e) => setNcdBondIssuerFormData({ ...ncdBondIssuerFormData, credit_rating_agency: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., CRISIL"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Credit Rating
+                  </label>
+                  <input
+                    type="text"
+                    value={ncdBondIssuerFormData.credit_rating}
+                    onChange={(e) => setNcdBondIssuerFormData({ ...ncdBondIssuerFormData, credit_rating: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., AAA"
+                  />
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={ncdBondIssuerFormData.is_active}
+                    onChange={(e) => setNcdBondIssuerFormData({ ...ncdBondIssuerFormData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                    Is Active
+                  </label>
+                </div>
+                
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNcdBondIssuerForm(false)
+                      setEditingNcdBondIssuer(null)
+                      resetNcdBondIssuerForm()
+                    }}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    {editingNcdBondIssuer ? 'Update Issuer' : 'Add Issuer'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NCD/Bond Scheme Form Modal */}
+      {showNcdBondSchemeForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                {editingNcdBondScheme ? 'Edit NCD/Bond Scheme' : 'Add New NCD/Bond Scheme'}
+              </h2>
+              <form onSubmit={editingNcdBondScheme ? handleUpdateNcdBondScheme : handleCreateNcdBondScheme} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Scheme ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={ncdBondSchemeFormData.scheme_id}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_id: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., ADANI_NCD_SERIES_A"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Scheme Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={ncdBondSchemeFormData.scheme_name}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., Adani Enterprises NCD Series A"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    ISIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={12}
+                    value={ncdBondSchemeFormData.isin}
+                    onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, isin: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., INE01XX07026"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Short Description
+                  </label>
+                  <input
+                    type="text"
+                    value={ncdBondSchemeFormData.description_short}
+                    onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, description_short: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Brief description for display"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Coupon Rate (%) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={ncdBondSchemeFormData.coupon_rate}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, coupon_rate: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 8.50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Face Value (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      value={ncdBondSchemeFormData.face_value}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, face_value: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 1000"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Issue Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={ncdBondSchemeFormData.issue_date}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Maturity Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={ncdBondSchemeFormData.maturity_date}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Interest Payment Frequency
+                    </label>
+                    <select
+                      value={ncdBondSchemeFormData.interest_payment_frequency}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, interest_payment_frequency: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="Monthly">Monthly</option>
+                      <option value="Quarterly">Quarterly</option>
+                      <option value="Half-Yearly">Half-Yearly</option>
+                      <option value="Annual">Annual</option>
+                      <option value="Cumulative">Cumulative</option>
+                      <option value="At Maturity">At Maturity</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Credit Rating
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondSchemeFormData.credit_rating}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, credit_rating: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., AAA, AA+"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Listing Status
+                    </label>
+                    <select
+                      value={ncdBondSchemeFormData.listing_status}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, listing_status: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="Listed">Listed</option>
+                      <option value="Unlisted">Unlisted</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Min Investment (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={ncdBondSchemeFormData.min_investment}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, min_investment: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 10000"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Currency
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondSchemeFormData.currency}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, currency: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., INR"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Issue Size
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondSchemeFormData.issue_size}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_size: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., ₹500 Crores"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      CC %
+                    </label>
+                    <input
+                      type="number"
+                      step="0.00001"
+                      value={ncdBondSchemeFormData.cc}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, cc: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 0.5"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      SI %
+                    </label>
+                    <input
+                      type="number"
+                      step="0.00001"
+                      value={ncdBondSchemeFormData.si}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, si: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 0.2"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={ncdBondSchemeFormData.is_variable_rate}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, is_variable_rate: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Variable Rate
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={ncdBondSchemeFormData.is_secured}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, is_secured: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Secured
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={ncdBondSchemeFormData.early_redemption_allowed}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, early_redemption_allowed: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Early Redemption Allowed
+                    </label>
+                  </div>
+                  {ncdBondSchemeFormData.early_redemption_allowed && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Early Redemption Terms
+                      </label>
+                      <input
+                        type="text"
+                        value={ncdBondSchemeFormData.early_redemption_terms}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, early_redemption_terms: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., After 12 months with penalty"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={ncdBondSchemeFormData.put_option_available}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, put_option_available: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Put Option Available
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={ncdBondSchemeFormData.call_option_available}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, call_option_available: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Call Option Available
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={ncdBondSchemeFormData.is_active}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, is_active: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Is Active
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNcdBondSchemeForm(false)
+                      setEditingNcdBondScheme(null)
+                      resetNcdBondSchemeForm()
+                    }}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    {editingNcdBondScheme ? 'Update Scheme' : 'Add Scheme'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

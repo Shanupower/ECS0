@@ -14,6 +14,9 @@ import StepTransactionDetails from './receipt-steps/StepTransactionDetails.jsx'
 import StepFDIssuer from './receipt-steps/StepFDIssuer.jsx'
 import StepFDScheme from './receipt-steps/StepFDScheme.jsx'
 import StepFDDetails from './receipt-steps/StepFDDetails.jsx'
+import StepNCDBondIssuer from './receipt-steps/StepNCDBondIssuer.jsx'
+import StepNCDBondScheme from './receipt-steps/StepNCDBondScheme.jsx'
+import StepNCDBondDetails from './receipt-steps/StepNCDBondDetails.jsx'
 import StepProductType from './receipt-steps/StepProductType.jsx'
 import StepProduct from './receipt-steps/StepProduct.jsx'
 import StepFinal from './receipt-steps/StepFinal.jsx'
@@ -169,39 +172,73 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
           console.log('Available properties:', Object.keys(searchResults || {}))
         }
         
-        if (customers.length > 0) {
-          console.log(`Search API returned ${customers.length} customers`)
-          console.log('First customer:', customers[0])
-          
-          // Backend has already applied branch filtering via JWT authentication
-          
-          // Transform customers to expected format
-          const transformedResults = customers.map(customer => {
-            const transformed = {
-              investorId: customer.investor_id,
-              investorName: customer.name,
-              investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
-              pinCode: customer.pin || customer.pin_code || '',
-              pan: customer.pan || '',
-              email: customer.email || ''
+        // Handle minors array from search results
+        const minors = searchResults && searchResults.minors && Array.isArray(searchResults.minors) 
+          ? searchResults.minors 
+          : []
+        
+        // Transform customers to expected format
+        const transformedCustomers = customers.map(customer => {
+          const transformed = {
+            investorId: customer.investor_id,
+            investorName: customer.name,
+            investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
+            pinCode: customer.pin || customer.pin_code || '',
+            pan: customer.pan || '',
+            email: customer.email || '',
+            isMinor: false,
+            parentName: null,
+            parentInvestorId: null
+          }
+          return transformed
+        })
+        
+        // Transform minors to expected format
+        const transformedMinors = minors.map(minor => {
+          // Compute address - use parent's address if use_same_address is true
+          let address = ''
+          if (minor.use_same_address) {
+            // Find parent customer to get address
+            const parent = customers.find(c => c.investor_id === minor.parent_investor_id)
+            if (parent) {
+              address = `${parent.address1 || ''} ${parent.address2 || ''} ${parent.address3 || ''}`.trim()
             }
-            console.log('Transformed customer:', transformed)
-            return transformed
-          })
+          } else {
+            address = `${minor.address1 || ''} ${minor.address2 || ''} ${minor.address3 || ''}`.trim()
+          }
           
-          console.log(`Returning ${transformedResults.length} transformed results`)
+          return {
+            investorId: minor.investor_id,
+            investorName: `${minor.name} (Minor - ${minor.relationship_type === 'child' ? 'Child' : 'Ward'})`,
+            investorAddress: address,
+            pinCode: minor.use_same_address 
+              ? (customers.find(c => c.investor_id === minor.parent_investor_id)?.pin || minor.pin || '')
+              : (minor.pin || ''),
+            pan: minor.pan || '',
+            email: '',
+            isMinor: true,
+            parentName: minor.parent_name || '',
+            parentInvestorId: minor.parent_investor_id
+          }
+        })
+        
+        // Combine customers and minors
+        const transformedResults = [...transformedCustomers, ...transformedMinors]
+        
+        if (transformedResults.length > 0) {
+          console.log(`Search API returned ${customers.length} customers and ${minors.length} minors`)
           
           return {
             results: transformedResults,
             pagination: {
               page: page,
               limit: limit,
-              total: searchResults.pagination?.total || filteredResults.length,
+              total: searchResults.pagination?.total || transformedResults.length,
               hasMore: searchResults.pagination?.hasNext || false
             }
           }
         } else {
-          console.log('No customers found - returning empty results')
+          console.log('No customers or minors found - returning empty results')
         }
       } catch (searchError) {
         console.warn('Search API failed, falling back to local search:', searchError)
@@ -1228,6 +1265,8 @@ export default function MultiStepReceipt() {
   const [investmentTypeSeed, setInvestmentTypeSeed] = useState('')
   const [fdIssuerSeed, setFdIssuerSeed] = useState(null)
   const [fdSchemeSeed, setFdSchemeSeed] = useState(null)
+  const [ncdBondIssuerSeed, setNcdBondIssuerSeed] = useState(null)
+  const [ncdBondSchemeSeed, setNcdBondSchemeSeed] = useState(null)
   const [finalData, setFinalData] = useState(null)
   const [supportingDocument, setSupportingDocument] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -1334,13 +1373,13 @@ export default function MultiStepReceipt() {
     
     if (receiptData) {
       description += `**Receipt Details:**\n`
-      description += `- Receipt Number: ${receiptData.receiptNo || 'N/A'}\n`
+      description += `- Receipt Number: ${receiptData.receipt_no || receiptData.receiptNo || 'N/A'}\n`
       description += `- Date: ${receiptData.date || 'N/A'}\n`
-      description += `- Product Type: ${receiptData.productType || receiptData.product_category || 'N/A'}\n`
-      description += `- Investor ID: ${receiptData.investorId || 'N/A'}\n`
-      description += `- Investor Name: ${receiptData.investorName || 'N/A'}\n`
-      if (receiptData.investmentAmount || receiptData.investment_amount || receiptData.fd_deposit_amount) {
-        description += `- Investment Amount: ₹${receiptData.investmentAmount || receiptData.investment_amount || receiptData.fd_deposit_amount}\n`
+      description += `- Product Type: ${receiptData.product_category || receiptData.productType || 'N/A'}\n`
+      description += `- Investor ID: ${receiptData.investor_id || receiptData.investorId || 'N/A'}\n`
+      description += `- Investor Name: ${receiptData.investor_name || receiptData.investorName || 'N/A'}\n`
+      if (receiptData.investment_amount || receiptData.investmentAmount || receiptData.fd_deposit_amount) {
+        description += `- Investment Amount: ₹${receiptData.investment_amount || receiptData.investmentAmount || receiptData.fd_deposit_amount}\n`
       }
       description += `- Current Step: ${step}\n\n`
     }
@@ -1372,27 +1411,253 @@ export default function MultiStepReceipt() {
     return { title, description }
   }
 
+  /**
+   * Build base receipt structure with common fields
+   * This creates the foundation for all receipt types (MF, FD, INS, BOND)
+   * All fields use snake_case to match backend expectations
+   */
   const buildBase = () => {
     const base = {
-      receiptNo: genReceiptNo(),
+      // Receipt identification
+      receipt_no: genReceiptNo(),
       date: new Date().toISOString().slice(0, 10),
+      
+      // Employee information
       branch: empSeed.branch || '',
-      employeeName: empSeed.employeeName || '',
-      empCode: empSeed.empCode || '',
-      investorId: investorSeed.investorId || '',
-      investorName: '', investorAddress: '', pinCode: '', pan: '', email: '',
-      schemeName: '', investmentAmount: '', folioPolicyNo: '',
-      mode: 'Lump Sum', txnType: 'Fresh',
-      issuerCompany: ''
+      employee_name: empSeed.employeeName || '',
+      emp_code: empSeed.empCode || '',
+      
+      // Investor information
+      investor_id: investorSeed.investorId || '',
+      investor_name: '',
+      investor_address: '',
+      pin_code: '',
+      pan: '',
+      email: ''
     }
+    
+    // Populate investor info if available
     if (investorSeed.investorInfo) {
-      base.investorName    = investorSeed.investorInfo.investorName || ''
-      base.investorAddress = investorSeed.investorInfo.investorAddress || ''
-      base.pinCode         = investorSeed.investorInfo.pinCode || ''
-      base.pan             = investorSeed.investorInfo.pan || ''
-      base.email           = investorSeed.investorInfo.email || ''
+      base.investor_name = investorSeed.investorInfo.investorName || ''
+      base.investor_address = investorSeed.investorInfo.investorAddress || ''
+      base.pin_code = investorSeed.investorInfo.pinCode || ''
+      base.pan = investorSeed.investorInfo.pan || ''
+      base.email = investorSeed.investorInfo.email || ''
     }
+    
     return base
+  }
+
+  /**
+   * Build clean MF receipt structure
+   * Consolidates all MF-specific fields into a single, non-redundant structure
+   * @param {Object} transactionData - Data from StepTransactionDetails (amount, mode, SIP/SWP/STP/Switch Over details)
+   * @returns {Object} Clean receipt object with all MF fields properly structured
+   */
+  const buildMFReceipt = (transactionData) => {
+    const base = buildBase()
+    
+    // Determine mode from investment type
+    const modeMap = {
+      'Lumpsum': 'Lump Sum',
+      'SIP': 'SIP',
+      'SWP': 'SWP',
+      'STP': 'STP',
+      'Switch Over': 'Lump Sum'
+    }
+    
+    return {
+      ...base,
+      // Product category
+      product_category: 'MF',
+      
+      // AMC information
+      amc_code: mfSchemeSeed.selectedAmc.amc_code,
+      amc_name: mfSchemeSeed.selectedAmc.amc_name,
+      
+      // Scheme information
+      scheme_code: mfSchemeSeed.selectedScheme.scheme_code,
+      scheme_name: mfSchemeSeed.selectedScheme.display_name || mfSchemeSeed.selectedScheme.scheme_name,
+      scheme_category: mfSchemeSeed.selectedScheme.category || null,
+      scheme_sub_category: mfSchemeSeed.selectedScheme.sub_category || null,
+      scheme_plan: mfSchemeSeed.selectedScheme.plan || null,
+      scheme_option: mfSchemeSeed.selectedScheme.option || null,
+      scheme_type: mfSchemeSeed.selectedScheme.type || null,
+      scheme_is_nfo: mfSchemeSeed.selectedScheme.is_nfo || false,
+      
+      // Investment details
+      investment_amount: transactionData.investment_amount || transactionData.investmentAmount || null,
+      mode: transactionData.mode || modeMap[investmentTypeSeed] || 'Lump Sum',
+      txn_type: transactionData.txn_type || (investmentTypeSeed === 'Switch Over' ? 'Switch Over' : investmentTypeSeed) || null,
+      
+      // Folio information
+      has_existing_folio: mfSchemeSeed.hasExistingFolio || false,
+      folio_number: mfSchemeSeed.folioNumber || null,
+      folio_policy_no: mfSchemeSeed.folioNumber || null,
+      
+      // SIP fields (if applicable)
+      ...(investmentTypeSeed === 'SIP' && {
+        sip_frequency: transactionData.sip_frequency || null,
+        sip_start_date: transactionData.sip_start_date || null,
+        sip_end_date: transactionData.sip_end_date || null,
+        sip_is_perpetual: transactionData.sip_is_perpetual || false
+      }),
+      
+      // SWP fields (if applicable)
+      ...(investmentTypeSeed === 'SWP' && {
+        swp_frequency: transactionData.swp_frequency || null,
+        swp_start_date: transactionData.swp_start_date || null,
+        swp_amount: transactionData.swp_amount || null
+      }),
+      
+      // STP fields (if applicable)
+      ...(investmentTypeSeed === 'STP' && {
+        stp_target_scheme_code: transactionData.stp_target_scheme_code || null,
+        stp_target_scheme_name: transactionData.stp_target_scheme_name || null,
+        stp_frequency: transactionData.stp_frequency || null,
+        stp_start_date: transactionData.stp_start_date || null,
+        stp_amount: transactionData.stp_amount || null,
+        stp_original_amount: transactionData.stp_original_amount || null
+      }),
+      
+      // Switch Over fields (if applicable)
+      ...(investmentTypeSeed === 'Switch Over' && {
+        switch_from_scheme_code: transactionData.switch_from_scheme_code || null,
+        switch_from_scheme_name: transactionData.switch_from_scheme_name || null,
+        switch_to_scheme_code: transactionData.switch_to_scheme_code || null,
+        switch_to_scheme_name: transactionData.switch_to_scheme_name || null,
+        switch_type: transactionData.switch_type || null,
+        switch_value: transactionData.switch_value || null
+      })
+    }
+  }
+
+  /**
+   * Build clean FD receipt structure
+   * Consolidates all FD-specific fields into a single, non-redundant structure
+   * @param {Object} fdData - Data from StepFDDetails (deposit amount, tenure, rates, etc.)
+   * @returns {Object} Clean receipt object with all FD fields properly structured
+   */
+  const buildFDReceipt = (fdData) => {
+    const base = buildBase()
+    
+    // Calculate deposit_period_ym from tenure_months if not provided
+    const depositPeriodYM = fdData.deposit_period_ym || (fdData.fd_tenure_months 
+      ? `${Math.floor(fdData.fd_tenure_months / 12)}Y ${fdData.fd_tenure_months % 12}M`
+      : null)
+    
+    return {
+      ...base,
+      // Product category
+      product_category: 'FD',
+      
+      // FD Issuer information (from fdData, which includes issuer info from StepFDDetails)
+      fd_issuer_key: fdData.fd_issuer_key || null,
+      fd_issuer_name: fdData.fd_issuer_name || null,
+      fd_issuer_type: fdData.fd_issuer_type || null,
+      issuer_company: fdData.fd_issuer_name || null,
+      issuer_category: 'Fixed Deposit',
+      
+      // FD Scheme information (from fdData)
+      fd_scheme_id: fdData.fd_scheme_id || null,
+      fd_scheme_name: fdData.fd_scheme_name || null,
+      scheme_name: fdData.fd_scheme_name || null,
+      fd_is_cumulative: fdData.fd_is_cumulative || false,
+      
+      // FD Transaction details
+      fd_transaction_type: fdData.fd_transaction_type || 'Fresh',
+      txn_type: fdData.fd_transaction_type || 'Fresh',
+      fd_renewal_investment_type: fdData.fd_renewal_investment_type || null,
+      fd_renewal_additional_amount: fdData.fd_renewal_additional_amount || null,
+      
+      // FD Deposit details
+      fd_deposit_amount: fdData.fd_deposit_amount || null,
+      investment_amount: fdData.fd_deposit_amount || null,
+      fd_tenure_months: fdData.fd_tenure_months || null,
+      deposit_period_ym: depositPeriodYM,
+      fd_booking_date: fdData.fd_booking_date || null,
+      fd_deposit_date: fdData.fd_booking_date || fdData.fd_deposit_date || null,
+      
+      // FD Rate and interest details
+      fd_payout_frequency: fdData.fd_payout_frequency || null,
+      interest_frequency: fdData.fd_payout_frequency || null,
+      fd_base_rate_pa: fdData.fd_base_rate_pa || null,
+      fd_locked_interest_rate_pa: fdData.fd_locked_interest_rate_pa || null,
+      fd_effective_yield_pa: fdData.fd_effective_yield_pa || null,
+      fd_senior_citizen_bonus: fdData.fd_senior_citizen_bonus || null,
+      fd_women_bonus: fdData.fd_women_bonus || null,
+      fd_renewal_bonus: fdData.fd_renewal_bonus || null,
+      fd_total_rate_pa: fdData.fd_total_rate_pa || null,
+      roi_percent: fdData.fd_total_rate_pa || null,
+      
+      // FD Maturity and payout details
+      fd_maturity_amount: fdData.fd_maturity_amount || null,
+      maturity_amount: fdData.fd_maturity_amount || null,
+      fd_maturity_date: fdData.fd_maturity_date || null,
+      fd_periodic_payout: fdData.fd_periodic_payout || null,
+      fd_total_interest: fdData.fd_total_interest || null,
+      
+      // FD Application details
+      fd_application_number: fdData.fd_application_number || null,
+      folio_policy_no: fdData.fd_application_number || null,
+      
+      // FD Tax details
+      fd_tds_applicable: fdData.fd_tds_applicable || null,
+      fd_form_15g_15h: fdData.fd_form_15g_15h || null
+    }
+  }
+
+  /**
+   * Build clean NCD/Bond receipt structure
+   * @param {Object} bondData - Data from StepNCDBondDetails
+   * @returns {Object} Clean receipt object with all NCD/Bond fields properly structured
+   */
+  const buildNCDBondReceipt = (bondData) => {
+    const base = buildBase()
+    
+    return {
+      ...base,
+      // Product category
+      product_category: 'BOND',
+      
+      // NCD/Bond Issuer information
+      bond_issuer_key: bondData.bond_issuer_key || null,
+      bond_issuer_name: bondData.bond_issuer_name || null,
+      bond_issuer_type: bondData.bond_issuer_type || null,
+      issuer_company: bondData.bond_issuer_name || null,
+      issuer_category: bondData.bond_issuer_type || 'Bonds',
+      
+      // NCD/Bond Scheme information
+      bond_scheme_id: bondData.bond_scheme_id || null,
+      bond_scheme_name: bondData.bond_scheme_name || null,
+      scheme_name: bondData.bond_scheme_name || null,
+      bond_isin: bondData.bond_isin || null,
+      bond_coupon_rate: bondData.bond_coupon_rate || null,
+      bond_face_value: bondData.bond_face_value || null,
+      bond_issue_date: bondData.bond_issue_date || null,
+      bond_maturity_date: bondData.bond_maturity_date || null,
+      renewal_due_date: bondData.bond_maturity_date || null,
+      
+      // NCD/Bond Transaction details
+      bond_transaction_type: bondData.bond_transaction_type || null,
+      txn_type: bondData.bond_transaction_type || null,
+      bond_number_of_units: bondData.bond_number_of_units || null,
+      bond_investment_amount: bondData.bond_investment_amount || null,
+      investment_amount: bondData.bond_investment_amount || null,
+      bond_transaction_date: bondData.bond_transaction_date || null,
+      
+      // NCD/Bond Application details
+      bond_application_number: bondData.bond_application_number || null,
+      folio_policy_no: bondData.bond_application_number || null,
+      
+      // NCD/Bond Tax details
+      bond_form_15g_15h: bondData.bond_form_15g_15h || null,
+      
+      // ROI from coupon rate
+      roi_percent: bondData.bond_coupon_rate || null
+      
+      // Note: NCD/Bonds do NOT have a 'mode' field (unlike MF)
+    }
   }
 
   const saveToServer = async () => {
@@ -1650,11 +1915,13 @@ export default function MultiStepReceipt() {
           onBack={() => setStep(2)}
           onNext={type => { 
             setProductTypeSeed(type)
-            // MF and FD go through special flows
+            // MF, FD, and BOND go through special flows
             if (type === 'MF') {
               setStep(4)
             } else if (type === 'FD') {
               setStep(4) // FD also starts at step 4 (FD Issuer selection)
+            } else if (type === 'BOND') {
+              setStep(4) // BOND also starts at step 4 (NCD/Bond Issuer selection)
             } else {
               setStep(999) // Skip to old flow for other types
             }
@@ -1690,19 +1957,51 @@ export default function MultiStepReceipt() {
         <StepFDDetails
           onBack={() => setStep(5)}
           onNext={(fdData) => {
-            const base = buildBase()
-            const merged = {
-              ...base,
-              ...fdData,
-              productType: productTypeSeed,
-              product_category: 'FD'
-            }
-            setFinalData(merged)
+            const cleanReceipt = buildFDReceipt(fdData)
+            setFinalData(cleanReceipt)
             setStep(7)
           }}
           token={token}
           issuer={fdIssuerSeed}
           scheme={fdSchemeSeed}
+        />
+      )}
+
+      {/* NCD/Bond Flow */}
+      {step === 4 && productTypeSeed === 'BOND' && (
+        <StepNCDBondIssuer
+          onBack={() => setStep(3)}
+          onNext={(issuer) => {
+            setNcdBondIssuerSeed(issuer)
+            setStep(5)
+          }}
+          token={token}
+        />
+      )}
+
+      {step === 5 && productTypeSeed === 'BOND' && ncdBondIssuerSeed && (
+        <StepNCDBondScheme
+          onBack={() => setStep(4)}
+          onNext={(scheme) => {
+            setNcdBondSchemeSeed(scheme)
+            setStep(6)
+          }}
+          token={token}
+          issuer={ncdBondIssuerSeed}
+        />
+      )}
+
+      {step === 6 && productTypeSeed === 'BOND' && ncdBondSchemeSeed && (
+        <StepNCDBondDetails
+          onBack={() => setStep(5)}
+          onNext={(bondData) => {
+            const cleanReceipt = buildNCDBondReceipt(bondData)
+            setFinalData(cleanReceipt)
+            setStep(7)
+          }}
+          token={token}
+          issuer={ncdBondIssuerSeed}
+          scheme={ncdBondSchemeSeed}
         />
       )}
 
@@ -1733,30 +2032,9 @@ export default function MultiStepReceipt() {
         <StepTransactionDetails
           onBack={() => setStep(5)}
           onNext={transactionData => {
-            // Merge all data and go to final step
-            const base = buildBase()
-            const merged = {
-              ...base,
-              ...transactionData,
-              product_category: 'MF',
-              amc_code: mfSchemeSeed.selectedAmc.amc_code,
-              amc_name: mfSchemeSeed.selectedAmc.amc_name,
-              scheme_code: mfSchemeSeed.selectedScheme.scheme_code,
-              scheme_name: mfSchemeSeed.selectedScheme.display_name || mfSchemeSeed.selectedScheme.scheme_name,
-              schemeName: mfSchemeSeed.selectedScheme.display_name || mfSchemeSeed.selectedScheme.scheme_name, // camelCase for compatibility
-              scheme_category: mfSchemeSeed.selectedScheme.category,
-              scheme_sub_category: mfSchemeSeed.selectedScheme.sub_category,
-              scheme_plan: mfSchemeSeed.selectedScheme.plan,
-              scheme_option: mfSchemeSeed.selectedScheme.option,
-              scheme_type: mfSchemeSeed.selectedScheme.type,
-              scheme_is_nfo: mfSchemeSeed.selectedScheme.is_nfo,
-              has_existing_folio: mfSchemeSeed.hasExistingFolio,
-              folio_number: mfSchemeSeed.folioNumber,
-              transaction_type: investmentTypeSeed,
-              investmentType: investmentTypeSeed,
-              productType: productTypeSeed
-            }
-            setFinalData(merged)
+            // Build clean MF receipt structure
+            const cleanReceipt = buildMFReceipt(transactionData)
+            setFinalData(cleanReceipt)
             setStep(7)
           }}
           investmentType={investmentTypeSeed}
@@ -1766,12 +2044,16 @@ export default function MultiStepReceipt() {
         />
       )}
 
-      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && (
+      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'BOND' && (
         <StepProduct
           onBack={() => setStep(3)}
           onNext={(_, normalized) => {
             const base = buildBase()
-            const merged = { ...base, ...normalized, investmentType: investmentTypeSeed, productType: productTypeSeed }
+            const merged = {
+              ...base,
+              ...normalized,
+              product_category: productTypeSeed || normalized.product_category || null
+            }
             setFinalData(merged)
             setStep(6)
           }}

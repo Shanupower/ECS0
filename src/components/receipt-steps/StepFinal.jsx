@@ -62,7 +62,8 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
     }
     
     // Validate product-specific details
-    if (data.productType === 'FD') {
+    // Data is already normalized (snake_case), so we use product_category
+    if (data.product_category === 'FD') {
       // Validate FD fields from data
       if (!data.fd_issuer_name || !data.fd_scheme_name || !data.fd_deposit_amount || 
           !data.fd_tenure_months || !data.fd_payout_frequency || !data.fd_application_number) {
@@ -77,38 +78,34 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
         alert('Interest rate must be calculated')
         return
       }
-    } else if (data.productType === 'MF') {
+    } else if (data.product_category === 'MF') {
       // Validate Mutual Fund required fields from data
-      // Check both snake_case (new MF flow) and camelCase (legacy)
-      if (!data.scheme_name && !data.schemeName) {
+      if (!data.scheme_name) {
         alert('Scheme name is required for Mutual Funds')
         return
       }
-      // Check both camelCase and snake_case for investment amount
-      const investmentAmt = data.investmentAmount || data.investment_amount
-      if (!investmentAmt || parseFloat(investmentAmt) <= 0) {
+      // Data is normalized, so use investment_amount
+      if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
         alert('Investment amount must be a positive number')
         return
       }
-    } else if (data.productType === 'INS') {
+    } else if (data.product_category === 'INS') {
       // Validate Insurance required fields from data
-      if (!data.issuerCompany) {
+      if (!data.issuer_company) {
         alert('Insurance company is required')
         return
       }
-      const premiumAmt = data.investmentAmount || data.investment_amount
-      if (!premiumAmt || parseFloat(premiumAmt) <= 0) {
+      if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
         alert('Premium amount must be a positive number')
         return
       }
-    } else if (data.productType === 'BOND') {
+    } else if (data.product_category === 'BOND') {
       // Validate Bonds required fields from data
-      if (!data.issuerCompany) {
+      if (!data.issuer_company) {
         alert('Issuer company is required for Bonds')
         return
       }
-      const bondAmt = data.investmentAmount || data.investment_amount
-      if (!bondAmt || parseFloat(bondAmt) <= 0) {
+      if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
         alert('Investment amount must be a positive number')
         return
       }
@@ -195,7 +192,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
             </div>
             <div className="text-right">
               <div className="text-sm text-red-100">Receipt No</div>
-              <div className="text-lg font-bold">{data.receiptNo}</div>
+              <div className="text-lg font-bold">{data.receipt_no || data.receiptNo}</div>
               <div className="text-sm text-red-100 mt-1">{fmtDate(data.date)}</div>
             </div>
           </div>
@@ -213,11 +210,11 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Name:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.employeeName || '—'}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.employee_name || data.employeeName || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Code:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.empCode || '—'}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.emp_code || data.empCode || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Branch:</span>
@@ -234,11 +231,11 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">ID:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.investorId || '—'}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.investor_id || data.investorId || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Name:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.investorName || '—'}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.investor_name || data.investorName || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">PAN:</span>
@@ -260,7 +257,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
             </h3>
             
             {/* FD-specific display */}
-            {data.productType === 'FD' ? (
+            {data.product_category === 'FD' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.fd_issuer_name && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -312,48 +309,122 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                 )}
               </div>
             ) : null}
-            {data.productType !== 'FD' && (
+            
+            {/* NCD/Bond-specific display */}
+            {data.product_category === 'BOND' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {data.bond_issuer_name && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Issuer</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_issuer_name} ({data.bond_issuer_type})</div>
+                  </div>
+                )}
+                {data.bond_scheme_name && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Scheme</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_scheme_name}</div>
+                  </div>
+                )}
+                {data.bond_isin && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">ISIN</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_isin}</div>
+                  </div>
+                )}
+                {data.bond_transaction_type && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Type</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_transaction_type}</div>
+                  </div>
+                )}
+                {data.bond_number_of_units && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Number of Units</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_number_of_units}</div>
+                  </div>
+                )}
+                {data.bond_investment_amount && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Investment Amount</div>
+                    <div className="text-lg font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.bond_investment_amount)}</div>
+                  </div>
+                )}
+                {data.bond_coupon_rate && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Coupon Rate</div>
+                    <div className="text-lg font-semibold text-green-600 dark:text-green-400">{data.bond_coupon_rate}% p.a.</div>
+                  </div>
+                )}
+                {data.bond_face_value && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Face Value</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">₹{data.bond_face_value}</div>
+                  </div>
+                )}
+                {data.bond_transaction_date && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Date</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.bond_transaction_date)}</div>
+                  </div>
+                )}
+                {data.bond_maturity_date && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Maturity Date</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.bond_maturity_date)}</div>
+                  </div>
+                )}
+                {data.bond_application_number && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Application Number</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_application_number}</div>
+                  </div>
+                )}
+              </div>
+            ) : data.product_category !== 'FD' && data.product_category !== 'BOND' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">Product Type</div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{getProductTypeLabel(data.productType)}</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{getProductTypeLabel(data.product_category)}</div>
               </div>
               
-              {data.investmentType && (
+              {data.transaction_type && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Investment Type</div>
-                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.investmentType}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Type</div>
+                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.transaction_type}</div>
                 </div>
               )}
               
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">Transaction</div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.txnType || 'Fresh'}</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.txn_type || 'Fresh'}</div>
               </div>
               
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Mode</div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.mode || 'Lump Sum'}</div>
-              </div>
-              
-              {data.investmentAmount && (
+              {/* Only show mode for MF products */}
+              {data.product_category === 'MF' && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Amount</div>
-                  <div className="text-lg font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.investmentAmount)}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Mode</div>
+                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.mode || 'Lump Sum'}</div>
                 </div>
               )}
               
-              {data.folioPolicyNo && (
+              {data.investment_amount && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Amount</div>
+                  <div className="text-lg font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.investment_amount)}</div>
+                </div>
+              )}
+              
+              {data.folio_policy_no && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                   <div className="text-sm text-gray-600 dark:text-gray-400">Folio/Policy No</div>
-                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.folioPolicyNo}</div>
+                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.folio_policy_no}</div>
                 </div>
               )}
             </div>
             )}
 
             {/* Product-specific details */}
-            {data.productType === 'MF' && data.amc_name && (
+            {data.product_category === 'MF' && data.amc_name && (
               <>
                 {/* New MF Scheme Details */}
                 {(data.amc_name || data.scheme_name) && (
@@ -414,7 +485,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
               </>
             )}
             
-            {data.productType === 'MF' && !data.transaction_type && data.fd_issuer_name && (
+            {data.product_category === 'MF' && !data.transaction_type && data.fd_issuer_name && (
                 <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
                     <span className="w-2 h-2 bg-purple-600 rounded-full mr-2"></span>
@@ -486,8 +557,98 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                 </div>
             )}
             
-            {/* Transaction Details (non-FD only) */}
-            {data.productType !== 'FD' && data.transaction_type && (
+            {/* NCD/Bond Details Section */}
+            {data.product_category === 'BOND' && (
+              <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                  <span className="w-2 h-2 bg-purple-600 rounded-full mr-2"></span>
+                  NCD/Bond Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {data.bond_issuer_name && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Issuer</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_issuer_name} ({data.bond_issuer_type})</div>
+                    </div>
+                  )}
+                  {data.bond_scheme_name && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Scheme Name</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_scheme_name}</div>
+                    </div>
+                  )}
+                  {data.bond_isin && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">ISIN</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_isin}</div>
+                    </div>
+                  )}
+                  {data.bond_coupon_rate && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Coupon Rate</div>
+                      <div className="font-semibold text-green-600 dark:text-green-400">{data.bond_coupon_rate}% p.a.</div>
+                    </div>
+                  )}
+                  {data.bond_face_value && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Face Value</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">₹{data.bond_face_value}</div>
+                    </div>
+                  )}
+                  {data.bond_issue_date && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Issue Date</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.bond_issue_date)}</div>
+                    </div>
+                  )}
+                  {data.bond_maturity_date && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Maturity Date</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.bond_maturity_date)}</div>
+                    </div>
+                  )}
+                  {data.bond_transaction_type && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Type</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_transaction_type}</div>
+                    </div>
+                  )}
+                  {data.bond_number_of_units && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Number of Units</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_number_of_units}</div>
+                    </div>
+                  )}
+                  {data.bond_investment_amount && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Investment Amount</div>
+                      <div className="font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.bond_investment_amount)}</div>
+                    </div>
+                  )}
+                  {data.bond_transaction_date && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Date</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.bond_transaction_date)}</div>
+                    </div>
+                  )}
+                  {data.bond_application_number && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Application Number</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_application_number}</div>
+                    </div>
+                  )}
+                  {data.bond_form_15g_15h !== undefined && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">TDS</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_form_15g_15h ? 'Form 15G/15H Submitted' : 'Applicable'}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Transaction Details (MF only - SIP, SWP, STP, Switch) */}
+            {data.product_category === 'MF' && data.transaction_type && (
               <div className="mt-4 p-4 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-300 dark:border-green-800">
                 <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
                   <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
