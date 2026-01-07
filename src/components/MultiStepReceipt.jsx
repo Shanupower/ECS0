@@ -1915,13 +1915,15 @@ export default function MultiStepReceipt() {
           onBack={() => setStep(2)}
           onNext={type => { 
             setProductTypeSeed(type)
-            // MF, FD, and BOND go through special flows
+            // MF, FD, BOND, and INS go through special flows
             if (type === 'MF') {
               setStep(4)
             } else if (type === 'FD') {
               setStep(4) // FD also starts at step 4 (FD Issuer selection)
             } else if (type === 'BOND') {
               setStep(4) // BOND also starts at step 4 (NCD/Bond Issuer selection)
+            } else if (type === 'INS') {
+              setStep(4) // INS also starts at step 4 (Insurance Product selection)
             } else {
               setStep(999) // Skip to old flow for other types
             }
@@ -2005,6 +2007,39 @@ export default function MultiStepReceipt() {
         />
       )}
 
+      {/* Insurance Flow */}
+      {step === 4 && productTypeSeed === 'INS' && (
+        <StepProduct
+          onBack={() => setStep(3)}
+          onNext={(_, normalized) => {
+            const base = buildBase()
+            const merged = {
+              ...base,
+              ...normalized,
+              product_category: 'INS'
+            }
+            setFinalData(merged)
+            setStep(5) // Next: StepFinal (Transaction Details)
+          }}
+          investmentType="Lumpsum"
+          productType="INS"
+          token={token}
+        />
+      )}
+
+      {step === 5 && productTypeSeed === 'INS' && finalData && (
+        <StepFinal
+          data={finalData}
+          onBack={() => setStep(4)}
+          onSave={saveToServer}
+          isSaving={isSaving}
+          saveError={saveError}
+          saveSuccess={saveSuccess}
+          supportingDocument={supportingDocument}
+          setSupportingDocument={setSupportingDocument}
+        />
+      )}
+
       {step === 4 && productTypeSeed === 'MF' && (
         <StepMFScheme
           onBack={() => setStep(3)}
@@ -2044,7 +2079,7 @@ export default function MultiStepReceipt() {
         />
       )}
 
-      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'BOND' && (
+      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'BOND' && productTypeSeed !== 'INS' && (
         <StepProduct
           onBack={() => setStep(3)}
           onNext={(_, normalized) => {
@@ -2059,6 +2094,7 @@ export default function MultiStepReceipt() {
           }}
           investmentType={investmentTypeSeed}
           productType={productTypeSeed}
+          token={token}
         />
       )}
 

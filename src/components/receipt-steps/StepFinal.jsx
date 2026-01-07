@@ -91,8 +91,12 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       }
     } else if (data.product_category === 'INS') {
       // Validate Insurance required fields from data
-      if (!data.issuer_company) {
-        alert('Insurance company is required')
+      if (!data.insurance_issuer_key) {
+        alert('Insurance issuer is required')
+        return
+      }
+      if (!data.insurance_product_id) {
+        alert('Insurance product is required')
         return
       }
       if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
@@ -380,7 +384,7 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                   </div>
                 )}
               </div>
-            ) : data.product_category !== 'FD' && data.product_category !== 'BOND' && (
+            ) : data.product_category !== 'FD' && data.product_category !== 'BOND' && data.product_category !== 'INS' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">Product Type</div>
@@ -421,6 +425,139 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                 </div>
               )}
             </div>
+            )}
+            
+            {/* Insurance Details Section */}
+            {data.product_category === 'INS' && (
+              <div className="mt-4 p-4 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg border border-indigo-300 dark:border-indigo-800">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                  <span className="w-2 h-2 bg-indigo-600 rounded-full mr-2"></span>
+                  Insurance Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {data.issuerCompany && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Issuer Company</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.issuerCompany}</div>
+                    </div>
+                  )}
+                  {data.issuerCategory && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Category</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.issuerCategory}</div>
+                    </div>
+                  )}
+                  {data.schemeName && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Product Name</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.schemeName}</div>
+                    </div>
+                  )}
+                  {data.investment_amount && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Premium Amount</div>
+                      <div className="font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.investment_amount)}</div>
+                    </div>
+                  )}
+                  {data.folioPolicyNo && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Policy Number</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.folioPolicyNo}</div>
+                    </div>
+                  )}
+                  {data.folio_policy_no && !data.folioPolicyNo && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Policy Number</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.folio_policy_no}</div>
+                    </div>
+                  )}
+                  {data.insurance_date_of_issue && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Date of Issue</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.insurance_date_of_issue)}</div>
+                    </div>
+                  )}
+                  {data.insurance_renewal_date && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Renewal Date</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{fmtDate(data.insurance_renewal_date)}</div>
+                    </div>
+                  )}
+                  {data.insurance_sum_assured && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Sum Assured</div>
+                      <div className="font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.insurance_sum_assured)}</div>
+                    </div>
+                  )}
+                  {data.insurance_term && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Term</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.insurance_term} years</div>
+                    </div>
+                  )}
+                  {data.insurance_premium_pay_term && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Premium Pay Term</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.insurance_premium_pay_term} years</div>
+                    </div>
+                  )}
+                  {data.insurance_payment_schedule && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Payment Schedule</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">{data.insurance_payment_schedule}</div>
+                    </div>
+                  )}
+                  {data.insurance_money_back !== undefined && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Money Back</div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          data.insurance_money_back 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' 
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                        }`}>
+                          {data.insurance_money_back ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {data.insurance_selected_riders_details && Array.isArray(data.insurance_selected_riders_details) && data.insurance_selected_riders_details.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:col-span-2">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Selected Riders</div>
+                      <div className="space-y-2">
+                        {data.insurance_selected_riders_details.map((rider, index) => (
+                          <div key={rider.id || index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {rider.name || rider.rider_name || `Rider ID: ${rider.id || rider.rider_id}`}
+                            </span>
+                            <span className="text-sm text-green-600 dark:text-green-400 font-semibold">
+                              {rider.premium_fixed 
+                                ? fmtAmt(rider.premium_fixed)
+                                : rider.premium_percentage 
+                                ? `${rider.premium_percentage}% of SA`
+                                : '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Fallback to show rider IDs if details are not available */}
+                  {(!data.insurance_selected_riders_details || !Array.isArray(data.insurance_selected_riders_details) || data.insurance_selected_riders_details.length === 0) && 
+                   data.insurance_selected_riders && Array.isArray(data.insurance_selected_riders) && data.insurance_selected_riders.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:col-span-2">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Selected Riders</div>
+                      <div className="flex flex-wrap gap-2">
+                        {data.insurance_selected_riders.map((riderId, index) => (
+                          <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-200">
+                            Rider ID: {riderId}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Product-specific details */}

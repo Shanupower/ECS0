@@ -157,6 +157,67 @@ export default function SchemeManagementPage() {
     cc: 0,
     si: 0
   })
+
+  // Insurance Form Data States
+  const [insuranceIssuerFormData, setInsuranceIssuerFormData] = useState({
+    legal_name: '',
+    short_name: '',
+    type: 'Life',
+    license_number: '',
+    is_active: true,
+    products: []
+  })
+
+  const [insuranceProductFormData, setInsuranceProductFormData] = useState({
+    product_id: '',
+    product_name: '',
+    category: 'Life',
+    sub_category: '',
+    description: '',
+    policy_types: ['Term'],
+    min_sum_assured: 100000,
+    max_sum_assured: null,
+    min_premium: 5000,
+    max_premium: null,
+    min_entry_age: 18,
+    max_entry_age: 65,
+    policy_term_years_min: 10,
+    policy_term_years_max: 40,
+    premium_payment_frequency: ['Yearly'],
+    premium_payment_term_min: 5,
+    premium_payment_term_max: 35,
+    premium_payment_term_type: 'Years',
+    coverage_details: {
+      base_coverage: '',
+      additional_coverage: null,
+      exclusions: [],
+      waiting_period_days: 0,
+      renewability: 'Term',
+      claim_settlement_ratio: null
+    },
+    riders: [],
+    beneficiary_required: true,
+    nomination_allowed: true,
+    tax_benefits: [],
+    cc: 0,
+    si: 0,
+    is_active: true,
+    launch_date: '',
+    withdrawal_date: null
+  })
+
+  const [insuranceRiderFormData, setInsuranceRiderFormData] = useState({
+    rider_id: '',
+    rider_name: '',
+    description: '',
+    rider_type: '',
+    min_sum_assured: null,
+    max_sum_assured: null,
+    rider_premium_percentage: null,
+    rider_premium_fixed: null,
+    eligibility_criteria: '',
+    is_active: true
+  })
   
   const [fdSchemeFormData, setFdSchemeFormData] = useState({
     scheme_id: '',
@@ -198,6 +259,11 @@ export default function SchemeManagementPage() {
 
   useEffect(() => {
     if (!isAdmin) return
+    // Clear selections from other tabs when switching
+    if (activeTab !== 'FD') setSelectedFdIssuer(null)
+    if (activeTab !== 'NCDBond') setSelectedNcdBondIssuer(null)
+    if (activeTab !== 'Insurance') setSelectedInsuranceIssuer(null)
+    
     if (activeTab === 'MF') {
       loadAMCs()
     } else if (activeTab === 'FD') {
@@ -388,12 +454,23 @@ useEffect(() => {
         if (result.updated > 0 && selectedAmc) {
           await loadSchemes(selectedAmc.amc_code)
         }
-      } else {
+      } else if (activeTab === 'FD') {
         result = await api.importFDSchemesExcel(token, importFile)
         if (result.updated > 0 && selectedFdIssuer) {
           const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
           if (issuerKey) {
             await loadFDSchemes(issuerKey)
+          }
+        }
+      } else if (activeTab === 'Insurance') {
+        result = await api.importInsuranceSchemesExcel(token, importFile)
+        if (result.updated > 0) {
+          await loadInsuranceIssuers()
+          if (selectedInsuranceIssuer) {
+            const issuerKey = selectedInsuranceIssuer._key
+            if (issuerKey) {
+              await loadInsuranceProducts(issuerKey)
+            }
           }
         }
       }
@@ -1032,6 +1109,275 @@ useEffect(() => {
       cc: 0,
       si: 0
     })
+  }
+
+  // Insurance Handler Functions
+  const resetInsuranceIssuerForm = () => {
+    setInsuranceIssuerFormData({
+      legal_name: '',
+      short_name: '',
+      type: 'Life',
+      license_number: '',
+      is_active: true,
+      products: []
+    })
+  }
+
+  const resetInsuranceProductForm = () => {
+    setInsuranceProductFormData({
+      product_id: '',
+      product_name: '',
+      category: 'Life',
+      sub_category: '',
+      description: '',
+      policy_types: ['Term'],
+      min_sum_assured: 100000,
+      max_sum_assured: null,
+      min_premium: 5000,
+      max_premium: null,
+      min_entry_age: 18,
+      max_entry_age: 65,
+      policy_term_years_min: 10,
+      policy_term_years_max: 40,
+      premium_payment_frequency: ['Yearly'],
+      premium_payment_term_min: 5,
+      premium_payment_term_max: 35,
+      premium_payment_term_type: 'Years',
+      coverage_details: {
+        base_coverage: '',
+        additional_coverage: null,
+        exclusions: [],
+        waiting_period_days: 0,
+        renewability: 'Term',
+        claim_settlement_ratio: null
+      },
+      riders: [],
+      beneficiary_required: true,
+      nomination_allowed: true,
+      tax_benefits: [],
+      cc: 0,
+      si: 0,
+      is_active: true,
+      launch_date: '',
+      withdrawal_date: null
+    })
+  }
+
+  const resetInsuranceRiderForm = () => {
+    setInsuranceRiderFormData({
+      rider_id: '',
+      rider_name: '',
+      description: '',
+      rider_type: '',
+      min_sum_assured: null,
+      max_sum_assured: null,
+      rider_premium_percentage: null,
+      rider_premium_fixed: null,
+      eligibility_criteria: '',
+      is_active: true
+    })
+  }
+
+  const openInsuranceIssuerEdit = (issuer) => {
+    setEditingInsuranceIssuer(issuer)
+    setInsuranceIssuerFormData({
+      legal_name: issuer.legal_name || '',
+      short_name: issuer.short_name || '',
+      type: issuer.type || 'Life',
+      license_number: issuer.license_number || '',
+      is_active: issuer.is_active !== undefined ? issuer.is_active : true,
+      products: issuer.products || []
+    })
+  }
+
+  const openInsuranceProductEdit = (product) => {
+    setEditingInsuranceProduct(product)
+    setInsuranceProductFormData({
+      product_id: product.product_id || '',
+      product_name: product.product_name || '',
+      category: product.category || 'Life',
+      sub_category: product.sub_category || '',
+      description: product.description || '',
+      policy_types: product.policy_types || ['Term'],
+      min_sum_assured: product.min_sum_assured || 100000,
+      max_sum_assured: product.max_sum_assured || null,
+      min_premium: product.min_premium || 5000,
+      max_premium: product.max_premium || null,
+      min_entry_age: product.min_entry_age || 18,
+      max_entry_age: product.max_entry_age || 65,
+      policy_term_years_min: product.policy_term_years_min || 10,
+      policy_term_years_max: product.policy_term_years_max || 40,
+      premium_payment_frequency: product.premium_payment_frequency || ['Yearly'],
+      premium_payment_term_min: product.premium_payment_term_min || 5,
+      premium_payment_term_max: product.premium_payment_term_max || 35,
+      premium_payment_term_type: product.premium_payment_term_type || 'Years',
+      coverage_details: product.coverage_details || {
+        base_coverage: '',
+        additional_coverage: null,
+        exclusions: [],
+        waiting_period_days: 0,
+        renewability: 'Term',
+        claim_settlement_ratio: null
+      },
+      riders: product.riders || [],
+      beneficiary_required: product.beneficiary_required !== undefined ? product.beneficiary_required : true,
+      nomination_allowed: product.nomination_allowed !== undefined ? product.nomination_allowed : true,
+      tax_benefits: product.tax_benefits || [],
+      cc: product.cc || 0,
+      si: product.si || 0,
+      is_active: product.is_active !== undefined ? product.is_active : true,
+      launch_date: product.launch_date || '',
+      withdrawal_date: product.withdrawal_date || null
+    })
+  }
+
+  const openInsuranceRiderEdit = (rider) => {
+    setEditingInsuranceRider(rider)
+    setInsuranceRiderFormData({
+      rider_id: rider.rider_id || '',
+      rider_name: rider.rider_name || '',
+      description: rider.description || '',
+      rider_type: rider.rider_type || '',
+      min_sum_assured: rider.min_sum_assured || null,
+      max_sum_assured: rider.max_sum_assured || null,
+      rider_premium_percentage: rider.rider_premium_percentage || null,
+      rider_premium_fixed: rider.rider_premium_fixed || null,
+      eligibility_criteria: rider.eligibility_criteria || '',
+      is_active: rider.is_active !== undefined ? rider.is_active : true
+    })
+  }
+
+  const handleCreateInsuranceIssuer = async (e) => {
+    e.preventDefault()
+    try {
+      const trimmedData = trimFormData(insuranceIssuerFormData)
+      await api.createInsuranceIssuer(token, trimmedData)
+      await loadInsuranceIssuers()
+      setShowInsuranceIssuerForm(false)
+      resetInsuranceIssuerForm()
+    } catch (err) {
+      alert('Failed to create insurance issuer: ' + err.message)
+    }
+  }
+
+  const handleUpdateInsuranceIssuer = async (e) => {
+    e.preventDefault()
+    try {
+      const trimmedData = trimFormData(insuranceIssuerFormData)
+      await api.updateInsuranceIssuer(token, editingInsuranceIssuer._key, trimmedData)
+      await loadInsuranceIssuers()
+      setEditingInsuranceIssuer(null)
+      setShowInsuranceIssuerForm(false)
+      resetInsuranceIssuerForm()
+    } catch (err) {
+      alert('Failed to update insurance issuer: ' + err.message)
+    }
+  }
+
+  const handleDeleteInsuranceIssuer = async (issuer_key) => {
+    if (!confirm('Are you sure you want to delete this insurance issuer and all its products?')) return
+    try {
+      await api.deleteInsuranceIssuer(token, issuer_key)
+      await loadInsuranceIssuers()
+      setSelectedInsuranceIssuer(null)
+    } catch (err) {
+      alert('Failed to delete insurance issuer: ' + err.message)
+    }
+  }
+
+  const handleCreateInsuranceProduct = async (e) => {
+    e.preventDefault()
+    if (!selectedInsuranceIssuer) {
+      alert('Please select an insurance issuer first')
+      return
+    }
+    try {
+      const issuerKey = selectedInsuranceIssuer._key
+      const trimmedData = trimFormData(insuranceProductFormData)
+      await api.createInsuranceProduct(token, issuerKey, trimmedData)
+      await loadInsuranceProducts(issuerKey)
+      setShowInsuranceProductForm(false)
+      resetInsuranceProductForm()
+    } catch (err) {
+      alert('Failed to create insurance product: ' + err.message)
+    }
+  }
+
+  const handleUpdateInsuranceProduct = async (e) => {
+    e.preventDefault()
+    if (!selectedInsuranceIssuer || !editingInsuranceProduct) return
+    try {
+      const issuerKey = selectedInsuranceIssuer._key
+      const trimmedData = trimFormData(insuranceProductFormData)
+      await api.updateInsuranceProduct(token, issuerKey, editingInsuranceProduct.product_id, trimmedData)
+      await loadInsuranceProducts(issuerKey)
+      setEditingInsuranceProduct(null)
+      setShowInsuranceProductForm(false)
+      resetInsuranceProductForm()
+    } catch (err) {
+      alert('Failed to update insurance product: ' + err.message)
+    }
+  }
+
+  const handleDeleteInsuranceProduct = async (product_id) => {
+    if (!confirm('Are you sure you want to delete this insurance product?')) return
+    if (!selectedInsuranceIssuer) return
+    try {
+      const issuerKey = selectedInsuranceIssuer._key
+      await api.deleteInsuranceProduct(token, issuerKey, product_id)
+      await loadInsuranceProducts(issuerKey)
+    } catch (err) {
+      alert('Failed to delete insurance product: ' + err.message)
+    }
+  }
+
+  const handleCreateInsuranceRider = async (e) => {
+    e.preventDefault()
+    if (!selectedInsuranceIssuer || !selectedInsuranceProduct) {
+      alert('Please select an insurance issuer and product first')
+      return
+    }
+    try {
+      const issuerKey = selectedInsuranceIssuer._key
+      const productId = selectedInsuranceProduct.product_id
+      const trimmedData = trimFormData(insuranceRiderFormData)
+      await api.createInsuranceRider(token, issuerKey, productId, trimmedData)
+      await loadInsuranceRiders(issuerKey, productId)
+      setShowInsuranceRiderForm(false)
+      resetInsuranceRiderForm()
+    } catch (err) {
+      alert('Failed to create insurance rider: ' + err.message)
+    }
+  }
+
+  const handleUpdateInsuranceRider = async (e) => {
+    e.preventDefault()
+    if (!selectedInsuranceIssuer || !selectedInsuranceProduct || !editingInsuranceRider) return
+    try {
+      const issuerKey = selectedInsuranceIssuer._key
+      const productId = selectedInsuranceProduct.product_id
+      const trimmedData = trimFormData(insuranceRiderFormData)
+      await api.updateInsuranceRider(token, issuerKey, productId, editingInsuranceRider.rider_id, trimmedData)
+      await loadInsuranceRiders(issuerKey, productId)
+      setEditingInsuranceRider(null)
+      setShowInsuranceRiderForm(false)
+      resetInsuranceRiderForm()
+    } catch (err) {
+      alert('Failed to update insurance rider: ' + err.message)
+    }
+  }
+
+  const handleDeleteInsuranceRider = async (rider_id) => {
+    if (!confirm('Are you sure you want to delete this insurance rider?')) return
+    if (!selectedInsuranceIssuer || !selectedInsuranceProduct) return
+    try {
+      const issuerKey = selectedInsuranceIssuer._key
+      const productId = selectedInsuranceProduct.product_id
+      await api.deleteInsuranceRider(token, issuerKey, productId, rider_id)
+      await loadInsuranceRiders(issuerKey, productId)
+    } catch (err) {
+      alert('Failed to delete insurance rider: ' + err.message)
+    }
   }
   
   const handleCreateNcdBondIssuer = async (e) => {
@@ -2108,6 +2454,596 @@ useEffect(() => {
                       className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
                       {editingFDSlab ? 'Update Slab' : 'Create Slab'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Insurance Riders View - Must be checked BEFORE Products view
+  if (activeTab === 'Insurance' && selectedInsuranceProduct && selectedInsuranceIssuer) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <button
+            onClick={() => setSelectedInsuranceProduct(null)}
+            className="inline-flex items-center mb-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <FiArrowLeft className="w-4 h-4 mr-2" />
+            Back to Products
+          </button>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {selectedInsuranceProduct.product_name}
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {selectedInsuranceIssuer.short_name} • {selectedInsuranceProduct.category}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                resetInsuranceRiderForm()
+                setEditingInsuranceRider(null)
+                setShowInsuranceRiderForm(true)
+              }}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FiPlus className="w-4 h-4 mr-2" />
+              Add Rider
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Rider Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sum Assured Range</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Premium</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    </td>
+                  </tr>
+                ) : insuranceRiders.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No riders available for this product.
+                    </td>
+                  </tr>
+                ) : (
+                  insuranceRiders.map((rider) => (
+                    <tr key={rider.rider_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{rider.rider_name}</div>
+                        {rider.description && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{rider.description}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {rider.rider_type || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {rider.min_sum_assured && rider.max_sum_assured 
+                          ? `₹${rider.min_sum_assured.toLocaleString()} - ₹${rider.max_sum_assured.toLocaleString()}`
+                          : rider.min_sum_assured 
+                            ? `₹${rider.min_sum_assured.toLocaleString()}+`
+                            : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {rider.rider_premium_percentage 
+                          ? `${rider.rider_premium_percentage}%`
+                          : rider.rider_premium_fixed 
+                            ? `₹${rider.rider_premium_fixed.toLocaleString()}`
+                            : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          rider.is_active !== false
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                        }`}>
+                          {rider.is_active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openInsuranceRiderEdit(rider)
+                            setShowInsuranceRiderForm(true)
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          <FiEdit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            await handleDeleteInsuranceRider(rider.rider_id)
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Insurance Rider Form Modal - Embedded in Riders View */}
+        {showInsuranceRiderForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  {editingInsuranceRider ? 'Edit Insurance Rider' : 'Add New Insurance Rider'}
+                </h2>
+                <form onSubmit={editingInsuranceRider ? handleUpdateInsuranceRider : handleCreateInsuranceRider} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Rider ID <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={insuranceRiderFormData.rider_id}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Rider Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={insuranceRiderFormData.rider_name}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      value={insuranceRiderFormData.description}
+                      onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, description: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      rows="3"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Rider Type
+                      </label>
+                      <input
+                        type="text"
+                        value={insuranceRiderFormData.rider_type}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_type: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., Accidental Death, Critical Illness"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Eligibility Criteria
+                      </label>
+                      <input
+                        type="text"
+                        value={insuranceRiderFormData.eligibility_criteria}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, eligibility_criteria: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Min Sum Assured (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={insuranceRiderFormData.min_sum_assured || ''}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, min_sum_assured: e.target.value ? parseFloat(e.target.value) : null })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Max Sum Assured (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={insuranceRiderFormData.max_sum_assured || ''}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, max_sum_assured: e.target.value ? parseFloat(e.target.value) : null })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Premium Percentage (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={insuranceRiderFormData.rider_premium_percentage || ''}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_premium_percentage: e.target.value ? parseFloat(e.target.value) : null })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Premium Fixed (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={insuranceRiderFormData.rider_premium_fixed || ''}
+                        onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_premium_fixed: e.target.value ? parseFloat(e.target.value) : null })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={insuranceRiderFormData.is_active}
+                      onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, is_active: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Is Active
+                    </label>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowInsuranceRiderForm(false)
+                        setEditingInsuranceRider(null)
+                        resetInsuranceRiderForm()
+                      }}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editingInsuranceRider ? 'Update Rider' : 'Add Rider'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Insurance Detail View (Products Table)
+  if (activeTab === 'Insurance' && selectedInsuranceIssuer) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <button
+            onClick={() => setSelectedInsuranceIssuer(null)}
+            className="inline-flex items-center mb-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <FiArrowLeft className="w-4 h-4 mr-2" />
+            Back to Insurance Issuers
+          </button>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {selectedInsuranceIssuer.short_name}
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Legal Name: {selectedInsuranceIssuer.legal_name} | Type: {selectedInsuranceIssuer.type || 'Insurance'}
+              </p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={async () => {
+                  try {
+                    setExporting(true)
+                    const issuerKey = selectedInsuranceIssuer._key
+                    await api.exportInsuranceSchemesExcel(token, issuerKey)
+                  } catch (err) {
+                    setError(err.message || 'Export failed')
+                  } finally {
+                    setExporting(false)
+                  }
+                }}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export'}
+              </button>
+              <button
+                onClick={() => {
+                  resetInsuranceProductForm()
+                  setEditingInsuranceProduct(null)
+                  setShowInsuranceProductForm(true)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Product
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Insurance Products Table */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Product Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Category
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Sub Category
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    </td>
+                  </tr>
+                ) : filteredInsuranceProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No insurance products available.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInsuranceProducts.map((product) => (
+                    <tr key={product.product_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{product.product_name}</div>
+                        {product.description && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{product.description}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {product.category || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {product.sub_category || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          product.is_active !== false
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                        }`}>
+                          {product.is_active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedInsuranceProduct(product)
+                          }}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          View Riders
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openInsuranceProductEdit(product)
+                            setShowInsuranceProductForm(true)
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          <FiEdit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            await handleDeleteInsuranceProduct(product.product_id)
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Insurance Product Form Modal - Embedded in Products View */}
+        {showInsuranceProductForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  {editingInsuranceProduct ? 'Edit Insurance Product' : 'Add New Insurance Product'}
+                </h2>
+                <form onSubmit={editingInsuranceProduct ? handleUpdateInsuranceProduct : handleCreateInsuranceProduct} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Product ID <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={insuranceProductFormData.product_id}
+                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, product_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Product Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={insuranceProductFormData.product_name}
+                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, product_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Category <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        required
+                        value={insuranceProductFormData.category}
+                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, category: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="Life">Life</option>
+                        <option value="Health">Health</option>
+                        <option value="General">General</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Sub Category
+                      </label>
+                      <input
+                        type="text"
+                        value={insuranceProductFormData.sub_category}
+                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, sub_category: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      value={insuranceProductFormData.description}
+                      onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, description: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      rows="3"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Commission (CC) %
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={insuranceProductFormData.cc}
+                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, cc: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Service Income (SI) %
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={insuranceProductFormData.si}
+                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, si: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={insuranceProductFormData.is_active}
+                      onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, is_active: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                      Is Active
+                    </label>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowInsuranceProductForm(false)
+                        setEditingInsuranceProduct(null)
+                        resetInsuranceProductForm()
+                      }}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editingInsuranceProduct ? 'Update Product' : 'Add Product'}
                     </button>
                   </div>
                 </form>
@@ -3346,7 +4282,17 @@ useEffect(() => {
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              NCD/Bonds
+              NCD/Bond
+            </button>
+            <button 
+              onClick={() => setActiveTab('Insurance')}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'Insurance'
+                  ? 'text-gray-900 dark:text-white border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              Insurance
             </button>
           </div>
         </div>
@@ -3532,6 +4478,54 @@ useEffect(() => {
             </div>
             <button
               onClick={loadNcdBondIssuers}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </>
+        ) : activeTab === 'Insurance' ? (
+          <>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  resetInsuranceIssuerForm()
+                  setEditingInsuranceIssuer(null)
+                  setShowInsuranceIssuerForm(true)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Insurance Issuer
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    setExporting(true)
+                    await api.exportInsuranceSchemesExcel(token)
+                  } catch (err) {
+                    setError(err.message || 'Export failed')
+                  } finally {
+                    setExporting(false)
+                  }
+                }}
+                disabled={exporting}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiDownload className={`w-4 h-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+                {exporting ? 'Exporting...' : 'Export All'}
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FiUpload className="w-4 h-4 mr-2" />
+                Import
+              </button>
+            </div>
+            <button
+              onClick={loadInsuranceIssuers}
               disabled={loading}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
@@ -3804,6 +4798,97 @@ useEffect(() => {
                           onClick={(e) => {
                             e.stopPropagation()
                             handleDeleteNcdBondIssuer(issuer._key)
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : activeTab === 'Insurance' && !selectedInsuranceIssuer ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Issuer Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Products
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    </td>
+                  </tr>
+                ) : filteredInsuranceIssuers.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No insurance issuers available.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInsuranceIssuers.map((issuer, idx) => (
+                    <tr 
+                      key={issuer._key || idx} 
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      onClick={() => setSelectedInsuranceIssuer(issuer)}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {issuer.short_name}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{issuer.legal_name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                          {issuer.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {issuer.products?.length || 0} products
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedInsuranceIssuer(issuer)
+                          }}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          View Products
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openInsuranceIssuerEdit(issuer)
+                            setShowInsuranceIssuerForm(true)
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                        >
+                          <FiEdit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            await handleDeleteInsuranceIssuer(issuer._key)
                           }}
                           className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
                         >
@@ -4867,6 +5952,108 @@ useEffect(() => {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     {editingNcdBondScheme ? 'Update Scheme' : 'Add Scheme'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Insurance Issuer Form Modal */}
+      {showInsuranceIssuerForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                {editingInsuranceIssuer ? 'Edit Insurance Issuer' : 'Add New Insurance Issuer'}
+              </h2>
+              <form onSubmit={editingInsuranceIssuer ? handleUpdateInsuranceIssuer : handleCreateInsuranceIssuer} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Legal Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={insuranceIssuerFormData.legal_name}
+                      onChange={(e) => setInsuranceIssuerFormData({ ...insuranceIssuerFormData, legal_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Short Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={insuranceIssuerFormData.short_name}
+                      onChange={(e) => setInsuranceIssuerFormData({ ...insuranceIssuerFormData, short_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={insuranceIssuerFormData.type}
+                      onChange={(e) => setInsuranceIssuerFormData({ ...insuranceIssuerFormData, type: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="Life">Life</option>
+                      <option value="Health">Health</option>
+                      <option value="General">General</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      License Number
+                    </label>
+                    <input
+                      type="text"
+                      value={insuranceIssuerFormData.license_number}
+                      onChange={(e) => setInsuranceIssuerFormData({ ...insuranceIssuerFormData, license_number: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={insuranceIssuerFormData.is_active}
+                    onChange={(e) => setInsuranceIssuerFormData({ ...insuranceIssuerFormData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                    Is Active
+                  </label>
+                </div>
+                
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInsuranceIssuerForm(false)
+                      setEditingInsuranceIssuer(null)
+                      resetInsuranceIssuerForm()
+                    }}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    {editingInsuranceIssuer ? 'Update Issuer' : 'Add Issuer'}
                   </button>
                 </div>
               </form>

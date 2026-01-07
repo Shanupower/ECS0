@@ -16,7 +16,7 @@ function StepProductType({ onBack, onNext }) {
       label: 'Insurance', 
       icon: '🛡️',
       description: 'Protect your future with life and health insurance',
-      enabled: false
+      enabled: true
     },
     { 
       value: 'FD', 
