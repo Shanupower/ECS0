@@ -13,6 +13,21 @@ import {
   FiDownload,
   FiUpload
 } from 'react-icons/fi'
+import bondCategories from '../data/bond_categories.json'
+
+/** Life insurance subcategory options for scheme management */
+const LIFE_SUBCATEGORIES = [
+  'Term Insurance',
+  'Term Insurance (Return of Premium)',
+  'Whole Life Insurance',
+  'Endowment Plan',
+  'Money Back Plan',
+  'Unit Linked Insurance Plan (ULIP)',
+  'Child Insurance Plan',
+  'Retirement / Pension Plan',
+  'Annuity Plan',
+  'Group Life Insurance'
+]
 
 export default function SchemeManagementPage() {
   const { token, user } = useAuth()
@@ -27,6 +42,7 @@ export default function SchemeManagementPage() {
   const [insuranceIssuers, setInsuranceIssuers] = useState([])
   const [insuranceProducts, setInsuranceProducts] = useState([])
   const [insuranceRiders, setInsuranceRiders] = useState([])
+  const [miscServicesScheme, setMiscServicesScheme] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedAmc, setSelectedAmc] = useState(null)
@@ -46,6 +62,7 @@ export default function SchemeManagementPage() {
   const [showInsuranceIssuerForm, setShowInsuranceIssuerForm] = useState(false)
   const [showInsuranceProductForm, setShowInsuranceProductForm] = useState(false)
   const [showInsuranceRiderForm, setShowInsuranceRiderForm] = useState(false)
+  const [showMiscPriceRangeForm, setShowMiscPriceRangeForm] = useState(false)
   const [editingFDIssuer, setEditingFDIssuer] = useState(null)
   const [editingFDScheme, setEditingFDScheme] = useState(null)
   const [editingFDSlab, setEditingFDSlab] = useState(null)
@@ -54,6 +71,7 @@ export default function SchemeManagementPage() {
   const [editingInsuranceIssuer, setEditingInsuranceIssuer] = useState(null)
   const [editingInsuranceProduct, setEditingInsuranceProduct] = useState(null)
   const [editingInsuranceRider, setEditingInsuranceRider] = useState(null)
+  const [editingMiscPriceRange, setEditingMiscPriceRange] = useState(null)
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -137,6 +155,8 @@ export default function SchemeManagementPage() {
     scheme_name: '',
     isin: '',
     description_short: '',
+    category: '',
+    sub_category: '',
     coupon_rate: 0,
     face_value: 1000,
     issue_date: '',
@@ -201,6 +221,10 @@ export default function SchemeManagementPage() {
     tax_benefits: [],
     cc: 0,
     si: 0,
+    cc_fresh: 0,
+    si_fresh: 0,
+    cc_renewal: 0,
+    si_renewal: 0,
     is_active: true,
     launch_date: '',
     withdrawal_date: null
@@ -255,6 +279,13 @@ export default function SchemeManagementPage() {
     is_active: true
   })
 
+  const [miscPriceRangeFormData, setMiscPriceRangeFormData] = useState({
+    min_price: 0,
+    max_price: 10000,
+    cc: 0,
+    si: 0
+  })
+
   const isAdmin = user?.role === 'admin'
 
   useEffect(() => {
@@ -272,6 +303,8 @@ export default function SchemeManagementPage() {
       loadNcdBondIssuers()
     } else if (activeTab === 'Insurance') {
       loadInsuranceIssuers()
+    } else if (activeTab === 'MiscServices') {
+      loadMiscServicesScheme()
     }
   }, [token, isAdmin, activeTab])
 
@@ -968,6 +1001,156 @@ useEffect(() => {
       is_active: true
     })
   }
+
+  const resetMiscPriceRangeForm = () => {
+    setMiscPriceRangeFormData({
+      min_price: 0,
+      max_price: 10000,
+      cc: 0,
+      si: 0
+    })
+  }
+
+  const openMiscPriceRangeEdit = (range) => {
+    setEditingMiscPriceRange(range)
+    setMiscPriceRangeFormData({
+      min_price: range.min_price || 0,
+      max_price: range.max_price || 10000,
+      cc: range.cc || 0,
+      si: range.si || 0
+    })
+  }
+
+  // Helper function to check if two price ranges overlap
+  const rangesOverlap = (range1, range2) => {
+    const min1 = parseFloat(range1.min_price)
+    const max1 = parseFloat(range1.max_price)
+    const min2 = parseFloat(range2.min_price)
+    const max2 = parseFloat(range2.max_price)
+    
+    // Check if ranges overlap
+    // Ranges overlap if: min1 <= max2 && min2 <= max1
+    return min1 <= max2 && min2 <= max1
+  }
+
+  // Helper function to check for duplicate or overlapping ranges
+  const validatePriceRange = (newRange, existingRanges, excludeRange = null) => {
+    const newMin = parseFloat(newRange.min_price)
+    const newMax = parseFloat(newRange.max_price)
+    
+    // Check min <= max
+    if (newMin > newMax) {
+      return { valid: false, error: 'Min price must be less than or equal to max price' }
+    }
+    
+    // Check for duplicates and overlaps
+    for (const existing of existingRanges) {
+      // Skip the range we're editing (if updating)
+      if (excludeRange && 
+          existing.min_price === excludeRange.min_price && 
+          existing.max_price === excludeRange.max_price) {
+        continue
+      }
+      
+      const existingMin = parseFloat(existing.min_price)
+      const existingMax = parseFloat(existing.max_price)
+      
+      // Check for exact duplicate
+      if (newMin === existingMin && newMax === existingMax) {
+        return { valid: false, error: `A price range with the same min (₹${newMin}) and max (₹${newMax}) already exists` }
+      }
+      
+      // Check for overlap
+      if (rangesOverlap(newRange, existing)) {
+        return { valid: false, error: `This price range overlaps with an existing range (₹${existingMin} - ₹${existingMax})` }
+      }
+    }
+    
+    return { valid: true }
+  }
+
+  const handleCreateMiscPriceRange = async (e) => {
+    e.preventDefault()
+    if (!miscServicesScheme) return
+    
+    // Validate for duplicates and overlaps
+    const validation = validatePriceRange(
+      miscPriceRangeFormData, 
+      miscServicesScheme.price_ranges || []
+    )
+    
+    if (!validation.valid) {
+      alert(validation.error)
+      return
+    }
+    
+    try {
+      const newRanges = [...(miscServicesScheme.price_ranges || []), { ...miscPriceRangeFormData }]
+      const updatedScheme = { ...miscServicesScheme, price_ranges: newRanges }
+      await api.updateMiscServicesScheme(token, updatedScheme)
+      await loadMiscServicesScheme()
+      setShowMiscPriceRangeForm(false)
+      resetMiscPriceRangeForm()
+    } catch (err) {
+      alert('Failed to create price range: ' + err.message)
+    }
+  }
+
+  const handleUpdateMiscPriceRange = async (e) => {
+    e.preventDefault()
+    if (!miscServicesScheme || !editingMiscPriceRange) return
+    
+    // Validate for duplicates and overlaps (excluding the range being edited)
+    const validation = validatePriceRange(
+      miscPriceRangeFormData, 
+      miscServicesScheme.price_ranges || [],
+      editingMiscPriceRange
+    )
+    
+    if (!validation.valid) {
+      alert(validation.error)
+      return
+    }
+    
+    try {
+      const newRanges = miscServicesScheme.price_ranges.map((range, idx) => {
+        // Find the range to update (by index or by matching values)
+        if (range === editingMiscPriceRange || 
+            (range.min_price === editingMiscPriceRange.min_price && 
+             range.max_price === editingMiscPriceRange.max_price)) {
+          return { ...miscPriceRangeFormData }
+        }
+        return range
+      })
+      const updatedScheme = { ...miscServicesScheme, price_ranges: newRanges }
+      await api.updateMiscServicesScheme(token, updatedScheme)
+      await loadMiscServicesScheme()
+      setEditingMiscPriceRange(null)
+      setShowMiscPriceRangeForm(false)
+      resetMiscPriceRangeForm()
+    } catch (err) {
+      alert('Failed to update price range: ' + err.message)
+    }
+  }
+
+  const handleDeleteMiscPriceRange = async (rangeToDelete) => {
+    if (!confirm('Delete this price range?')) return
+    if (!miscServicesScheme) return
+    
+    try {
+      const newRanges = miscServicesScheme.price_ranges.filter((range) => {
+        return !(range.min_price === rangeToDelete.min_price && 
+                 range.max_price === rangeToDelete.max_price &&
+                 range.cc === rangeToDelete.cc &&
+                 range.si === rangeToDelete.si)
+      })
+      const updatedScheme = { ...miscServicesScheme, price_ranges: newRanges }
+      await api.updateMiscServicesScheme(token, updatedScheme)
+      await loadMiscServicesScheme()
+    } catch (err) {
+      alert('Failed to delete price range: ' + err.message)
+    }
+  }
   
   const openFDIssuerEdit = (issuer) => {
     setEditingFDIssuer(issuer)
@@ -1050,6 +1233,8 @@ useEffect(() => {
       scheme_name: scheme.scheme_name || '',
       isin: scheme.isin || '',
       description_short: scheme.description_short || scheme.description || '',
+      category: scheme.category || '',
+      sub_category: scheme.sub_category || '',
       coupon_rate: scheme.coupon_rate || 0,
       face_value: scheme.face_value || 1000,
       issue_date: scheme.issue_date || '',
@@ -1089,6 +1274,8 @@ useEffect(() => {
       scheme_name: '',
       isin: '',
       description_short: '',
+      category: '',
+      sub_category: '',
       coupon_rate: 0,
       face_value: 1000,
       issue_date: '',
@@ -1157,6 +1344,10 @@ useEffect(() => {
       tax_benefits: [],
       cc: 0,
       si: 0,
+      cc_fresh: 0,
+      si_fresh: 0,
+      cc_renewal: 0,
+      si_renewal: 0,
       is_active: true,
       launch_date: '',
       withdrawal_date: null
@@ -1225,6 +1416,10 @@ useEffect(() => {
       tax_benefits: product.tax_benefits || [],
       cc: product.cc || 0,
       si: product.si || 0,
+      cc_fresh: product.cc_fresh ?? product.cc ?? 0,
+      si_fresh: product.si_fresh ?? product.si ?? 0,
+      cc_renewal: product.cc_renewal ?? product.cc ?? 0,
+      si_renewal: product.si_renewal ?? product.si ?? 0,
       is_active: product.is_active !== undefined ? product.is_active : true,
       launch_date: product.launch_date || '',
       withdrawal_date: product.withdrawal_date || null
@@ -1556,6 +1751,71 @@ useEffect(() => {
   // Note: NCDs/Bonds don't use rate slabs - they have fixed coupon rates
 
   // Insurance loading functions
+  const loadMiscServicesScheme = async () => {
+    if (!token) return
+    setLoading(true)
+    setError('')
+    try {
+      const scheme = await api.getMiscServicesScheme(token)
+      setMiscServicesScheme(scheme)
+    } catch (err) {
+      console.error('Failed to load misc services scheme:', err)
+      setError('Failed to load misc services scheme: ' + (err.message || 'Unknown error'))
+      // Initialize with empty scheme if not found
+      setMiscServicesScheme({
+        _key: 'misc_services',
+        scheme_name: 'Misc Services',
+        price_ranges: [],
+        is_active: true
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const saveMiscServicesScheme = async () => {
+    if (!token || !miscServicesScheme) return
+    
+    // Validate price ranges
+    const errors = []
+    if (!miscServicesScheme.price_ranges || miscServicesScheme.price_ranges.length === 0) {
+      errors.push('At least one price range is required')
+    }
+    
+    miscServicesScheme.price_ranges?.forEach((range, idx) => {
+      const minPrice = parseFloat(range.min_price)
+      const maxPrice = parseFloat(range.max_price)
+      if (isNaN(minPrice) || isNaN(maxPrice) || minPrice > maxPrice) {
+        errors.push(`Range ${idx + 1}: min_price must be <= max_price`)
+      }
+      if (isNaN(parseFloat(range.cc)) || parseFloat(range.cc) < 0) {
+        errors.push(`Range ${idx + 1}: CC must be a non-negative number`)
+      }
+      if (isNaN(parseFloat(range.si)) || parseFloat(range.si) < 0) {
+        errors.push(`Range ${idx + 1}: SI must be a non-negative number`)
+      }
+    })
+    
+    if (errors.length > 0) {
+      alert('Validation errors:\n' + errors.join('\n'))
+      return
+    }
+    
+    setLoading(true)
+    setError('')
+    try {
+      await api.updateMiscServicesScheme(token, miscServicesScheme)
+      alert('Misc Services scheme saved successfully!')
+      await loadMiscServicesScheme()
+    } catch (err) {
+      console.error('Failed to save misc services scheme:', err)
+      setError('Failed to save misc services scheme: ' + (err.message || 'Unknown error'))
+      alert('Failed to save: ' + (err.message || 'Unknown error'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const loadInsuranceIssuers = async () => {
     if (!token) return
     
@@ -1703,37 +1963,43 @@ useEffect(() => {
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                    Scheme Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                    ISIN
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                    Coupon Rate
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                    Maturity Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                    Actions
-                  </th>
-                </tr>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Scheme Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Category
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Sub Category
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        ISIN
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Coupon Rate
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Maturity Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Actions
+                      </th>
+                    </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center">
+                    <td colSpan="8" className="px-6 py-8 text-center">
                       <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
                     </td>
                   </tr>
                 ) : filteredNcdBondSchemes.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="8" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                       No NCD/Bond schemes available.
                     </td>
                   </tr>
@@ -1745,6 +2011,12 @@ useEffect(() => {
                         {scheme.description && (
                           <div className="text-xs text-gray-500 dark:text-gray-400">{scheme.description}</div>
                         )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {scheme.category || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {scheme.sub_category || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {scheme.isin || 'N/A'}
@@ -1871,6 +2143,48 @@ useEffect(() => {
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       placeholder="Brief description for display"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Category <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        required
+                        value={ncdBondSchemeFormData.category}
+                        onChange={(e) => {
+                          setNcdBondSchemeFormData({ 
+                            ...ncdBondSchemeFormData, 
+                            category: e.target.value,
+                            sub_category: '' // Reset subcategory when category changes
+                          })
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Select Category</option>
+                        {Object.keys(bondCategories).map(category => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Sub Category <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        required
+                        value={ncdBondSchemeFormData.sub_category}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, sub_category: e.target.value })}
+                        disabled={!ncdBondSchemeFormData.category}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">Select Sub Category</option>
+                        {ncdBondSchemeFormData.category && bondCategories[ncdBondSchemeFormData.category]?.map(subCategory => (
+                          <option key={subCategory} value={subCategory}>{subCategory}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -2955,7 +3269,15 @@ useEffect(() => {
                       <select
                         required
                         value={insuranceProductFormData.category}
-                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, category: e.target.value })}
+                        onChange={(e) => {
+                          const newCategory = e.target.value
+                          setInsuranceProductFormData({
+                            ...insuranceProductFormData,
+                            category: newCategory,
+                            // Clear sub_category when switching away from Life so it doesn't hold a Life-only value
+                            sub_category: newCategory === 'Life' ? insuranceProductFormData.sub_category : ''
+                          })
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       >
                         <option value="Life">Life</option>
@@ -2967,12 +3289,26 @@ useEffect(() => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Sub Category
                       </label>
-                      <input
-                        type="text"
-                        value={insuranceProductFormData.sub_category}
-                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, sub_category: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
+                      {insuranceProductFormData.category === 'Life' ? (
+                        <select
+                          value={insuranceProductFormData.sub_category}
+                          onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, sub_category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">Select sub category</option>
+                          {LIFE_SUBCATEGORIES.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={insuranceProductFormData.sub_category}
+                          onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, sub_category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder="Sub category (Health/General)"
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -2989,30 +3325,85 @@ useEffect(() => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Commission (CC) %
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={insuranceProductFormData.cc}
-                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, cc: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Service Income (SI) %
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={insuranceProductFormData.si}
-                        onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, si: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
+                    {insuranceProductFormData.category === 'Life' ? (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Commission (CC) % — Fresh
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insuranceProductFormData.cc_fresh}
+                            onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, cc_fresh: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Service Income (SI) % — Fresh
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insuranceProductFormData.si_fresh}
+                            onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, si_fresh: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Commission (CC) % — Renewal
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insuranceProductFormData.cc_renewal}
+                            onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, cc_renewal: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Service Income (SI) % — Renewal
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insuranceProductFormData.si_renewal}
+                            onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, si_renewal: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Commission (CC) %
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insuranceProductFormData.cc}
+                            onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, cc: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Service Income (SI) %
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insuranceProductFormData.si}
+                            onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, si: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                   
                   <div className="flex items-center">
@@ -4294,6 +4685,16 @@ useEffect(() => {
             >
               Insurance
             </button>
+            <button
+              onClick={() => setActiveTab('MiscServices')}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'MiscServices'
+                  ? 'text-gray-900 dark:text-white border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              Misc Services
+            </button>
           </div>
         </div>
       </div>
@@ -4533,6 +4934,15 @@ useEffect(() => {
               Refresh
             </button>
           </>
+        ) : activeTab === 'MiscServices' ? (
+          <button
+            onClick={loadMiscServicesScheme}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         ) : null}
       </div>
 
@@ -4954,6 +5364,7 @@ useEffect(() => {
                       <option value="NBFC">NBFC</option>
                       <option value="Bank">Bank</option>
                       <option value="Corporate FD">Corporate FD</option>
+                      <option value="Government(Post Office)">Government(Post Office)</option>
                     </select>
                   </div>
                   <div>
@@ -6054,6 +6465,185 @@ useEffect(() => {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     {editingInsuranceIssuer ? 'Update Issuer' : 'Add Issuer'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Misc Services Tab Content */}
+      {activeTab === 'MiscServices' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Misc Services Price Ranges</h2>
+              <button
+                onClick={() => {
+                  resetMiscPriceRangeForm()
+                  setEditingMiscPriceRange(null)
+                  setShowMiscPriceRangeForm(true)
+                }}
+                className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <FiPlus className="w-4 h-4 mr-2" />
+                Add Price Range
+              </button>
+            </div>
+
+            {loading && !miscServicesScheme ? (
+              <div className="text-center py-8">
+                <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Price Range</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">CC (%)</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SI (%)</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {!miscServicesScheme?.price_ranges || miscServicesScheme.price_ranges.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                          No price ranges configured. Click "Add Price Range" to get started.
+                        </td>
+                      </tr>
+                    ) : (
+                      miscServicesScheme.price_ranges.map((range, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            ₹{range.min_price?.toLocaleString('en-IN') || 0} - ₹{range.max_price?.toLocaleString('en-IN') || 0}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
+                            {range.cc || 0}%
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
+                            {range.si || 0}%
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => {
+                                openMiscPriceRangeEdit(range)
+                                setShowMiscPriceRangeForm(true)
+                              }}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-4"
+                            >
+                              <FiEdit className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMiscPriceRange(range)}
+                              className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                            >
+                              <FiTrash2 className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Misc Services Price Range Form Modal */}
+      {showMiscPriceRangeForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                {editingMiscPriceRange ? 'Edit Price Range' : 'Add New Price Range'}
+              </h2>
+              <form onSubmit={editingMiscPriceRange ? handleUpdateMiscPriceRange : handleCreateMiscPriceRange} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Min Price (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={miscPriceRangeFormData.min_price}
+                      onChange={(e) => setMiscPriceRangeFormData({ ...miscPriceRangeFormData, min_price: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Max Price (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={miscPriceRangeFormData.max_price}
+                      onChange={(e) => setMiscPriceRangeFormData({ ...miscPriceRangeFormData, max_price: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Collection Credit (CC %) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={miscPriceRangeFormData.cc}
+                      onChange={(e) => setMiscPriceRangeFormData({ ...miscPriceRangeFormData, cc: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Service Income (SI %) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={miscPriceRangeFormData.si}
+                      onChange={(e) => setMiscPriceRangeFormData({ ...miscPriceRangeFormData, si: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMiscPriceRangeForm(false)
+                      setEditingMiscPriceRange(null)
+                      resetMiscPriceRangeForm()
+                    }}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    {editingMiscPriceRange ? 'Update Range' : 'Create Range'}
                   </button>
                 </div>
               </form>

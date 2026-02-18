@@ -20,19 +20,20 @@ export default function PrintReceipt({ data = {} }) {
     // Receipt identification
     receiptNo: normalized.receipt_no,
     date: normalized.date,
-    branch: normalized.branch,
+    branch: normalized.branch ?? data.employee?.branch ?? data.branch ?? '',
     
-    // Employee
-    employeeName: normalized.employee_name,
-    empCode: normalized.emp_code,
+    // Employee (normalizer already handles nested employee and flat keys)
+    employeeName: normalized.employee_name ?? data.employee?.name ?? '',
+    empCode: normalized.emp_code ?? data.employee?.code ?? '',
     
-    // Investor
-    investorId: normalized.investor_id,
-    investorName: normalized.investor_name,
-    investorAddress: normalized.investor_address,
-    pinCode: normalized.pin_code,
-    pan: normalized.pan,
-    email: normalized.email,
+    // Investor (normalizer already handles nested employee/investor and flat keys)
+    investorId: normalized.investor_id ?? data.investor?.id ?? '',
+    investorName: normalized.investor_name ?? data.investor?.name ?? '',
+    investorAddress: normalized.investor_address ?? '',
+    pinCode: normalized.pin_code ?? data.investor?.address?.pin_code ?? '',
+    pan: normalized.pan ?? data.investor?.pan ?? '',
+    email: normalized.email ?? data.investor?.email ?? '',
+    mobile: normalized.mobile ?? data.investor?.mobile ?? '',
     
     // Product and transaction
     product_category: normalized.product_category,
@@ -65,6 +66,11 @@ export default function PrintReceipt({ data = {} }) {
     instrumentDate: normalized.instrument_date,
     bankName: normalized.bank_name,
     bankBranch: normalized.bank_branch,
+    entryMode: normalized.entry_mode,
+    channel: normalized.channel,
+    referenceNo: normalized.reference_no,
+    notes: normalized.notes,
+    txnDate: normalized.txn_date,
     fdr_demat_policy: normalized.fdr_demat_policy,
     renewalDueDate: normalized.renewal_due_date,
     maturityAmount: normalized.maturity_amount,
@@ -116,6 +122,32 @@ export default function PrintReceipt({ data = {} }) {
     fd_transaction_type: normalized.fd_transaction_type,
     fd_renewal_investment_type: normalized.fd_renewal_investment_type,
     fd_renewal_additional_amount: normalized.fd_renewal_additional_amount,
+
+    // Bond/NCD
+    bond_issuer_key: normalized.bond_issuer_key,
+    bond_issuer_name: normalized.bond_issuer_name,
+    bond_scheme_name: normalized.bond_scheme_name,
+    bond_isin: normalized.bond_isin,
+    bond_coupon_rate: normalized.bond_coupon_rate,
+    bond_face_value: normalized.bond_face_value,
+    bond_issue_date: normalized.bond_issue_date,
+    bond_maturity_date: normalized.bond_maturity_date,
+    bond_transaction_type: normalized.bond_transaction_type,
+    bond_number_of_units: normalized.bond_number_of_units,
+    bond_application_number: normalized.bond_application_number,
+
+    // Insurance
+    insurance_issuer_key: normalized.insurance_issuer_key,
+    insurance_product_name: normalized.insurance_product_name,
+    insurance_policy_number: normalized.insurance_policy_number,
+    insurance_sum_assured: normalized.insurance_sum_assured,
+    insurance_premium_frequency: normalized.insurance_premium_frequency,
+    insurance_date_of_issue: normalized.insurance_date_of_issue,
+    insurance_maturity_date: normalized.insurance_maturity_date,
+    insurance_policy_term_years: normalized.insurance_policy_term_years,
+    insurance_premium_payment_term: normalized.insurance_premium_payment_term,
+    insurance_category: normalized.insurance_category,
+    insurance_sub_category: normalized.insurance_sub_category,
   }
   const line = (label, value) => (
     <div className="rec-row">
@@ -157,6 +189,7 @@ export default function PrintReceipt({ data = {} }) {
             {line('PIN', receipt.pinCode)}
             {line('PAN', receipt.pan)}
           </div>
+          {receipt.mobile && line('Mobile', receipt.mobile)}
           {line('Email', receipt.email)}
         </div>
       </div>
@@ -167,18 +200,23 @@ export default function PrintReceipt({ data = {} }) {
           {line('Product Category', getCategoryDisplayName(receipt.product_category) || (Array.isArray(receipt.txnCategory) && receipt.txnCategory.length ? receipt.txnCategory.join(', ') : ''))}
           {line('Transaction', receipt.txnType)}
         </div>
-        <div className="two">
-          {line('Mode', receipt.mode)}
-          {line('Period / Installments', [receipt.sip_stp_swp_period, receipt.noOfInstallments ? `(${receipt.noOfInstallments})` : ''].filter(Boolean).join(' '))}
-        </div>
-        <div className="two">
-          {line('From', receipt.from)}
-          {line('To', receipt.to)}
-        </div>
-        <div className="two">
-          {line('Units / Amount', receipt.unitsOrAmount)}
-          {line('Investment Amount', fmtAmt(receipt.investmentAmount))}
-        </div>
+        {receipt.product_category === 'MF' && (
+          <>
+            <div className="two">
+              {line('Mode', receipt.mode)}
+              {line('Period / Installments', [receipt.sip_stp_swp_period, receipt.noOfInstallments ? `(${receipt.noOfInstallments})` : ''].filter(Boolean).join(' '))}
+            </div>
+            <div className="two">
+              {line('From', receipt.from)}
+              {line('To', receipt.to)}
+            </div>
+            <div className="two">
+              {line('Units / Amount', receipt.unitsOrAmount)}
+              {line('Investment Amount', fmtAmt(receipt.investmentAmount))}
+            </div>
+          </>
+        )}
+        {receipt.product_category !== 'MF' && line('Investment Amount', fmtAmt(receipt.investmentAmount))}
       </div>
 
       <div className="rec-grid">
@@ -189,34 +227,80 @@ export default function PrintReceipt({ data = {} }) {
           {line('Appln / Folio / Policy No', receipt.folioPolicyNo)}
         </div>
 
-        <div className="card">
-          <h3>FD / Bonds / NCD</h3>
-          {line('Type', receipt.fdType)}
-          {(receipt.fd_transaction_type || receipt.txn_type) && line('Transaction Type', receipt.fd_transaction_type || receipt.txn_type || 'Fresh')}
-          {receipt.fd_transaction_type === 'Renewal' && receipt.fd_renewal_investment_type && (
-            <>
-              {line('Renewal Investment', 
-                receipt.fd_renewal_investment_type === 'same' ? 'Same Amount' :
-                receipt.fd_renewal_investment_type === 'increased' ? 'Increased Amount' :
-                receipt.fd_renewal_investment_type === 'decreased' ? 'Decreased Amount' :
-                receipt.fd_renewal_investment_type
-              )}
-              {receipt.fd_renewal_additional_amount && line(
-                receipt.fd_renewal_investment_type === 'increased' ? 'Additional Amount' : 'Withdrawal Amount',
-                fmtAmt(receipt.fd_renewal_additional_amount)
-              )}
-            </>
-          )}
-          <div className="two">
-            {line('Client Type', receipt.clientType)}
-            {line('Deposit Period (Y/M)', receipt.depositPeriodYM)}
+        {(receipt.product_category === 'BOND' || receipt.product_category === 'NCD') && (
+          <div className="card">
+            <h3>Bond / NCD Details</h3>
+            {line('Issuer', receipt.bond_issuer_name)}
+            {line('Scheme', receipt.bond_scheme_name)}
+            {line('ISIN', receipt.bond_isin)}
+            <div className="two">
+              {line('Coupon rate (%)', receipt.bond_coupon_rate)}
+              {line('Face value', receipt.bond_face_value ? fmtAmt(receipt.bond_face_value) : null)}
+            </div>
+            <div className="two">
+              {line('Issue date', fmtDate(receipt.bond_issue_date))}
+              {line('Maturity date', fmtDate(receipt.bond_maturity_date))}
+            </div>
+            {line('Transaction type', receipt.bond_transaction_type)}
+            {line('Number of units', receipt.bond_number_of_units)}
+            {line('Application number', receipt.bond_application_number)}
           </div>
-          <div className="two">
-            {line('ROI (%)', receipt.roi)}
-            {line('Interest Payable', receipt.interestPayable)}
+        )}
+
+        {receipt.product_category === 'INS' && (
+          <div className="card">
+            <h3>Insurance Details</h3>
+            {line('Product', receipt.insurance_product_name)}
+            {line('Policy number', receipt.insurance_policy_number)}
+            {line('Sum assured', receipt.insurance_sum_assured ? fmtAmt(receipt.insurance_sum_assured) : null)}
+            <div className="two">
+              {line('Premium frequency', receipt.insurance_premium_frequency)}
+              {line('Policy term (years)', receipt.insurance_policy_term_years)}
+            </div>
+            {receipt.insurance_premium_payment_term && line('Premium payment term', receipt.insurance_premium_payment_term)}
+            <div className="two">
+              {line('Date of issue', fmtDate(receipt.insurance_date_of_issue))}
+              {line('Maturity date', fmtDate(receipt.insurance_maturity_date))}
+            </div>
+            {(receipt.insurance_category || receipt.insurance_sub_category) && (
+              <div className="two">
+                {line('Category', receipt.insurance_category)}
+                {line('Sub-category', receipt.insurance_sub_category)}
+              </div>
+            )}
           </div>
-          {line('Frequency', receipt.interestFrequency)}
-        </div>
+        )}
+
+        {receipt.product_category === 'FD' && (
+          <div className="card">
+            <h3>FD Details</h3>
+            {line('Type', receipt.fdType)}
+            {(receipt.fd_transaction_type || receipt.txn_type) && line('Transaction Type', receipt.fd_transaction_type || receipt.txn_type || 'Fresh')}
+            {receipt.fd_transaction_type === 'Renewal' && receipt.fd_renewal_investment_type && (
+              <>
+                {line('Renewal Investment',
+                  receipt.fd_renewal_investment_type === 'same' ? 'Same Amount' :
+                  receipt.fd_renewal_investment_type === 'increased' ? 'Increased Amount' :
+                  receipt.fd_renewal_investment_type === 'decreased' ? 'Decreased Amount' :
+                  receipt.fd_renewal_investment_type
+                )}
+                {receipt.fd_renewal_additional_amount && line(
+                  receipt.fd_renewal_investment_type === 'increased' ? 'Additional Amount' : 'Withdrawal Amount',
+                  fmtAmt(receipt.fd_renewal_additional_amount)
+                )}
+              </>
+            )}
+            <div className="two">
+              {line('Client Type', receipt.clientType)}
+              {line('Deposit Period (Y/M)', receipt.depositPeriodYM)}
+            </div>
+            <div className="two">
+              {line('ROI (%)', receipt.roi)}
+              {line('Interest Payable', receipt.interestPayable)}
+            </div>
+            {line('Frequency', receipt.interestFrequency)}
+          </div>
+        )}
       </div>
 
       {/* SIP/STP/SWP Specific Details */}
@@ -251,14 +335,22 @@ export default function PrintReceipt({ data = {} }) {
 
       <div className="rec-grid">
         <div className="card">
-          <h3>Payment Instrument</h3>
-          {line('Type', receipt.instrumentType)}
-          <div className="two">
-            {line('Number', receipt.instrumentNo)}
-            {line('Date', fmtDate(receipt.instrumentDate))}
-          </div>
-          {line('Bank', receipt.bankName)}
-          {line('Branch', receipt.bankBranch)}
+          <h3>Payment / Transaction details</h3>
+          {line('Payment type', receipt.entryMode || (receipt.referenceNo || receipt.channel) ? 'Online' : (receipt.instrumentType || receipt.instrumentNo || receipt.bankName) ? 'Offline' : (receipt.notes || receipt.channel) ? 'Others' : null)}
+          {(receipt.entryMode === 'Online' || (!receipt.entryMode && (receipt.referenceNo || receipt.channel))) && (receipt.referenceNo || receipt.channel) && line('Reference / Transaction number', receipt.referenceNo || receipt.channel)}
+          {(receipt.entryMode === 'Others' || (!receipt.entryMode && (receipt.notes || receipt.channel) && !receipt.referenceNo && !receipt.instrumentNo)) && (receipt.notes || receipt.channel) && line('Details', receipt.notes || receipt.channel)}
+          {(receipt.instrumentType || receipt.instrumentNo || receipt.bankName) && (
+            <>
+              {line('Instrument type', receipt.instrumentType)}
+              <div className="two">
+                {line('Number', receipt.instrumentNo)}
+                {line('Date', fmtDate(receipt.instrumentDate))}
+              </div>
+              {line('Bank', receipt.bankName)}
+              {line('Branch', receipt.bankBranch)}
+            </>
+          )}
+          {(receipt.txnDate && (receipt.entryMode || receipt.referenceNo || receipt.instrumentNo || receipt.notes)) && line('Transaction date', fmtDate(receipt.txnDate))}
         </div>
 
         <div className="card">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 
@@ -113,6 +114,7 @@ const statusColors = {
 
 export default function IssuesPage() {
   const { token, user } = useAuth()
+  const navigate = useNavigate()
   const [issues, setIssues] = useState([])
   const [allIssues, setAllIssues] = useState([]) // For stats calculation
   const [loading, setLoading] = useState(true)
@@ -659,6 +661,17 @@ export default function IssuesPage() {
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</h3>
                 <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{selectedIssue.description}</p>
               </div>
+
+              {selectedIssue.receipt_draft_id && (
+                <div>
+                  <button
+                    onClick={() => navigate(`/receipts?draftId=${selectedIssue.receipt_draft_id}`)}
+                    className="w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    Recreate Receipt from Draft
+                  </button>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Submitted By</h3>

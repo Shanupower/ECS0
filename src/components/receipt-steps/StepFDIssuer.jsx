@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 
-export default function StepFDIssuer({ onBack, onNext, token }) {
+const GOVERNMENT_ISSUER_TYPE = 'Government(Post Office)'
+
+export default function StepFDIssuer({ onBack, onNext, token, initialIssuerKey = '', recentIssuers = [], governmentOnly = false }) {
   const [issuers, setIssuers] = useState([])
   const [selectedIssuer, setSelectedIssuer] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -9,14 +11,24 @@ export default function StepFDIssuer({ onBack, onNext, token }) {
 
   useEffect(() => {
     loadIssuers()
-  }, [token])
+  }, [token, governmentOnly])
+
+  useEffect(() => {
+    if (!initialIssuerKey || !issuers.length) return
+    const issuer = issuers.find(i => i._key === initialIssuerKey)
+    if (issuer) setSelectedIssuer(issuer)
+  }, [initialIssuerKey, issuers])
 
   const loadIssuers = async () => {
     if (!token) return
     setLoading(true)
     try {
       const result = await api.listFDIssuers(token)
-      setIssuers(Array.isArray(result) ? result : [])
+      const all = Array.isArray(result) ? result : []
+      const byType = governmentOnly
+        ? all.filter(i => (i.type || '').trim() === GOVERNMENT_ISSUER_TYPE)
+        : all.filter(i => (i.type || '').trim() !== GOVERNMENT_ISSUER_TYPE)
+      setIssuers(byType)
     } catch (error) {
       console.error('Failed to load FD issuers:', error)
     } finally {
@@ -28,7 +40,7 @@ export default function StepFDIssuer({ onBack, onNext, token }) {
     ? issuers.filter(issuer =>
         issuer.short_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         issuer.legal_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issuer.type.toLowerCase().includes(searchQuery.toLowerCase())
+        (issuer.type && issuer.type.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : issuers
 
@@ -39,9 +51,29 @@ export default function StepFDIssuer({ onBack, onNext, token }) {
 
   return (
     <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Select FD Issuer</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose the Fixed Deposit issuer</p>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — {governmentOnly ? 'Select Government Scheme Issuer' : 'Select FD Issuer'}</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">{governmentOnly ? 'Choose the Government (Post Office) scheme issuer' : 'Choose the Fixed Deposit issuer'}</p>
 
+      {recentIssuers.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recent Issuers</label>
+          <div className="flex flex-wrap gap-2">
+            {recentIssuers.map(issuer => (
+              <button
+                key={issuer._key}
+                type="button"
+                onClick={() => {
+                  const found = issuers.find(i => i._key === issuer._key)
+                  setSelectedIssuer(found || issuer)
+                }}
+                className="px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+              >
+                {issuer.short_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Search */}
       <div className="mb-6">
         <div className="relative">

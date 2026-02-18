@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-function StepProductType({ onBack, onNext }) {
+function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true, onTogglePreset = null }) {
   const [productType, setProductType] = useState('')
 
   const productTypes = [
@@ -26,10 +26,24 @@ function StepProductType({ onBack, onNext }) {
       enabled: true
     },
     { 
+      value: 'GOVT_FD', 
+      label: 'Government schemes', 
+      icon: '🏛️',
+      description: 'Post Office and other government savings schemes',
+      enabled: true
+    },
+    { 
       value: 'BOND', 
-      label: 'Bonds', 
+      label: 'Bonds/NCD', 
       icon: '📊',
-      description: 'Government and corporate bonds for stable returns',
+      description: 'Government and corporate bonds / NCD for stable returns',
+      enabled: true
+    },
+    { 
+      value: 'MISC', 
+      label: 'Misc Services', 
+      icon: '🔧',
+      description: 'Various services and miscellaneous transactions',
       enabled: true
     }
   ]
@@ -67,6 +81,20 @@ function StepProductType({ onBack, onNext }) {
           </button>
         ))}
       </div>
+
+      {productType && presetsByType[productType] && (
+        <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+          <label className="flex items-center gap-3 text-sm text-yellow-800 dark:text-yellow-200">
+            <input
+              type="checkbox"
+              checked={usePreset}
+              onChange={() => onTogglePreset && onTogglePreset(!usePreset)}
+              className="w-4 h-4 text-yellow-600"
+            />
+            Use preset for {presetsByType[productType]?.label || productType}
+          </label>
+        </div>
+      )}
 
       <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
         <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">

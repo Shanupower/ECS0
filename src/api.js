@@ -84,6 +84,22 @@ function createFormData(data, files) {
   return formData
 }
 
+// Receipt creation with files: send payload as JSON so nested objects (e.g. transaction_details) survive multipart
+function createReceiptFormData(data, files) {
+  const formData = new FormData()
+  formData.append('payload', JSON.stringify(data))
+  if (files) {
+    if (Array.isArray(files)) {
+      files.forEach(file => {
+        if (file) formData.append('files', file)
+      })
+    } else if (files) {
+      formData.append('files', files)
+    }
+  }
+  return formData
+}
+
 function createIssueFormData(data, file) {
   const formData = new FormData()
   
@@ -119,7 +135,8 @@ export const api={
   listReceipts:(t,q)=>req('/api/receipts',{token:t,query:q}),
   getReceipt:(t,id)=>req(`/api/receipts/${id}`,{token:t}),
   getReceiptsByEmpCode:(t,empCode,q)=>req(`/api/receipts/emp/${empCode}`,{token:t,query:q}),
-  createReceipt:(t,p,files)=>files && files.length > 0 ? reqWithFiles('/api/receipts',{method:'POST',token:t,formData:createFormData(p,files)}) : req('/api/receipts',{method:'POST',token:t,json:p}),
+  getTransactionSummary:(t,q)=>req('/api/receipts/summary',{token:t,query:q}),
+  createReceipt:(t,p,files)=>files && files.length > 0 ? reqWithFiles('/api/receipts',{method:'POST',token:t,formData:createReceiptFormData(p,files)}) : req('/api/receipts',{method:'POST',token:t,json:p}),
   updateReceipt:(t,id,data)=>req(`/api/receipts/${id}`,{method:'PATCH',token:t,json:data}),
   deleteReceipt:(t,id,r)=>req(`/api/receipts/${id}`,{method:'DELETE',token:t,json:{reason:r}}),
   restoreReceipt:(t,id)=>req(`/api/receipts/${id}/restore`,{method:'POST',token:t}),
@@ -128,6 +145,10 @@ export const api={
   getReceiptMedia:(t,id)=>req(`/api/receipts/${id}/media`,{token:t}),
   downloadReceiptMedia:(t,id,mediaId)=>req(`/api/receipts/${id}/media/${mediaId}`,{token:t}),
   downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
+  createReceiptDraft:(t,data)=>req('/api/receipt-drafts',{method:'POST',token:t,json:data}),
+  getReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{token:t}),
+  getRecentReceipts:(t,limit=10)=>req('/api/receipts/recent',{token:t,query:{limit}}),
+  checkReceiptDuplicate:(t,params)=>req('/api/receipts/check-duplicate',{token:t,query:params}),
   
   // Customer/Investor endpoints
   listCustomers:(t,q)=>req('/api/customers',{token:t,query:q}),
@@ -150,8 +171,9 @@ export const api={
   getBranch:(t,code)=>req(`/api/branches/${code}`,{token:t}),
   getBranchStats:(t,code,q)=>req(`/api/branches/${code}/stats`,{token:t,query:q}),
   getGlobalBranchStats:(t,q)=>req('/api/stats/branches',{token:t,query:q}),
+  getEmployeePerformance:(t,q)=>req('/api/stats/employees/performance',{token:t,query:q}),
   getBranchReceipts:(t,code,q)=>req(`/api/branches/${code}/receipts`,{token:t,query:q}),
-  createBranchReceipt:(t,code,data,files)=>files && files.length > 0 ? reqWithFiles(`/api/branches/${code}/receipts`,{method:'POST',token:t,formData:createFormData(data,files)}) : req(`/api/branches/${code}/receipts`,{method:'POST',token:t,json:data}),
+  createBranchReceipt:(t,code,data,files)=>files && files.length > 0 ? reqWithFiles(`/api/branches/${code}/receipts`,{method:'POST',token:t,formData:createReceiptFormData(data,files)}) : req(`/api/branches/${code}/receipts`,{method:'POST',token:t,json:data}),
   
   // Branch management endpoints (admin only)
   createBranch:(t,data)=>req('/api/branches',{method:'POST',token:t,json:data}),
@@ -362,5 +384,10 @@ export const api={
     const formData = new FormData()
     formData.append('excelFile', file)
     return reqWithFiles('/api/insurance-schemes/import/excel',{method:'POST',token:t,formData})
-  }
+  },
+  
+  // Misc Services Schemes endpoints
+  getMiscServicesScheme:(t)=>req('/api/misc-services-schemes',{token:t}),
+  updateMiscServicesScheme:(t,data)=>req('/api/misc-services-schemes',{method:'PUT',token:t,json:data}),
+  calculateMiscServicesCCSI:(t,price)=>req('/api/misc-services-schemes/calculate-cc-si',{method:'POST',token:t,json:{price}})
 }

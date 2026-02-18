@@ -51,6 +51,7 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
   const [bondScheme, setBondScheme] = useState('')
   const [bondInvestmentAmount, setBondInvestmentAmount] = useState('')
   const [bondApplicationNo, setBondApplicationNo] = useState('')
+  const [validationError, setValidationError] = useState('')
 
   const mfIssuerOptions = useMemo(() => mfSchemes.map(a => ({ label: a.company, value: a.company })), [])
   const mfSchemeOptions = useMemo(() => {
@@ -191,6 +192,12 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
           <strong>Product Type:</strong> {productType === 'MF' ? 'Mutual Funds' : productType === 'INS' ? 'Insurance' : productType === 'FD' ? 'Fixed Deposit' : 'Bonds'} | <strong>Investment Type:</strong> {investmentType}
         </p>
       </div>
+
+      {validationError && (
+        <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">
+          {validationError}
+        </div>
+      )}
 
       {product === 'MF' && (
         <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
@@ -625,20 +632,21 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
         </button>
         <button
           onClick={() => {
+            setValidationError('')
             let normalized = {}
             
             // Validate required fields based on product type
             if (product === 'MF') {
               if (!mfIssuer) {
-                alert('Please select an issuer company (AMC)')
+                setValidationError('Please select an issuer company (AMC)')
                 return
               }
               if (!mfScheme) {
-                alert('Please select a scheme')
+                setValidationError('Please select a scheme')
                 return
               }
               if (!mfInvestmentAmount || parseFloat(mfInvestmentAmount) <= 0) {
-                alert('Please enter a valid investment amount')
+                setValidationError('Please enter a valid investment amount')
                 return
               }
               
@@ -657,23 +665,23 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
               }
             } else if (product === 'FD') {
               if (!fdIssuer) {
-                alert('Please select a company')
+                setValidationError('Please select a company')
                 return
               }
               if (!fdScheme) {
-                alert('Please select a scheme')
+                setValidationError('Please select a scheme')
                 return
               }
               if (!fdInvestmentAmount || parseFloat(fdInvestmentAmount) <= 0) {
-                alert('Please enter a valid deposit amount')
+                setValidationError('Please enter a valid deposit amount')
                 return
               }
               if (!fdDepositPeriod) {
-                alert('Please enter deposit period')
+                setValidationError('Please enter deposit period')
                 return
               }
               if (!fdRoi || parseFloat(fdRoi) <= 0) {
-                alert('Please enter a valid interest rate')
+                setValidationError('Please enter a valid interest rate')
                 return
               }
               
@@ -688,26 +696,25 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
                 depositPeriodYM: fdDepositPeriod,
                 roi: fdRoi,
                 txnType: 'Fresh',
-                mode: 'Lump Sum',
                 schemeOption: 'Cumulative',
                 instrumentType: 'Application',
                 instrumentNo: fdApplicationNo || `FD-${Date.now()}`
               }
             } else if (product === 'INS') {
               if (!insIssuerKey) {
-                alert('Please select an insurance company')
+                setValidationError('Please select an insurance company')
                 return
               }
               if (!insCategory) {
-                alert('Please select an insurance category')
+                setValidationError('Please select an insurance category')
                 return
               }
               if (!insProductId) {
-                alert('Please select an insurance product')
+                setValidationError('Please select an insurance product')
                 return
               }
               if (!insPremiumAmount || parseFloat(insPremiumAmount) <= 0) {
-                alert('Please enter a valid premium amount')
+                setValidationError('Please enter a valid premium amount')
                 return
               }
               
@@ -744,22 +751,21 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
                 insurance_payment_schedule: insPaymentSchedule || null,
                 insurance_money_back: selectedProduct?.money_back || false,
                 txnType: 'Fresh',
-                mode: 'Lump Sum',
                 schemeOption: insPaymentSchedule || 'Annual',
                 instrumentType: 'Policy',
                 instrumentNo: insPolicyNo || `INS-${Date.now()}`
               }
             } else if (product === 'BOND') {
               if (!bondIssuer) {
-                alert('Please select an issuer company')
+                setValidationError('Please select an issuer company')
                 return
               }
               if (!bondScheme) {
-                alert('Please select a bond scheme')
+                setValidationError('Please select a bond scheme')
                 return
               }
               if (!bondInvestmentAmount || parseFloat(bondInvestmentAmount) <= 0) {
-                alert('Please enter a valid investment amount')
+                setValidationError('Please enter a valid investment amount')
                 return
               }
               
@@ -771,7 +777,6 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
                 investmentAmount: parseFloat(bondInvestmentAmount) || 0,
                 folioPolicyNo: bondApplicationNo,
                 txnType: 'Fresh',
-                mode: 'Lump Sum',
                 schemeOption: 'Cumulative',
                 instrumentType: 'Application',
                 instrumentNo: bondApplicationNo || `BOND-${Date.now()}`

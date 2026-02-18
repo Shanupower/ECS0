@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { 
@@ -12,7 +12,10 @@ import {
   FiEye,
   FiRefreshCw,
   FiAlertCircle,
-  FiCheck
+  FiCheck,
+  FiSearch,
+  FiBarChart,
+  FiTrendingUp
 } from 'react-icons/fi'
 
 export default function BranchManagement() {
@@ -26,6 +29,14 @@ export default function BranchManagement() {
   const [editingBranch, setEditingBranch] = useState(null)
   const [selectedBranch, setSelectedBranch] = useState(null)
   const [showUserAssignment, setShowUserAssignment] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterType, setFilterType] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [allBranches, setAllBranches] = useState([])
+  const [viewMode, setViewMode] = useState('card')
+  const [selectedBranchForInsights, setSelectedBranchForInsights] = useState(null)
+  const [branchInsightsData, setBranchInsightsData] = useState(null)
+  const [loadingInsights, setLoadingInsights] = useState(false)
 
   const isAdmin = user?.role === 'admin'
 
@@ -48,6 +59,7 @@ export default function BranchManagement() {
       ])
       
       setBranches(branchesData)
+      setAllBranches(branchesData)
       setUsers(usersData)
       
     } catch (err) {
@@ -116,6 +128,36 @@ export default function BranchManagement() {
       setError(err.message || 'Failed to assign users to branch')
     }
   }
+
+  // Filter branches based on search and filters
+  const filteredBranches = useMemo(() => {
+    let filtered = allBranches
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(b => 
+        b.branch_name?.toLowerCase().includes(term) ||
+        b.branch_code?.toLowerCase().includes(term) ||
+        b.address?.toLowerCase().includes(term)
+      )
+    }
+    
+    if (filterType) {
+      filtered = filtered.filter(b => b.branch_type === filterType)
+    }
+    
+    if (filterStatus) {
+      filtered = filtered.filter(b => 
+        filterStatus === 'active' ? b.is_active : !b.is_active
+      )
+    }
+    
+    return filtered
+  }, [allBranches, searchTerm, filterType, filterStatus])
+
+  useEffect(() => {
+    setBranches(filteredBranches)
+  }, [filteredBranches])
 
   if (!isAdmin) {
     return (
@@ -197,17 +239,75 @@ export default function BranchManagement() {
         />
       )}
 
-      {/* Branches List */}
+      {/* Search and Filter Bar */}
+      <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FiSearch className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search branches by name or code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <select 
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500"
+            >
+              <option value="">All Types</option>
+              <option value="operational">Operational</option>
+              <option value="head_office">Head Office</option>
+              <option value="regional">Regional</option>
+            </select>
+            <select 
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Branches Grid - Card View */}
       <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
         <div className="p-4 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">All Branches</h3>
-          
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-              <span className="ml-2 text-gray-600 dark:text-dark-400">Loading branches...</span>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Branches ({branches.length})</h3>
+            <div className="flex items-center gap-2">
+              <button 
+              onClick={() => setViewMode('card')}
+              className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                viewMode === 'card'
+                  ? 'border-red-600 bg-red-600 text-white'
+                  : 'border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-700 dark:text-dark-200'
+              }`}>
+                Card View
+              </button>
+              <button 
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                viewMode === 'table'
+                  ? 'border-red-600 bg-red-600 text-white'
+                  : 'border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-700 dark:text-dark-200'
+              }`}>
+                Table View
+              </button>
             </div>
-          ) : (
+          </div>
+          
+          {viewMode === 'table' && (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -251,6 +351,15 @@ export default function BranchManagement() {
                             <FiUsers className="w-4 h-4" />
                           </button>
                           <button
+                            onClick={() => {
+                              setSelectedBranchForInsights(branch)
+                            }}
+                            className="p-2 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors duration-200"
+                            title="View Performance"
+                          >
+                            <FiBarChart className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => setEditingBranch(branch)}
                             className="p-2 text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded-lg transition-colors duration-200"
                             title="Edit Branch"
@@ -272,8 +381,185 @@ export default function BranchManagement() {
               </table>
             </div>
           )}
+          
+          {viewMode === 'card' && (
+            loading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+              <span className="ml-2 text-gray-600 dark:text-dark-400">Loading branches...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {branches.map((branch) => {
+                const branchUsers = users.filter(u => u.branch_code === branch.branch_code)
+                return (
+                  <div key={branch.branch_code} className="bg-gradient-to-br from-white to-gray-50 dark:from-dark-700 dark:to-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-dark-600 hover:shadow-md transition-all duration-200 p-5">
+                    {/* Branch Header */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <FiMapPin className="w-6 h-6 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate">{branch.branch_name}</h4>
+                          <p className="text-sm text-gray-500 dark:text-dark-400">{branch.branch_code}</p>
+                          <span className={`inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            branch.is_active 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                          }`}>
+                            {branch.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Branch Stats */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white dark:bg-dark-800 p-3 rounded-lg border border-gray-200 dark:border-dark-600">
+                        <div className="text-xs text-gray-500 dark:text-dark-400 mb-1">Users</div>
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">{branchUsers.length}</div>
+                      </div>
+                      <div className="bg-white dark:bg-dark-800 p-3 rounded-lg border border-gray-200 dark:border-dark-600">
+                        <div className="text-xs text-gray-500 dark:text-dark-400 mb-1">Type</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{branch.branch_type || 'Operational'}</div>
+                      </div>
+                    </div>
+
+                    {/* Branch Info */}
+                    {branch.address && (
+                      <div className="mb-4 text-sm text-gray-600 dark:text-dark-400 line-clamp-2">
+                        {branch.address}
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-dark-600">
+                      <button
+                        onClick={() => {
+                          setSelectedBranch(branch)
+                          setShowUserAssignment(true)
+                        }}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 text-sm font-medium transition-colors"
+                        title="Assign Users"
+                      >
+                        <FiUsers className="w-4 h-4 mr-1.5" />
+                        Users ({branchUsers.length})
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedBranchForInsights(branch)
+                        }}
+                        className="px-3 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                        title="View Performance"
+                      >
+                        <FiBarChart className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingBranch(branch)}
+                        className="px-3 py-2 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors"
+                        title="Edit Branch"
+                      >
+                        <FiEdit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBranch(branch.branch_code)}
+                        className="px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                        title="Delete Branch"
+                      >
+                        <FiTrash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+          )}
+
+          {!loading && branches.length === 0 && (
+            <div className="text-center py-12 text-gray-500 dark:text-dark-400">
+              <FiMapPin className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-600" />
+              <p>No branches found</p>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Branch Performance Insights Modal */}
+      {selectedBranchForInsights && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedBranchForInsights(null)}>
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    Performance Insights: {selectedBranchForInsights.branch_name}
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-dark-400 mt-1">
+                    {selectedBranchForInsights.branch_code}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedBranchForInsights(null)
+                    setBranchInsightsData(null)
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {loadingInsights ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                  <span className="ml-2 text-gray-600 dark:text-dark-400">Loading insights...</span>
+                </div>
+              ) : branchInsightsData ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                      <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {branchInsightsData.statistics?.total_receipts || 0}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                      <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Total Investments</div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(branchInsightsData.statistics?.total_investments || 0)}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                      <div className="text-sm text-gray-500 dark:text-dark-400 mb-1">Collection/Credit</div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(branchInsightsData.statistics?.collection_credit || branchInsightsData.statistics?.commissions || 0)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        window.location.href = `/branches/dashboard?branch=${selectedBranchForInsights.branch_code}`
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      View Full Dashboard
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500 dark:text-dark-400">
+                  <FiBarChart className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-600" />
+                  <p>No performance data available</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -514,6 +800,46 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
 // User Assignment Modal Component
 function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
   const [selectedUserIds, setSelectedUserIds] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterRole, setFilterRole] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+
+  useEffect(() => {
+    // Pre-select users already assigned to this branch
+    const assignedUserIds = users
+      .filter(u => u.branch_code === branch.branch_code)
+      .map(u => u._key || u.id)
+    setSelectedUserIds(assignedUserIds)
+  }, [branch, users])
+
+  // Filter users based on search and filters
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        const matchesSearch = 
+          user.name?.toLowerCase().includes(term) ||
+          user.email?.toLowerCase().includes(term) ||
+          user.emp_code?.toLowerCase().includes(term)
+        if (!matchesSearch) return false
+      }
+      
+      if (filterRole && user.role !== filterRole) return false
+      
+      if (filterStatus === 'active' && !user.is_active) return false
+      if (filterStatus === 'inactive' && user.is_active) return false
+      
+      return true
+    })
+  }, [users, searchTerm, filterRole, filterStatus])
+
+  const handleSelectAll = () => {
+    if (selectedUserIds.length === filteredUsers.length) {
+      setSelectedUserIds([])
+    } else {
+      setSelectedUserIds(filteredUsers.map(u => u._key || u.id))
+    }
+  }
 
   const handleUserToggle = (userId) => {
     setSelectedUserIds(prev => 
@@ -544,25 +870,98 @@ function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
             </button>
           </div>
 
+          {/* Search and Filter Bar */}
+          <div className="mb-4 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FiSearch className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search users by name, email, or employee code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+              >
+                <option value="">All Roles</option>
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+              >
+                <option value="">All Status</option>
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-700 dark:text-dark-200 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-600 transition-colors text-sm"
+              >
+                {selectedUserIds.length === filteredUsers.length && filteredUsers.length > 0 ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit}>
             <div className="max-h-96 overflow-y-auto mb-4">
               <div className="space-y-2">
-                {users.map((user) => (
-                  <label key={user.id} className="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedUserIds.includes(user.id)}
-                      onChange={() => handleUserToggle(user.id)}
-                      className="mr-3 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                    />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-dark-400">
-                        {user.emp_code} • {user.role} • Current: {user.branch || 'No branch'}
-                      </div>
-                    </div>
-                  </label>
-                ))}
+                {filteredUsers.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-dark-400">
+                    <FiUsers className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-600" />
+                    <p>No users found matching your filters</p>
+                  </div>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const userId = user._key || user.id
+                    const isSelected = selectedUserIds.includes(userId)
+                    const isAssigned = user.branch_code === branch.branch_code
+                    
+                    return (
+                      <label key={userId} className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800'
+                          : 'hover:bg-gray-50 dark:hover:bg-dark-700 border border-gray-200 dark:border-dark-600'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleUserToggle(userId)}
+                          className="mr-3 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                        />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name || user.email}</div>
+                          <div className="text-xs text-gray-500 dark:text-dark-400">
+                            {user.email} • {user.emp_code || 'N/A'} • {user.role}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isAssigned && (
+                            <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded">
+                              Assigned
+                            </span>
+                          )}
+                          {!user.is_active && (
+                            <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 text-xs font-medium rounded">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })
+                )}
               </div>
             </div>
 

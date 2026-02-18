@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { FiUpload, FiFile, FiTrash2, FiCheck, FiAlertCircle, FiRefreshCw } from 'react-icons/fi'
 
-function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument }) {
+function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '', isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument }) {
   const [transactionType, setTransactionType] = useState('')
   const [offlineDetails, setOfflineDetails] = useState({
     bankName: '',
@@ -11,24 +11,79 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
   })
   const [onlineTransactionNumber, setOnlineTransactionNumber] = useState('')
   const [othersTransactionType, setOthersTransactionType] = useState('')
+  const [validationError, setValidationError] = useState('')
+  const [lastDocMeta, setLastDocMeta] = useState(null)
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('last_supporting_document')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        setLastDocMeta(parsed || null)
+      } else {
+        setLastDocMeta(null)
+      }
+    } catch {
+      setLastDocMeta(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (presetPaymentMode && !transactionType) {
+      setTransactionType(presetPaymentMode)
+    }
+  }, [presetPaymentMode, transactionType])
+
+  const dataUrlToFile = (dataUrl, filename, mimeType) => {
+    const arr = dataUrl.split(',')
+    const bstr = atob(arr[1] || '')
+    let n = bstr.length
+    const u8arr = new Uint8Array(n)
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n)
+    }
+    return new File([u8arr], filename, { type: mimeType })
+  }
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0]
     if (file) {
       // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB')
+        setValidationError('File size must be less than 5MB')
         return
       }
       
       // Check file type (images and PDFs)
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
       if (!allowedTypes.includes(file.type)) {
-        alert('Please upload an image (JPEG, PNG, GIF) or PDF file')
+        setValidationError('Please upload an image (JPEG, PNG, GIF) or PDF file')
         return
       }
       
       setSupportingDocument(file)
+      try {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const dataUrl = reader.result
+          if (typeof dataUrl === 'string') {
+            sessionStorage.setItem('last_supporting_document', JSON.stringify({
+              name: file.name,
+              type: file.type,
+              dataUrl,
+              updatedAt: new Date().toISOString()
+            }))
+            setLastDocMeta({
+              name: file.name,
+              type: file.type,
+              dataUrl
+            })
+          }
+        }
+        reader.readAsDataURL(file)
+      } catch (err) {
+        console.warn('Failed to store last document:', err)
+      }
     }
   }
 
@@ -36,27 +91,34 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
     setSupportingDocument(null)
   }
 
+  const applyLastDocument = () => {
+    if (!lastDocMeta?.dataUrl) return
+    const restored = dataUrlToFile(lastDocMeta.dataUrl, lastDocMeta.name || 'document', lastDocMeta.type || 'application/pdf')
+    setSupportingDocument(restored)
+  }
+
   const handleSave = () => {
+    setValidationError('')
     // Validate transaction type
     if (!transactionType) {
-      alert('Please select transaction type (Online/Offline/Others)')
+      setValidationError('Please select transaction type (Online/Offline/Others)')
       return
     }
     
     // Validate transaction details
     if (transactionType === 'Offline') {
       if (!offlineDetails.bankName || !offlineDetails.chequeNumber || !offlineDetails.chequeDate || !offlineDetails.branch) {
-        alert('Please fill all offline transaction details (Bank Name, Cheque Number, Cheque Date, Branch)')
+        setValidationError('Please fill all offline transaction details (Bank Name, Cheque Number, Cheque Date, Branch)')
         return
       }
     } else if (transactionType === 'Online') {
       if (!onlineTransactionNumber || onlineTransactionNumber.trim() === '') {
-        alert('Please enter transaction number')
+        setValidationError('Please enter transaction number')
         return
       }
     } else if (transactionType === 'Others') {
       if (!othersTransactionType || othersTransactionType.trim() === '') {
-        alert('Please enter transaction type (e.g., RTGS, NEFT, etc.)')
+        setValidationError('Please enter transaction type (e.g., RTGS, NEFT, etc.)')
         return
       }
     }
@@ -67,57 +129,69 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       // Validate FD fields from data
       if (!data.fd_issuer_name || !data.fd_scheme_name || !data.fd_deposit_amount || 
           !data.fd_tenure_months || !data.fd_payout_frequency || !data.fd_application_number) {
-        alert('Please fill all Fixed Deposit details')
+        setValidationError('Please fill all Fixed Deposit details')
         return
       }
       if (parseFloat(data.fd_deposit_amount) <= 0) {
-        alert('Deposit amount must be a positive number')
+        setValidationError('Deposit amount must be a positive number')
         return
       }
       if (!data.fd_locked_interest_rate_pa || parseFloat(data.fd_locked_interest_rate_pa) <= 0) {
-        alert('Interest rate must be calculated')
+        setValidationError('Interest rate must be calculated')
         return
       }
     } else if (data.product_category === 'MF') {
       // Validate Mutual Fund required fields from data
       if (!data.scheme_name) {
-        alert('Scheme name is required for Mutual Funds')
+        setValidationError('Scheme name is required for Mutual Funds')
         return
       }
       // Data is normalized, so use investment_amount
       if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
-        alert('Investment amount must be a positive number')
+        setValidationError('Investment amount must be a positive number')
         return
       }
     } else if (data.product_category === 'INS') {
       // Validate Insurance required fields from data
       if (!data.insurance_issuer_key) {
-        alert('Insurance issuer is required')
+        setValidationError('Insurance issuer is required')
         return
       }
       if (!data.insurance_product_id) {
-        alert('Insurance product is required')
+        setValidationError('Insurance product is required')
         return
       }
-      if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
-        alert('Premium amount must be a positive number')
+      const insuranceAmount = data.investment_amount ?? data.investmentAmount
+      if (!insuranceAmount || parseFloat(insuranceAmount) <= 0) {
+        setValidationError('Premium amount must be a positive number')
         return
       }
     } else if (data.product_category === 'BOND') {
       // Validate Bonds required fields from data
-      if (!data.issuer_company) {
-        alert('Issuer company is required for Bonds')
+      if (!data.issuer_company && !data.issuerCompany) {
+        setValidationError('Issuer company is required for Bonds')
         return
       }
-      if (!data.investment_amount || parseFloat(data.investment_amount) <= 0) {
-        alert('Investment amount must be a positive number')
+      const bondAmount = data.investment_amount ?? data.investmentAmount
+      if (!bondAmount || parseFloat(bondAmount) <= 0) {
+        setValidationError('Investment amount must be a positive number')
+        return
+      }
+    } else if (data.product_category === 'MISC') {
+      // Validate Misc Services required fields from data
+      if (!data.service_name || !data.service_price) {
+        setValidationError('Please fill all Misc Services details')
+        return
+      }
+      if (parseFloat(data.service_price) <= 0) {
+        setValidationError('Service price must be a positive number')
         return
       }
     }
     
     // Validate supporting document
     if (!supportingDocument) {
-      alert('Please upload a supporting document (screenshot or PDF)')
+      setValidationError('Please upload a supporting document (screenshot or PDF)')
       return
     }
     
@@ -141,18 +215,58 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       } : {})
     }
     
+    // For Offline: send bank_branch (not branch) so receipt branch isn't overwritten; map cheque to instrument
     const finalData = {
       ...data,
       transactionType,
       transaction_details: transactionDetails,
       entry_mode: transactionDetails.entry_mode,
       transaction_channel: transactionDetails.channel,
-      ...(transactionType === 'Offline' ? offlineDetails : {}),
+      ...(transactionType === 'Offline' ? {
+        bankName: offlineDetails.bankName,
+        chequeNumber: offlineDetails.chequeNumber,
+        chequeDate: offlineDetails.chequeDate,
+        bank_branch: offlineDetails.branch,
+        instrumentType: 'Cheque',
+        instrumentNo: offlineDetails.chequeNumber,
+        instrumentDate: offlineDetails.chequeDate
+      } : {}),
       ...(transactionType === 'Online' ? { transactionNumber: onlineTransactionNumber } : {}),
       ...(transactionType === 'Others' ? { othersTransactionType } : {})
     }
     
     onSave(finalData)
+  }
+
+  const handleSavePreset = () => {
+    if (!onSavePreset || !data?.product_category) return
+    const preset = { productType: data.product_category }
+    if (data.product_category === 'MF') {
+      preset.amc_code = data.amc_code || null
+      preset.amc_name = data.amc_name || null
+      preset.scheme_code = data.scheme_code || null
+      preset.scheme_name = data.scheme_name || null
+    } else if (data.product_category === 'FD') {
+      preset.issuer_key = data.fd_issuer_key || null
+      preset.issuer_name = data.fd_issuer_name || null
+      preset.scheme_id = data.fd_scheme_id || null
+      preset.scheme_name = data.fd_scheme_name || null
+    } else if (data.product_category === 'BOND') {
+      preset.issuer_key = data.bond_issuer_key || null
+      preset.issuer_name = data.bond_issuer_name || null
+      preset.scheme_id = data.bond_scheme_id || null
+      preset.scheme_name = data.bond_scheme_name || null
+    } else if (data.product_category === 'INS') {
+      preset.issuer_key = data.insurance_issuer_key || null
+      preset.issuer_name = data.issuerCompany || data.issuer_company || null
+      preset.product_id = data.insurance_product_id || null
+      preset.product_name = data.schemeName || data.scheme_name || null
+    } else if (data.product_category === 'MISC') {
+      // Misc Services doesn't need preset data (service name is free text)
+    }
+    preset.payment_mode = transactionType || ''
+    preset.label = `${data.product_category} preset`
+    onSavePreset(preset)
   }
 
   const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '');
@@ -169,12 +283,19 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
       case 'INS': return 'Insurance';
       case 'FD': return 'Fixed Deposit';
       case 'BOND': return 'Bonds';
+      case 'MISC': return 'Misc Services';
       default: return type;
     }
   }
 
   return (
     <div className="space-y-6">
+      {validationError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center space-x-2 text-red-700 dark:text-red-300 text-sm">
+          <FiAlertCircle className="w-4 h-4" />
+          <span>{validationError}</span>
+        </div>
+      )}
       <div className="text-center">
         <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Receipt Preview</h3>
         <p className="text-gray-600 dark:text-gray-400">Review your investment details before saving</p>
@@ -327,6 +448,13 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <div className="text-sm text-gray-600 dark:text-gray-400">Scheme</div>
                     <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_scheme_name}</div>
+                    {(data.bond_category || data.bond_sub_category) && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {data.bond_category && <span>{data.bond_category}</span>}
+                        {data.bond_category && data.bond_sub_category && <span className="mx-1">•</span>}
+                        {data.bond_sub_category && <span>{data.bond_sub_category}</span>}
+                      </div>
+                    )}
                   </div>
                 )}
                 {data.bond_isin && (
@@ -381,6 +509,21 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <div className="text-sm text-gray-600 dark:text-gray-400">Application Number</div>
                     <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.bond_application_number}</div>
+                  </div>
+                )}
+              </div>
+            ) : data.product_category === 'MISC' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {data.service_name && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Service Name</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{data.service_name}</div>
+                  </div>
+                )}
+                {data.service_price && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Service Price</div>
+                    <div className="text-lg font-semibold text-green-600 dark:text-green-400">{fmtAmt(data.service_price)}</div>
                   </div>
                 )}
               </div>
@@ -712,6 +855,13 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <div className="text-sm text-gray-600 dark:text-gray-400">Scheme Name</div>
                       <div className="font-semibold text-gray-900 dark:text-gray-100">{data.bond_scheme_name}</div>
+                      {(data.bond_category || data.bond_sub_category) && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {data.bond_category && <span>{data.bond_category}</span>}
+                          {data.bond_category && data.bond_sub_category && <span className="mx-1">•</span>}
+                          {data.bond_sub_category && <span>{data.bond_sub_category}</span>}
+                        </div>
+                      )}
                     </div>
                   )}
                   {data.bond_isin && (
@@ -1080,6 +1230,20 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
           </div>
         )}
       </div>
+
+      {!supportingDocument && lastDocMeta?.dataUrl && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex items-center justify-between">
+          <div className="text-sm text-yellow-800 dark:text-yellow-200">
+            Use your last uploaded document?
+          </div>
+          <button
+            onClick={applyLastDocument}
+            className="px-3 py-1.5 rounded-md bg-yellow-600 text-white text-sm font-semibold"
+          >
+            Use Last Document
+          </button>
+        </div>
+      )}
         </div>
       </div>
       
@@ -1110,6 +1274,13 @@ function StepFinal({ data, onBack, onSave, isSaving, saveError, saveSuccess, sup
           className={`px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Back
+        </button>
+        <button
+          onClick={handleSavePreset}
+          disabled={isSaving || !onSavePreset}
+          className={`px-6 py-3 border border-yellow-300 dark:border-yellow-700 rounded-lg font-semibold text-yellow-800 dark:text-yellow-200 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 transition-colors ${isSaving || !onSavePreset ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          Save Preset
         </button>
         <button 
           onClick={handleSave} 

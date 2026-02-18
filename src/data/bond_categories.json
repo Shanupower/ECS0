@@ -1,0 +1,33 @@
+{
+  "Government Bonds": [
+    "Treasury Bills (T-Bills)",
+    "Treasury Notes (T-Notes)",
+    "Treasury Bonds (T-Bonds)",
+    "Municipal Bonds",
+    "Sovereign Bonds"
+  ],
+  "Corporate Bonds": [
+    "Secured Bonds",
+    "Unsecured Bonds (Debentures)",
+    "Convertible Bonds",
+    "Callable Bonds",
+    "Puttable Bonds"
+  ],
+  "Specialty Bonds": [
+    "Zero-Coupon Bonds",
+    "Perpetual Bonds",
+    "Inflation-Linked Bonds (TIPS)",
+    "Subordinated Bonds",
+    "High-Yield (Junk) Bonds"
+  ],
+  "Structured & ESG Bonds": [
+    "Asset-Backed Bonds",
+    "Mortgage-Backed Securities (MBS)",
+    "Project Bonds",
+    "Green Bonds",
+    "Social & Sustainability Bonds"
+  ],
+  "Tax-Saving Bonds": [
+    "Capital Gain Bonds (54EC)"
+  ]
+}

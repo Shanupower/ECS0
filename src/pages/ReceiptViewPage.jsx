@@ -269,19 +269,20 @@ export default function ReceiptViewPage() {
     // Receipt identification
     receiptNo: receipt.receipt_no,
     date: receipt.date,
-    branch: receipt.branch,
     
-    // Employee
-    employeeName: receipt.employee_name,
-    empCode: receipt.emp_code,
+    // Employee (prefer normalized; fallback to nested employee object)
+    employeeName: receipt.employee_name ?? receipt.employee?.name ?? '',
+    empCode: receipt.emp_code ?? receipt.employee?.code ?? '',
+    branch: receipt.branch ?? receipt.employee?.branch ?? '',
     
-    // Investor
-    investorId: receipt.investor_id,
-    investorName: receipt.investor_name,
-    investorAddress: receipt.investor_address,
-    pinCode: receipt.pin_code,
-    pan: receipt.pan,
-    email: receipt.email,
+    // Investor (prefer normalized; fallback to nested investor object)
+    investorId: receipt.investor_id ?? receipt.investor?.id ?? '',
+    investorName: receipt.investor_name ?? receipt.investor?.name ?? '',
+    investorAddress: receipt.investor_address ?? (typeof receipt.investor?.address === 'string' ? receipt.investor.address : null) ?? '',
+    pinCode: receipt.pin_code ?? receipt.investor?.address?.pin_code ?? '',
+    pan: receipt.pan ?? receipt.investor?.pan ?? '',
+    email: receipt.email ?? receipt.investor?.email ?? '',
+    mobile: receipt.mobile ?? receipt.investor?.mobile ?? '',
     
     // Product and transaction
     product_category: receipt.product_category,
@@ -289,18 +290,24 @@ export default function ReceiptViewPage() {
     txnType: receipt.txn_type,
     mode: receipt.mode,
     
-    // Investment details
+    // Investment details (transaction)
     sip_stp_swp_period: receipt.period_installments,
     noOfInstallments: receipt.installments_count,
     from: receipt.from_text,
     to: receipt.to_text,
     unitsOrAmount: receipt.units_or_amount,
     investmentAmount: receipt.investment_amount,
+    period_installments: receipt.period_installments,
+    installments_count: receipt.installments_count,
+    from_text: receipt.from_text,
+    to_text: receipt.to_text,
+    units_or_amount: receipt.units_or_amount,
     
     // Scheme/Product
     schemeName: receipt.scheme_name,
     schemeOption: receipt.scheme_option,
     folioPolicyNo: receipt.folio_policy_no,
+    issuer_company: receipt.issuer_company,
     
     // FD/Bonds fields
     fdType: receipt.fd_type,
@@ -314,6 +321,12 @@ export default function ReceiptViewPage() {
     instrumentDate: receipt.instrument_date,
     bankName: receipt.bank_name,
     bankBranch: receipt.bank_branch,
+    // Payment / transaction details (Online, Offline, Others)
+    entryMode: receipt.entry_mode,
+    channel: receipt.channel,
+    referenceNo: receipt.reference_no,
+    txnDate: receipt.txn_date,
+    notes: receipt.notes,
     fdr_demat_policy: receipt.fdr_demat_policy,
     renewalDueDate: receipt.renewal_due_date,
     maturityAmount: receipt.maturity_amount,
@@ -373,6 +386,37 @@ export default function ReceiptViewPage() {
     fd_transaction_type: receipt.fd_transaction_type,
     fd_renewal_investment_type: receipt.fd_renewal_investment_type,
     fd_renewal_additional_amount: receipt.fd_renewal_additional_amount,
+
+    // Bond/NCD
+    bond_issuer_key: receipt.bond_issuer_key,
+    bond_issuer_name: receipt.bond_issuer_name,
+    bond_issuer_type: receipt.bond_issuer_type,
+    bond_scheme_id: receipt.bond_scheme_id,
+    bond_scheme_name: receipt.bond_scheme_name,
+    bond_isin: receipt.bond_isin,
+    bond_coupon_rate: receipt.bond_coupon_rate,
+    bond_face_value: receipt.bond_face_value,
+    bond_issue_date: receipt.bond_issue_date,
+    bond_maturity_date: receipt.bond_maturity_date,
+    bond_transaction_type: receipt.bond_transaction_type,
+    bond_number_of_units: receipt.bond_number_of_units,
+    bond_application_number: receipt.bond_application_number,
+    bond_form_15g_15h: receipt.bond_form_15g_15h,
+    renewal_due_date: receipt.renewal_due_date,
+
+    // Insurance
+    insurance_issuer_key: receipt.insurance_issuer_key,
+    insurance_product_id: receipt.insurance_product_id,
+    insurance_product_name: receipt.insurance_product_name,
+    insurance_category: receipt.insurance_category,
+    insurance_sub_category: receipt.insurance_sub_category,
+    insurance_policy_number: receipt.insurance_policy_number,
+    insurance_sum_assured: receipt.insurance_sum_assured,
+    insurance_policy_term_years: receipt.insurance_policy_term_years,
+    insurance_premium_frequency: receipt.insurance_premium_frequency,
+    insurance_premium_payment_term: receipt.insurance_premium_payment_term,
+    insurance_date_of_issue: receipt.insurance_date_of_issue,
+    insurance_maturity_date: receipt.insurance_maturity_date,
   }
 
   return (
@@ -494,10 +538,32 @@ export default function ReceiptViewPage() {
                     <span className="text-gray-600 dark:text-gray-400">Name:</span>
                     <span className="font-medium text-gray-900 dark:text-gray-100">{transformedReceipt.investorName || '—'}</span>
                   </div>
+                  {(transformedReceipt.investorAddress || transformedReceipt.pinCode) && (
+                    <>
+                      {transformedReceipt.investorAddress && (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-gray-600 dark:text-gray-400 shrink-0">Address:</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 text-right text-sm whitespace-pre-line">{transformedReceipt.investorAddress}</span>
+                        </div>
+                      )}
+                      {transformedReceipt.pinCode && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">PIN:</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{transformedReceipt.pinCode}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   {transformedReceipt.pan && (
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">PAN:</span>
                       <span className="font-medium text-gray-900 dark:text-gray-100">{transformedReceipt.pan}</span>
+                    </div>
+                  )}
+                  {transformedReceipt.mobile && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Mobile:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{transformedReceipt.mobile}</span>
                     </div>
                   )}
                   {transformedReceipt.email && (
@@ -517,7 +583,8 @@ export default function ReceiptViewPage() {
                 Investment Details
               </h3>
               
-              {transformedReceipt.fd_issuer_name ? null : (
+              {/* Investment Details grid – MF only; FD/BOND/INS use their dedicated sections below */}
+              {transformedReceipt.product_category === 'MF' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {transformedReceipt.product_category && (
                     <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
@@ -674,6 +741,158 @@ export default function ReceiptViewPage() {
                 </div>
               )}
 
+              {/* Bond/NCD Details */}
+              {(transformedReceipt.product_category === 'BOND' || transformedReceipt.product_category === 'NCD') && (transformedReceipt.bond_issuer_name || transformedReceipt.bond_scheme_name) && (
+                <div className="mt-4 p-4 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-800">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                    <span className="w-2 h-2 bg-teal-500 rounded-full mr-2"></span>
+                    Bond / NCD Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {transformedReceipt.bond_issuer_name && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Issuer</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bond_issuer_name} {transformedReceipt.bond_issuer_type && `(${transformedReceipt.bond_issuer_type})`}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.bond_scheme_name && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Scheme</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bond_scheme_name}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.investmentAmount && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Amount</div>
+                        <div className="font-semibold text-green-600 dark:text-green-400">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(transformedReceipt.investmentAmount)}
+                        </div>
+                      </div>
+                    )}
+                    {transformedReceipt.bond_coupon_rate && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Coupon rate</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bond_coupon_rate}% p.a.</div>
+                      </div>
+                    )}
+                    {transformedReceipt.bond_face_value && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Face value</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(transformedReceipt.bond_face_value)}
+                        </div>
+                      </div>
+                    )}
+                    {transformedReceipt.bond_issue_date && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Issue date</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.bond_issue_date).toLocaleDateString('en-IN')}</div>
+                      </div>
+                    )}
+                    {(transformedReceipt.bond_maturity_date || transformedReceipt.renewal_due_date) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Maturity / Renewal due</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.bond_maturity_date || transformedReceipt.renewal_due_date).toLocaleDateString('en-IN')}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.bond_application_number && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Application number</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bond_application_number}</div>
+                      </div>
+                    )}
+                    {(transformedReceipt.bond_transaction_type || transformedReceipt.txnType) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Transaction type</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bond_transaction_type || transformedReceipt.txnType || '—'}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.bond_isin && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">ISIN</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bond_isin}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Insurance Details */}
+              {transformedReceipt.product_category === 'INS' && (transformedReceipt.insurance_issuer_key || transformedReceipt.insurance_product_name || transformedReceipt.issuer_company) && (
+                <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
+                    Insurance Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(transformedReceipt.issuer_company || transformedReceipt.fd_issuer_name) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Issuer</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.issuer_company || transformedReceipt.fd_issuer_name}</div>
+                      </div>
+                    )}
+                    {(transformedReceipt.insurance_product_name || transformedReceipt.schemeName) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Product</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.insurance_product_name || transformedReceipt.schemeName}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.investmentAmount && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Premium amount</div>
+                        <div className="font-semibold text-green-600 dark:text-green-400">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(transformedReceipt.investmentAmount)}
+                        </div>
+                      </div>
+                    )}
+                    {(transformedReceipt.insurance_policy_number || transformedReceipt.folioPolicyNo) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Policy number</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.insurance_policy_number || transformedReceipt.folioPolicyNo}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.insurance_sum_assured && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Sum assured</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(transformedReceipt.insurance_sum_assured)}
+                        </div>
+                      </div>
+                    )}
+                    {transformedReceipt.insurance_policy_term_years && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Policy term</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.insurance_policy_term_years} years</div>
+                      </div>
+                    )}
+                    {transformedReceipt.insurance_premium_frequency && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Premium frequency</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.insurance_premium_frequency}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.insurance_date_of_issue && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Date of issue</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.insurance_date_of_issue).toLocaleDateString('en-IN')}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.insurance_maturity_date && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Maturity date</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.insurance_maturity_date).toLocaleDateString('en-IN')}</div>
+                      </div>
+                    )}
+                    {(transformedReceipt.fd_transaction_type || transformedReceipt.txnType) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Transaction type</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.fd_transaction_type || transformedReceipt.txnType || 'Fresh'}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* SIP Details */}
               {(transformedReceipt.sip_frequency || transformedReceipt.sip_start_date) && (
                 <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -704,6 +923,68 @@ export default function ReceiptViewPage() {
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Type</div>
                         <div className="font-semibold text-gray-900 dark:text-gray-100">Perpetual (40 years)</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Payment / Transaction details (Online, Offline, Others) – show when any payment data exists */}
+              {(transformedReceipt.entryMode || transformedReceipt.channel || transformedReceipt.referenceNo || transformedReceipt.bankName || transformedReceipt.bankBranch || transformedReceipt.notes || transformedReceipt.instrumentType || transformedReceipt.instrumentNo || transformedReceipt.txnDate) && (
+                <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                    <span className="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
+                    Payment / Transaction details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(transformedReceipt.entryMode || transformedReceipt.channel || transformedReceipt.bankName) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Payment type</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
+                          {transformedReceipt.entryMode || (transformedReceipt.bankName ? 'Offline' : (transformedReceipt.notes || transformedReceipt.channel ? 'Others' : 'Online')) || '—'}
+                        </div>
+                      </div>
+                    )}
+                    {(transformedReceipt.entryMode === 'Online' || (!transformedReceipt.entryMode && transformedReceipt.referenceNo)) && (transformedReceipt.referenceNo || transformedReceipt.channel) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Reference / Transaction number</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.referenceNo || transformedReceipt.channel}</div>
+                      </div>
+                    )}
+                    {(transformedReceipt.entryMode === 'Offline' || transformedReceipt.bankName) && (
+                      <>
+                        {transformedReceipt.bankName && (
+                          <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Bank</div>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bankName}</div>
+                          </div>
+                        )}
+                        {transformedReceipt.bankBranch && (
+                          <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Branch</div>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.bankBranch}</div>
+                          </div>
+                        )}
+                        {(transformedReceipt.instrumentNo || transformedReceipt.referenceNo) && (
+                          <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Cheque / Instrument number</div>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.instrumentNo || transformedReceipt.referenceNo}</div>
+                          </div>
+                        )}
+                        {(transformedReceipt.instrumentDate || transformedReceipt.txnDate) && (
+                          <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Date</div>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
+                              {new Date(transformedReceipt.instrumentDate || transformedReceipt.txnDate).toLocaleDateString('en-IN')}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {(transformedReceipt.entryMode === 'Others' || (transformedReceipt.notes && !transformedReceipt.bankName)) && (transformedReceipt.notes || transformedReceipt.channel) && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4 md:col-span-2">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Details</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.notes || transformedReceipt.channel}</div>
                       </div>
                     )}
                   </div>

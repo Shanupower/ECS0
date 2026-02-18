@@ -58,13 +58,14 @@ export function normalizeReceiptFields(receipt) {
   normalized.date = receipt.date || null
 
   // Employee information (from structured.employee or flat)
-  normalized.employee_name = getValue('employee.name', 'employee_name', 'employeeName')
-  normalized.emp_code = getValue('employee.code', 'emp_code', 'empCode')
-  normalized.branch = getValue('employee.branch', 'branch')
+  // Backend stores employee: { code, name, branch }; also support legacy flat keys
+  normalized.employee_name = getValue('employee.name', 'employee_name', 'employeeName') ?? receipt.employee?.name ?? null
+  normalized.emp_code = getValue('employee.code', 'emp_code', 'empCode') ?? receipt.employee?.code ?? null
+  normalized.branch = getValue('employee.branch', 'branch') ?? receipt.employee?.branch ?? receipt.branch ?? null
 
   // Investor information (from structured.investor or flat)
-  normalized.investor_id = getValue('investor.id', 'investor_id', 'investorId')
-  normalized.investor_name = getValue('investor.name', 'investor_name', 'investorName')
+  normalized.investor_id = getValue('investor.id', 'investor_id', 'investorId') ?? receipt.investor?.id ?? null
+  normalized.investor_name = getValue('investor.name', 'investor_name', 'investorName') ?? receipt.investor?.name ?? null
   // Build address from structured format or use flat
   const investorAddress = receipt.investor?.address
   if (investorAddress && typeof investorAddress === 'object') {
@@ -73,14 +74,17 @@ export function normalizeReceiptFields(receipt) {
       investorAddress.line2,
       investorAddress.line3
     ].filter(Boolean)
+    const cityState = [investorAddress.city, investorAddress.state].filter(Boolean).join(', ')
+    if (cityState) addressParts.push(cityState)
     normalized.investor_address = addressParts.join('\n') || null
-    normalized.pin_code = investorAddress.pin_code || null
+    normalized.pin_code = investorAddress.pin_code ?? receipt.pin_code ?? receipt.pinCode ?? null
   } else {
-    normalized.investor_address = getValue('investor_address', 'investorAddress')
-    normalized.pin_code = getValue('investor.address.pin_code', 'pin_code', 'pinCode')
+    normalized.investor_address = getValue('investor_address', 'investorAddress') ?? null
+    normalized.pin_code = getValue('investor.address.pin_code', 'pin_code', 'pinCode') ?? null
   }
-  normalized.pan = getValue('investor.pan', 'pan')
-  normalized.email = getValue('investor.email', 'email')
+  normalized.pan = getValue('investor.pan', 'pan') ?? receipt.investor?.pan ?? null
+  normalized.email = getValue('investor.email', 'email') ?? receipt.investor?.email ?? null
+  normalized.mobile = getValue('investor.mobile', 'mobile', 'investor_mobile') ?? receipt.investor?.mobile ?? null
 
   // Product category (from structured.product or flat)
   normalized.product_category = getValue('product.category', 'product_category', 'productCategory', 'productType')
@@ -134,11 +138,17 @@ export function normalizeReceiptFields(receipt) {
   normalized.investment_amount = getValue(
     'transaction.amount',
     'product_details.fd.deposit.amount',
+    'product_details.bond.transaction.amount',
     'investment_amount',
     'investmentAmount',
     'amount',
     'fd_deposit_amount'
   )
+  normalized.period_installments = getValue('transaction.period_installments', 'period_installments', 'periodInstallments', 'sip_stp_swp_period')
+  normalized.installments_count = getValue('transaction.installments_count', 'installments_count', 'installmentsCount', 'noOfInstallments')
+  normalized.from_text = getValue('transaction.from_text', 'from_text', 'fromText', 'from')
+  normalized.to_text = getValue('transaction.to_text', 'to_text', 'toText', 'to')
+  normalized.units_or_amount = getValue('transaction.units_or_amount', 'units_or_amount', 'unitsOrAmount')
   normalized.mode = getValue('transaction.mode', 'mode', 'mode_type', 'investment_mode')
   normalized.txn_type = getValue(
     'transaction.type',
@@ -287,6 +297,41 @@ export function normalizeReceiptFields(receipt) {
 
   // FD Application details (from structured.product_details.fd.application or flat)
   normalized.fd_application_number = getValue('product_details.fd.application.number', 'fd_application_number', 'fdApplicationNumber')
+
+  // FD type / interest payable (display)
+  normalized.fd_type = getValue('product_details.fd.application.transaction_type', 'product_details.insurance.policy.type', 'fd_type', 'fdType', 'insurance_policy_type')
+  normalized.interest_payable = getValue('product_details.fd.deposit.payout_frequency', 'interest_payable', 'interestPayable', 'fd_payout_frequency')
+
+  // Bond/NCD (from structured.product_details.bond or flat)
+  normalized.bond_issuer_key = getValue('product_details.bond.issuer.key', 'bond_issuer_key', 'bondIssuerKey')
+  normalized.bond_issuer_name = getValue('product_details.bond.issuer.name', 'bond_issuer_name', 'bondIssuerName', 'issuer_company', 'issuerCompany')
+  normalized.bond_issuer_type = getValue('product_details.bond.issuer.type', 'bond_issuer_type', 'bondIssuerType')
+  normalized.bond_scheme_id = getValue('product_details.bond.scheme.id', 'bond_scheme_id', 'bondSchemeId')
+  normalized.bond_scheme_name = getValue('product_details.bond.scheme.name', 'bond_scheme_name', 'bondSchemeName', 'scheme_name', 'schemeName')
+  normalized.bond_isin = getValue('product_details.bond.scheme.isin', 'bond_isin', 'bondIsin')
+  normalized.bond_coupon_rate = getValue('product_details.bond.instrument.coupon_rate', 'bond_coupon_rate', 'bondCouponRate', 'roi_percent', 'roiPercent')
+  normalized.bond_face_value = getValue('product_details.bond.instrument.face_value', 'bond_face_value', 'bondFaceValue')
+  normalized.bond_issue_date = getValue('product_details.bond.instrument.issue_date', 'bond_issue_date', 'bondIssueDate')
+  normalized.bond_maturity_date = getValue('product_details.bond.instrument.maturity_date', 'bond_maturity_date', 'bondMaturityDate', 'renewal_due_date', 'renewalDueDate')
+  normalized.renewal_due_date = getValue('product_details.bond.instrument.maturity_date', 'renewal_due_date', 'renewalDueDate', 'bond_maturity_date', 'bondMaturityDate')
+  normalized.bond_transaction_type = getValue('product_details.bond.transaction.type', 'bond_transaction_type', 'bondTransactionType', 'txn_type', 'txnType')
+  normalized.bond_number_of_units = getValue('product_details.bond.transaction.number_of_units', 'bond_number_of_units', 'bondNumberOfUnits')
+  normalized.bond_application_number = getValue('product_details.bond.application.number', 'bond_application_number', 'bondApplicationNumber')
+  normalized.bond_form_15g_15h = getValue('product_details.bond.tax.form_15g_15h', 'bond_form_15g_15h', 'bondForm15g15h')
+
+  // Insurance (from structured.product_details.insurance or flat)
+  normalized.insurance_issuer_key = getValue('product_details.insurance.issuer.key', 'insurance_issuer_key', 'insuranceIssuerKey')
+  normalized.insurance_product_id = getValue('product_details.insurance.product.id', 'insurance_product_id', 'insuranceProductId')
+  normalized.insurance_product_name = getValue('product_details.insurance.product.name', 'insurance_product_name', 'insuranceProductName', 'scheme_name', 'schemeName')
+  normalized.insurance_category = getValue('product_details.insurance.product.category', 'insurance_category', 'insuranceCategory')
+  normalized.insurance_sub_category = getValue('product_details.insurance.product.sub_category', 'insurance_sub_category', 'insuranceSubCategory')
+  normalized.insurance_policy_number = getValue('product_details.insurance.policy.number', 'insurance_policy_number', 'insurancePolicyNumber', 'folio_policy_no', 'folioPolicyNo')
+  normalized.insurance_sum_assured = getValue('product_details.insurance.coverage.sum_assured', 'insurance_sum_assured', 'insuranceSumAssured')
+  normalized.insurance_policy_term_years = getValue('product_details.insurance.coverage.policy_term_years', 'insurance_policy_term_years', 'insurancePolicyTermYears', 'insurance_term')
+  normalized.insurance_premium_frequency = getValue('product_details.insurance.policy.premium_frequency', 'insurance_premium_frequency', 'insurancePremiumFrequency', 'interest_frequency', 'interestFrequency')
+  normalized.insurance_premium_payment_term = getValue('product_details.insurance.policy.premium_payment_term', 'insurance_premium_payment_term', 'insurancePremiumPaymentTerm')
+  normalized.insurance_date_of_issue = getValue('product_details.insurance.coverage.policy_start_date', 'insurance_date_of_issue', 'insuranceDateOfIssue', 'insurance_policy_start_date')
+  normalized.insurance_maturity_date = getValue('product_details.insurance.coverage.maturity_date', 'insurance_maturity_date', 'insuranceMaturityDate')
 
   // FD Tax details (from structured.product_details.fd.tax or flat)
   normalized.fd_tds_applicable = getValue('product_details.fd.tax.tds_applicable', 'fd_tds_applicable', 'fdTdsApplicable') !== undefined

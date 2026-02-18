@@ -17,6 +17,10 @@ import StepFDDetails from './receipt-steps/StepFDDetails.jsx'
 import StepNCDBondIssuer from './receipt-steps/StepNCDBondIssuer.jsx'
 import StepNCDBondScheme from './receipt-steps/StepNCDBondScheme.jsx'
 import StepNCDBondDetails from './receipt-steps/StepNCDBondDetails.jsx'
+import StepInsuranceIssuer from './receipt-steps/StepInsuranceIssuer.jsx'
+import StepInsuranceProduct from './receipt-steps/StepInsuranceProduct.jsx'
+import StepInsuranceDetails from './receipt-steps/StepInsuranceDetails.jsx'
+import StepMiscDetails from './receipt-steps/StepMiscDetails.jsx'
 import StepProductType from './receipt-steps/StepProductType.jsx'
 import StepProduct from './receipt-steps/StepProduct.jsx'
 import StepFinal from './receipt-steps/StepFinal.jsx'
@@ -27,13 +31,21 @@ import mfSchemes from '../data/mf_schemes.json'
 import nonMfIssuers from '../data/non_mf_issuers.json'
 import insuranceIssuers from '../data/insurance_issuers.json'
 
-function genReceiptNo() {
+function genReceiptNo({ branch, empCode } = {}) {
   const d = new Date()
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   const rand = Math.floor(1000 + Math.random() * 9000)
-  return `ECS-${y}${m}${day}-${rand}`
+  const branchCode = String(branch || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6) || 'NA'
+  const emp = String(empCode || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8) || 'EMP'
+  return `ECS-${branchCode}-${emp}-${y}${m}${day}-${rand}`
 }
 
 // Load investors from backend API with pagination
@@ -359,17 +371,56 @@ function StepHeader({ step, productType }) {
         ['Employee', 1],
         ['Investor', 2],
         ['Product Type', 3],
-        ['Investment Type', 4],
-        ['Details', 5],
-        ['Preview', 6],
+        ['Scheme', 4],
+        ['Investment Type', 5],
+        ['Details', 6],
+        ['Preview', 7],
+      ]
+    } else if (productType === 'FD') {
+      return [
+        ['Employee', 1],
+        ['Investor', 2],
+        ['Product Type', 3],
+        ['Issuer', 4],
+        ['Scheme', 5],
+        ['Details', 6],
+        ['Preview', 7],
+      ]
+    } else if (productType === 'BOND' || productType === 'NCD') {
+      return [
+        ['Employee', 1],
+        ['Investor', 2],
+        ['Product Type', 3],
+        ['Issuer', 4],
+        ['Scheme', 5],
+        ['Details', 6],
+        ['Preview', 7],
+      ]
+    } else if (productType === 'INS') {
+      return [
+        ['Employee', 1],
+        ['Investor', 2],
+        ['Product Type', 3],
+        ['Issuer', 4],
+        ['Product', 5],
+        ['Details', 6],
+        ['Preview', 7],
+      ]
+    } else if (productType === 'MISC') {
+      return [
+        ['Employee', 1],
+        ['Investor', 2],
+        ['Product Type', 3],
+        ['Details', 4],
+        ['Preview', 5],
       ]
     } else {
       return [
         ['Employee', 1],
         ['Investor', 2],
         ['Product Type', 3],
-        ['Details', 4], // Renumbered from 5 to 4
-        ['Preview', 5], // Renumbered from 6 to 5
+        ['Details', 4],
+        ['Preview', 5],
       ]
     }
   }
@@ -405,6 +456,55 @@ function StepHeader({ step, productType }) {
             {i < stepLabels.length - 1 && <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700 min-w-6" />}
           </React.Fragment>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdIssuerSeed, fdSchemeSeed, ncdBondIssuerSeed, ncdBondSchemeSeed, insuranceIssuerSeed, insuranceProductSeed, finalData }) {
+  const summary = {
+    employee: empSeed.employeeName || empSeed.empCode || '',
+    investor: investorSeed.investorInfo?.investorName || investorSeed.investorId || '',
+    product: productTypeSeed || finalData?.product_category || '',
+    issuer: finalData?.issuer_company || finalData?.issuerCompany ||
+      fdIssuerSeed?.short_name || ncdBondIssuerSeed?.short_name || insuranceIssuerSeed?.short_name ||
+      mfSchemeSeed?.selectedAmc?.amc_name || '',
+    scheme: finalData?.scheme_name || finalData?.schemeName ||
+      fdSchemeSeed?.scheme_name || ncdBondSchemeSeed?.scheme_name || insuranceProductSeed?.product_name ||
+      mfSchemeSeed?.selectedScheme?.scheme_name || finalData?.service_name || '',
+    amount: finalData?.investment_amount || finalData?.investmentAmount || finalData?.fd_deposit_amount || finalData?.service_price || ''
+  }
+
+  if (!summary.employee && !summary.investor && !summary.product) return null
+
+  return (
+    <div className="mb-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+      <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Live Preview</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Employee</span>
+          <span className="text-gray-900 dark:text-gray-100">{summary.employee || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Investor</span>
+          <span className="text-gray-900 dark:text-gray-100">{summary.investor || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Product</span>
+          <span className="text-gray-900 dark:text-gray-100">{summary.product || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Issuer</span>
+          <span className="text-gray-900 dark:text-gray-100">{summary.issuer || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Scheme</span>
+          <span className="text-gray-900 dark:text-gray-100">{summary.scheme || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500 dark:text-gray-400">Amount</span>
+          <span className="text-gray-900 dark:text-gray-100">{summary.amount || '—'}</span>
+        </div>
       </div>
     </div>
   )
@@ -468,7 +568,7 @@ function StepEmployee({ user, onNext }) {
   )
 }
 
-function StepInvestor({ onBack, onFound, token, user }) {
+function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -814,6 +914,24 @@ function StepInvestor({ onBack, onFound, token, user }) {
   return (
     <div>
       <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 2 — Investor</h3>
+
+      {recentInvestors.length > 0 && (
+        <div className="mb-4">
+          <label className="text-sm text-gray-600 dark:text-gray-400 my-2 font-semibold">Recent Investors</label>
+          <div className="flex flex-wrap gap-2">
+            {recentInvestors.map(inv => (
+              <button
+                key={inv.investorId}
+                type="button"
+                onClick={() => handleSelectCustomer(inv)}
+                className="px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+              >
+                {inv.investorName || inv.investorId}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         <div className="col" style={{ flex: '1 1 320px' }}>
@@ -1254,7 +1372,7 @@ function StepInvestor({ onBack, onFound, token, user }) {
 
 // StepProductType, StepProduct, and StepFinal components have been moved to separate files in receipt-steps/ folder
 
-export default function MultiStepReceipt() {
+export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const { token, user } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
@@ -1267,6 +1385,8 @@ export default function MultiStepReceipt() {
   const [fdSchemeSeed, setFdSchemeSeed] = useState(null)
   const [ncdBondIssuerSeed, setNcdBondIssuerSeed] = useState(null)
   const [ncdBondSchemeSeed, setNcdBondSchemeSeed] = useState(null)
+  const [insuranceIssuerSeed, setInsuranceIssuerSeed] = useState(null)
+  const [insuranceProductSeed, setInsuranceProductSeed] = useState(null)
   const [finalData, setFinalData] = useState(null)
   const [supportingDocument, setSupportingDocument] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -1279,6 +1399,14 @@ export default function MultiStepReceipt() {
   const [failureDetails, setFailureDetails] = useState(null)
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
   const [saveErrorObj, setSaveErrorObj] = useState(null)
+  const [failureDraftId, setFailureDraftId] = useState(null)
+  const [hasAppliedDraft, setHasAppliedDraft] = useState(false)
+  const [recentReceipts, setRecentReceipts] = useState([])
+  const [recentLoading, setRecentLoading] = useState(false)
+  const [receiptPresets, setReceiptPresets] = useState({})
+  const [usePreset, setUsePreset] = useState(true)
+  const [presetPaymentMode, setPresetPaymentMode] = useState('')
+  const [duplicateOverrideKey, setDuplicateOverrideKey] = useState(null)
 
   // Auto-populate employee data from user context
   useEffect(() => {
@@ -1290,6 +1418,125 @@ export default function MultiStepReceipt() {
       })
     }
   }, [user])
+
+  const presetsStorageKey = useMemo(() => {
+    const emp = user?.emp_code || user?.id || 'unknown'
+    const branch = (user?.branch || user?.branch_name || 'branch').toString().replace(/\s+/g, '_')
+    return `receipt_presets_${emp}_${branch}`
+  }, [user])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(presetsStorageKey)
+      setReceiptPresets(raw ? JSON.parse(raw) : {})
+    } catch {
+      setReceiptPresets({})
+    }
+  }, [presetsStorageKey])
+
+  const savePreset = useCallback((preset) => {
+    if (!preset?.productType) return
+    const next = { ...receiptPresets, [preset.productType]: preset }
+    setReceiptPresets(next)
+    localStorage.setItem(presetsStorageKey, JSON.stringify(next))
+  }, [receiptPresets, presetsStorageKey])
+
+  useEffect(() => {
+    if (!token) return
+    const loadRecent = async () => {
+      setRecentLoading(true)
+      try {
+        const result = await api.getRecentReceipts(token, 10)
+        setRecentReceipts(Array.isArray(result.items) ? result.items : [])
+      } catch (err) {
+        console.error('Failed to load recent receipts:', err)
+        setRecentReceipts([])
+      } finally {
+        setRecentLoading(false)
+      }
+    }
+    loadRecent()
+  }, [token])
+
+  const recentInvestors = useMemo(() => {
+    const map = new Map()
+    recentReceipts.forEach(r => {
+      if (r.investor_id && !map.has(r.investor_id)) {
+        map.set(r.investor_id, { investorId: r.investor_id, investorName: r.investor_name })
+      }
+    })
+    return Array.from(map.values())
+  }, [recentReceipts])
+
+  const recentIssuersByType = useMemo(() => {
+    const result = { MF: [], FD: [], BOND: [], INS: [] }
+    const seen = { MF: new Set(), FD: new Set(), BOND: new Set(), INS: new Set() }
+    recentReceipts.forEach(r => {
+      if (r.product_category === 'MF' && r.amc_code && !seen.MF.has(r.amc_code)) {
+        seen.MF.add(r.amc_code)
+        result.MF.push({ amc_code: r.amc_code, amc_name: r.amc_name })
+      }
+      if (r.product_category === 'FD' && r.fd_issuer_key && !seen.FD.has(r.fd_issuer_key)) {
+        seen.FD.add(r.fd_issuer_key)
+        result.FD.push({ _key: r.fd_issuer_key, short_name: r.fd_issuer_name })
+      }
+      if (r.product_category === 'BOND' && r.bond_issuer_key && !seen.BOND.has(r.bond_issuer_key)) {
+        seen.BOND.add(r.bond_issuer_key)
+        result.BOND.push({ _key: r.bond_issuer_key, short_name: r.bond_issuer_name })
+      }
+      if (r.product_category === 'INS' && r.insurance_issuer_key && !seen.INS.has(r.insurance_issuer_key)) {
+        seen.INS.add(r.insurance_issuer_key)
+        result.INS.push({ _key: r.insurance_issuer_key, short_name: r.issuer_company || r.issuerCompany })
+      }
+    })
+    return result
+  }, [recentReceipts])
+
+  const recentSchemesByType = useMemo(() => {
+    const result = { MF: [], FD: [], BOND: [], INS: [] }
+    const seen = { MF: new Set(), FD: new Set(), BOND: new Set(), INS: new Set() }
+    recentReceipts.forEach(r => {
+      if (r.product_category === 'MF' && r.scheme_code && !seen.MF.has(r.scheme_code)) {
+        seen.MF.add(r.scheme_code)
+        result.MF.push({ scheme_code: r.scheme_code, scheme_name: r.scheme_name })
+      }
+      if (r.product_category === 'FD' && r.fd_scheme_id && !seen.FD.has(r.fd_scheme_id)) {
+        seen.FD.add(r.fd_scheme_id)
+        result.FD.push({ scheme_id: r.fd_scheme_id, scheme_name: r.fd_scheme_name })
+      }
+      if (r.product_category === 'BOND' && r.bond_scheme_id && !seen.BOND.has(r.bond_scheme_id)) {
+        seen.BOND.add(r.bond_scheme_id)
+        result.BOND.push({ scheme_id: r.bond_scheme_id, scheme_name: r.bond_scheme_name })
+      }
+      if (r.product_category === 'INS' && r.insurance_product_id && !seen.INS.has(r.insurance_product_id)) {
+        seen.INS.add(r.insurance_product_id)
+        result.INS.push({ product_id: r.insurance_product_id, product_name: r.scheme_name })
+      }
+    })
+    return result
+  }, [recentReceipts])
+
+  useEffect(() => {
+    if (!draftData || hasAppliedDraft) return
+
+    setEmpSeed(draftData.empSeed || empSeed)
+    setInvestorSeed(draftData.investorSeed || investorSeed)
+    setProductTypeSeed(draftData.productTypeSeed || '')
+    setMfSchemeSeed(draftData.mfSchemeSeed || null)
+    setInvestmentTypeSeed(draftData.investmentTypeSeed || '')
+    setFdIssuerSeed(draftData.fdIssuerSeed || null)
+    setFdSchemeSeed(draftData.fdSchemeSeed || null)
+    setNcdBondIssuerSeed(draftData.ncdBondIssuerSeed || null)
+    setNcdBondSchemeSeed(draftData.ncdBondSchemeSeed || null)
+    setInsuranceIssuerSeed(draftData.insuranceIssuerSeed || null)
+    setInsuranceProductSeed(draftData.insuranceProductSeed || null)
+    setFinalData(draftData.finalData || null)
+    setFailureDraftId(draftId || null)
+
+    const nextStep = draftData.step || (draftData.finalData ? 7 : 1)
+    setStep(nextStep)
+    setHasAppliedDraft(true)
+  }, [draftData, draftId, hasAppliedDraft, empSeed, investorSeed])
 
   // Monitor for stuck users - show popup after 2 minutes on same step
   useEffect(() => {
@@ -1419,7 +1666,7 @@ export default function MultiStepReceipt() {
   const buildBase = () => {
     const base = {
       // Receipt identification
-      receipt_no: genReceiptNo(),
+      receipt_no: genReceiptNo({ branch: empSeed.branch, empCode: empSeed.empCode }),
       date: new Date().toISOString().slice(0, 10),
       
       // Employee information
@@ -1630,6 +1877,8 @@ export default function MultiStepReceipt() {
       // NCD/Bond Scheme information
       bond_scheme_id: bondData.bond_scheme_id || null,
       bond_scheme_name: bondData.bond_scheme_name || null,
+      bond_category: bondData.bond_category || null,
+      bond_sub_category: bondData.bond_sub_category || null,
       scheme_name: bondData.bond_scheme_name || null,
       bond_isin: bondData.bond_isin || null,
       bond_coupon_rate: bondData.bond_coupon_rate || null,
@@ -1686,6 +1935,40 @@ export default function MultiStepReceipt() {
       const sanitizedData = sanitizeReceiptData(finalData)
       
       console.log(`Sending data size: ${(validation.sizeInBytes / 1024).toFixed(2)}KB`)
+
+      // Duplicate check (allow second attempt to proceed)
+      const duplicateKey = [
+        sanitizedData.investor_id,
+        sanitizedData.product_category,
+        sanitizedData.investment_amount,
+        sanitizedData.date
+      ].join('|')
+      if (duplicateOverrideKey !== duplicateKey) {
+        try {
+          const duplicateCheck = await api.checkReceiptDuplicate(token, {
+            investor_id: sanitizedData.investor_id,
+            product_category: sanitizedData.product_category,
+            investment_amount: sanitizedData.investment_amount,
+            date: sanitizedData.date,
+            scheme_code: sanitizedData.scheme_code,
+            scheme_name: sanitizedData.scheme_name,
+            issuer_company: sanitizedData.issuer_company,
+            fd_issuer_key: sanitizedData.fd_issuer_key,
+            fd_scheme_id: sanitizedData.fd_scheme_id,
+            bond_issuer_key: sanitizedData.bond_issuer_key,
+            bond_scheme_id: sanitizedData.bond_scheme_id,
+            insurance_issuer_key: sanitizedData.insurance_issuer_key,
+            insurance_product_id: sanitizedData.insurance_product_id
+          })
+          if (duplicateCheck?.duplicate) {
+            setSaveError('Possible duplicate found for today. Click Save again to confirm.')
+            setDuplicateOverrideKey(duplicateKey)
+            return
+          }
+        } catch (dupError) {
+          console.warn('Duplicate check failed:', dupError)
+        }
+      }
       
       // Use branch-specific receipt creation only for branch users, not regular employees
       let result
@@ -1709,17 +1992,22 @@ export default function MultiStepReceipt() {
       localStorage.setItem('receipt_force_refresh', 'true')
       
       // Reset form after successful save
+      localStorage.removeItem('failed_receipt_draft_id')
+      setDuplicateOverrideKey(null)
       setStep(1)
       setEmpSeed({ empCode: '', employeeName: '', branch: '' })
       setInvestorSeed({ investorId: '', investorInfo: null })
       setProductTypeSeed('')
       setInvestmentTypeSeed('')
+      setInsuranceIssuerSeed(null)
+      setInsuranceProductSeed(null)
       setFinalData(null)
       setSupportingDocument(null)
       setSaveError('')
       setSaveErrorObj(null)
       setFailureScreenshot(null)
       setFailureDetails(null)
+      setFailureDraftId(null)
       
       // Navigate to transactions page immediately
       navigate('/transactions')
@@ -1745,6 +2033,65 @@ export default function MultiStepReceipt() {
       localStorage.setItem('receipt_error_message', errorMessage)
       localStorage.setItem('receipt_error_timestamp', Date.now().toString())
       localStorage.setItem('receipt_force_refresh', 'true')
+
+      // Save failed receipt draft to server for recovery
+      try {
+        const draftPayload = {
+          draft_data: {
+            draft_version: 1,
+            step,
+            productTypeSeed,
+            empSeed,
+            investorSeed,
+            mfSchemeSeed,
+            investmentTypeSeed,
+            fdIssuerSeed,
+            fdSchemeSeed,
+            ncdBondIssuerSeed,
+            ncdBondSchemeSeed,
+            insuranceIssuerSeed,
+            insuranceProductSeed,
+            finalData
+          },
+          source: 'failed_receipt',
+          error_message: errorMessage
+        }
+        const draftResult = await api.createReceiptDraft(token, draftPayload)
+        const draftId = draftResult?.draft_id || draftResult?.id || null
+        if (draftId) {
+          setFailureDraftId(draftId)
+          localStorage.setItem('failed_receipt_draft_id', draftId)
+        }
+      } catch (draftError) {
+        console.error('Failed to save receipt draft:', draftError)
+        try {
+          localStorage.setItem('failed_receipt_draft_local', JSON.stringify({
+            draft_payload: {
+              draft_data: {
+                draft_version: 1,
+                step,
+                productTypeSeed,
+                empSeed,
+                investorSeed,
+                mfSchemeSeed,
+                investmentTypeSeed,
+                fdIssuerSeed,
+                fdSchemeSeed,
+                ncdBondIssuerSeed,
+                ncdBondSchemeSeed,
+                insuranceIssuerSeed,
+                insuranceProductSeed,
+                finalData
+              },
+              source: 'failed_receipt',
+              error_message: errorMessage
+            },
+            saved_at: new Date().toISOString()
+          }))
+        } catch (localError) {
+          console.error('Failed to store local receipt draft:', localError)
+        }
+      }
       
       // Show error message to user
       setSaveSuccess('')
@@ -1800,7 +2147,7 @@ export default function MultiStepReceipt() {
                         if (saveErrorObj) {
                           // For actual save errors
                           const failureInfo = generateFailureDetails(saveErrorObj, finalData)
-                          setFailureDetails(failureInfo)
+                          setFailureDetails({ ...failureInfo, receipt_draft_id: failureDraftId })
                         } else {
                           // For stuck users
                           const failureInfo = {
@@ -1820,7 +2167,7 @@ export default function MultiStepReceipt() {
                               `- Screen Resolution: ${window.screen.width}x${window.screen.height}\n` +
                               `- Viewport: ${window.innerWidth}x${window.innerHeight}\n`
                           }
-                          setFailureDetails(failureInfo)
+                          setFailureDetails({ ...failureInfo, receipt_draft_id: failureDraftId })
                         }
                       } catch (error) {
                         console.error('Failed to capture screenshot:', error)
@@ -1890,9 +2237,30 @@ export default function MultiStepReceipt() {
           title: failureDetails.title,
           description: failureDetails.description,
           priority: 'high',
-          screenshot: failureScreenshot
+          screenshot: failureScreenshot,
+          receipt_draft_id: failureDetails.receipt_draft_id || null
         } : null}
       />
+
+      {step < 999 && (
+        <StepHeader step={step} productType={productTypeSeed} />
+      )}
+
+      {step < 7 && (
+        <LivePreview
+          empSeed={empSeed}
+          investorSeed={investorSeed}
+          productTypeSeed={productTypeSeed}
+          mfSchemeSeed={mfSchemeSeed}
+          fdIssuerSeed={fdIssuerSeed}
+          fdSchemeSeed={fdSchemeSeed}
+          ncdBondIssuerSeed={ncdBondIssuerSeed}
+          ncdBondSchemeSeed={ncdBondSchemeSeed}
+          insuranceIssuerSeed={insuranceIssuerSeed}
+          insuranceProductSeed={insuranceProductSeed}
+          finalData={finalData}
+        />
+      )}
 
       {step === 1 && (
         <StepEmployee
@@ -1907,23 +2275,56 @@ export default function MultiStepReceipt() {
           onFound={r => { setInvestorSeed({ investorId: r.investorId, investorInfo: r.info }); setStep(3) }}
           token={token}
           user={user}
+          recentInvestors={recentInvestors}
         />
       )}
 
       {step === 3 && (
         <StepProductType
           onBack={() => setStep(2)}
+          usePreset={usePreset}
+          onTogglePreset={setUsePreset}
+          presetsByType={receiptPresets}
           onNext={type => { 
             setProductTypeSeed(type)
-            // MF, FD, BOND, and INS go through special flows
+            const preset = receiptPresets[type]
+            if (usePreset && preset) {
+              if (preset.productType === 'MF') {
+                setMfSchemeSeed({
+                  selectedAmc: { amc_code: preset.amc_code, amc_name: preset.amc_name },
+                  selectedScheme: { scheme_code: preset.scheme_code, scheme_name: preset.scheme_name, display_name: preset.scheme_name },
+                  hasExistingFolio: false,
+                  folioNumber: null
+                })
+              } else if (preset.productType === 'FD') {
+                setFdIssuerSeed({ _key: preset.issuer_key, issuer_key: preset.issuer_key, short_name: preset.issuer_name, legal_name: preset.issuer_name })
+                setFdSchemeSeed({ scheme_id: preset.scheme_id, scheme_name: preset.scheme_name })
+              } else if (preset.productType === 'BOND') {
+                setNcdBondIssuerSeed({ _key: preset.issuer_key, issuer_key: preset.issuer_key, short_name: preset.issuer_name, legal_name: preset.issuer_name })
+                setNcdBondSchemeSeed({ scheme_id: preset.scheme_id, scheme_name: preset.scheme_name })
+              } else if (preset.productType === 'INS') {
+                setInsuranceIssuerSeed({ _key: preset.issuer_key, short_name: preset.issuer_name, legal_name: preset.issuer_name })
+                setInsuranceProductSeed({ product_id: preset.product_id, product_name: preset.product_name })
+              }
+              setPresetPaymentMode(preset.payment_mode || '')
+            } else {
+              setPresetPaymentMode('')
+            }
+            // MF, FD, GOVT_FD, BOND, INS, and MISC go through special flows
             if (type === 'MF') {
               setStep(4)
             } else if (type === 'FD') {
-              setStep(4) // FD also starts at step 4 (FD Issuer selection)
+              setStep(4) // FD also starts at step 4 (FD Issuer selection; excludes Government schemes)
+            } else if (type === 'GOVT_FD') {
+              setFdIssuerSeed(null)
+              setFdSchemeSeed(null)
+              setStep(4) // Government schemes: step 4 = Government issuer selection
             } else if (type === 'BOND') {
               setStep(4) // BOND also starts at step 4 (NCD/Bond Issuer selection)
             } else if (type === 'INS') {
               setStep(4) // INS also starts at step 4 (Insurance Product selection)
+            } else if (type === 'MISC') {
+              setStep(4) // MISC starts at step 4 (Misc Details)
             } else {
               setStep(999) // Skip to old flow for other types
             }
@@ -1931,7 +2332,7 @@ export default function MultiStepReceipt() {
         />
       )}
 
-      {/* FD Flow */}
+      {/* FD Flow (excludes Government schemes) */}
       {step === 4 && productTypeSeed === 'FD' && (
         <StepFDIssuer
           onBack={() => setStep(3)}
@@ -1940,10 +2341,28 @@ export default function MultiStepReceipt() {
             setStep(5)
           }}
           token={token}
+          governmentOnly={false}
+          initialIssuerKey={fdIssuerSeed?._key || fdIssuerSeed?.issuer_key || receiptPresets.FD?.issuer_key || ''}
+          recentIssuers={recentIssuersByType.FD}
         />
       )}
 
-      {step === 5 && productTypeSeed === 'FD' && fdIssuerSeed && (
+      {/* Government schemes Flow (only Government/Post Office issuers from FD Scheme Management) */}
+      {step === 4 && productTypeSeed === 'GOVT_FD' && (
+        <StepFDIssuer
+          onBack={() => setStep(3)}
+          onNext={(issuer) => {
+            setFdIssuerSeed(issuer)
+            setStep(5)
+          }}
+          token={token}
+          governmentOnly={true}
+          initialIssuerKey={fdIssuerSeed?._key || fdIssuerSeed?.issuer_key || ''}
+          recentIssuers={[]}
+        />
+      )}
+
+      {step === 5 && (productTypeSeed === 'FD' || productTypeSeed === 'GOVT_FD') && fdIssuerSeed && (
         <StepFDScheme
           onBack={() => setStep(4)}
           onNext={(scheme) => {
@@ -1952,10 +2371,12 @@ export default function MultiStepReceipt() {
           }}
           token={token}
           issuer={fdIssuerSeed}
+          initialSchemeId={fdSchemeSeed?.scheme_id || (productTypeSeed === 'FD' ? receiptPresets.FD?.scheme_id : '') || ''}
+          recentSchemes={productTypeSeed === 'GOVT_FD' ? [] : recentSchemesByType.FD}
         />
       )}
 
-      {step === 6 && productTypeSeed === 'FD' && fdSchemeSeed && (
+      {step === 6 && (productTypeSeed === 'FD' || productTypeSeed === 'GOVT_FD') && fdSchemeSeed && (
         <StepFDDetails
           onBack={() => setStep(5)}
           onNext={(fdData) => {
@@ -1978,6 +2399,8 @@ export default function MultiStepReceipt() {
             setStep(5)
           }}
           token={token}
+          initialIssuerKey={ncdBondIssuerSeed?._key || ncdBondIssuerSeed?.issuer_key || receiptPresets.BOND?.issuer_key || ''}
+          recentIssuers={recentIssuersByType.BOND}
         />
       )}
 
@@ -1990,6 +2413,8 @@ export default function MultiStepReceipt() {
           }}
           token={token}
           issuer={ncdBondIssuerSeed}
+          initialSchemeId={ncdBondSchemeSeed?.scheme_id || receiptPresets.BOND?.scheme_id || ''}
+          recentSchemes={recentSchemesByType.BOND}
         />
       )}
 
@@ -2009,34 +2434,74 @@ export default function MultiStepReceipt() {
 
       {/* Insurance Flow */}
       {step === 4 && productTypeSeed === 'INS' && (
-        <StepProduct
+        <StepInsuranceIssuer
           onBack={() => setStep(3)}
-          onNext={(_, normalized) => {
-            const base = buildBase()
-            const merged = {
-              ...base,
-              ...normalized,
-              product_category: 'INS'
-            }
-            setFinalData(merged)
-            setStep(5) // Next: StepFinal (Transaction Details)
+          onNext={(issuer) => {
+            setInsuranceIssuerSeed(issuer)
+            setInsuranceProductSeed(null)
+            setStep(5)
           }}
-          investmentType="Lumpsum"
-          productType="INS"
           token={token}
+          initialIssuerKey={insuranceIssuerSeed?._key || receiptPresets.INS?.issuer_key || ''}
+          initialCategory={insuranceProductSeed?.category || receiptPresets.INS?.category || ''}
+          recentIssuers={recentIssuersByType.INS}
         />
       )}
 
-      {step === 5 && productTypeSeed === 'INS' && finalData && (
-        <StepFinal
-          data={finalData}
+      {step === 5 && productTypeSeed === 'INS' && insuranceIssuerSeed && (
+        <StepInsuranceProduct
           onBack={() => setStep(4)}
-          onSave={saveToServer}
-          isSaving={isSaving}
-          saveError={saveError}
-          saveSuccess={saveSuccess}
-          supportingDocument={supportingDocument}
-          setSupportingDocument={setSupportingDocument}
+          onNext={(product) => {
+            setInsuranceProductSeed(product)
+            setStep(6)
+          }}
+          token={token}
+          issuer={insuranceIssuerSeed}
+          initialProductId={insuranceProductSeed?.product_id || receiptPresets.INS?.product_id || ''}
+          recentProducts={recentSchemesByType.INS}
+        />
+      )}
+
+      {step === 6 && productTypeSeed === 'INS' && insuranceIssuerSeed && insuranceProductSeed && (
+        <StepInsuranceDetails
+          onBack={() => setStep(5)}
+          onNext={(normalized) => {
+            const base = buildBase()
+            const insuranceAmount = normalized?.investment_amount ?? normalized?.investmentAmount ?? null
+            const merged = {
+              ...base,
+              ...normalized,
+              product_category: 'INS',
+              investment_amount: insuranceAmount
+            }
+            setFinalData(merged)
+            setStep(7)
+          }}
+          token={token}
+          issuer={insuranceIssuerSeed}
+          product={insuranceProductSeed}
+        />
+      )}
+
+      {step === 4 && productTypeSeed === 'MISC' && (
+        <StepMiscDetails
+          onBack={() => setStep(3)}
+          onNext={(miscData) => {
+            const base = buildBase()
+            const merged = {
+              ...base,
+              ...miscData,
+              product_category: 'MISC',
+              service_name: miscData.service_name,
+              service_price: miscData.service_price,
+              investment_amount: miscData.service_price,
+              cc: miscData.cc,
+              si: miscData.si
+            }
+            setFinalData(merged)
+            setStep(5)
+          }}
+          token={token}
         />
       )}
 
@@ -2048,6 +2513,10 @@ export default function MultiStepReceipt() {
             setStep(5) // Next: Investment Type selection
           }}
           token={token}
+          initialAmcCode={mfSchemeSeed?.selectedAmc?.amc_code || receiptPresets.MF?.amc_code || ''}
+          initialSchemeCode={mfSchemeSeed?.selectedScheme?.scheme_code || receiptPresets.MF?.scheme_code || ''}
+          recentAmcs={recentIssuersByType.MF}
+          recentSchemes={recentSchemesByType.MF}
         />
       )}
 
@@ -2079,7 +2548,22 @@ export default function MultiStepReceipt() {
         />
       )}
 
-      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'BOND' && productTypeSeed !== 'INS' && (
+      {step === 5 && productTypeSeed === 'MISC' && finalData && (
+        <StepFinal 
+          data={finalData} 
+          onBack={() => setStep(4)} 
+          onSave={saveToServer}
+          onSavePreset={savePreset}
+          presetPaymentMode={presetPaymentMode}
+          isSaving={isSaving}
+          saveError={saveError}
+          saveSuccess={saveSuccess}
+          supportingDocument={supportingDocument}
+          setSupportingDocument={setSupportingDocument}
+        />
+      )}
+
+      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'BOND' && productTypeSeed !== 'INS' && productTypeSeed !== 'MISC' && (
         <StepProduct
           onBack={() => setStep(3)}
           onNext={(_, normalized) => {
@@ -2101,8 +2585,13 @@ export default function MultiStepReceipt() {
       {step === 7 && finalData && (
         <StepFinal 
           data={finalData} 
-          onBack={() => setStep(5)} 
+          onBack={() => {
+            const needsDetailsStep = ['MF', 'FD', 'BOND', 'INS'].includes(productTypeSeed)
+            setStep(needsDetailsStep ? 6 : 5)
+          }} 
           onSave={saveToServer}
+          onSavePreset={savePreset}
+          presetPaymentMode={presetPaymentMode}
           isSaving={isSaving}
           saveError={saveError}
           saveSuccess={saveSuccess}

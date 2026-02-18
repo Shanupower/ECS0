@@ -104,7 +104,8 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
         title: formData.title.trim(),
         description: formData.description.trim(),
         priority: formData.priority,
-        created_by: user?.id || user?.emp_code || 'unknown'
+        created_by: user?.id || user?.emp_code || 'unknown',
+        receipt_draft_id: initialData?.receipt_draft_id || null
       }
 
       // Call API - createIssue handles FormData creation internally

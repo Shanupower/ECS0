@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 
-export default function StepNCDBondScheme({ onBack, onNext, token, issuer }) {
+export default function StepNCDBondScheme({ onBack, onNext, token, issuer, initialSchemeId = '', recentSchemes = [] }) {
   const [schemes, setSchemes] = useState([])
   const [selectedScheme, setSelectedScheme] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -12,6 +12,12 @@ export default function StepNCDBondScheme({ onBack, onNext, token, issuer }) {
       loadSchemes()
     }
   }, [issuer])
+
+  useEffect(() => {
+    if (!initialSchemeId || !schemes.length) return
+    const scheme = schemes.find(s => s.scheme_id === initialSchemeId)
+    if (scheme) setSelectedScheme(scheme)
+  }, [initialSchemeId, schemes])
 
   const loadSchemes = async () => {
     const issuer_key = issuer?._key || issuer?.issuer_key
@@ -65,6 +71,27 @@ export default function StepNCDBondScheme({ onBack, onNext, token, issuer }) {
         From: <strong className="text-gray-900 dark:text-white">{issuer?.short_name}</strong>
       </p>
 
+      {recentSchemes.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recent Schemes</label>
+          <div className="flex flex-wrap gap-2">
+            {recentSchemes.map(scheme => (
+              <button
+                key={scheme.scheme_id}
+                type="button"
+                onClick={() => {
+                  const found = schemes.find(s => s.scheme_id === scheme.scheme_id)
+                  setSelectedScheme(found || scheme)
+                }}
+                className="px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+              >
+                {scheme.scheme_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <div className="mb-6">
         <div className="relative">
@@ -109,6 +136,13 @@ export default function StepNCDBondScheme({ onBack, onNext, token, issuer }) {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <h4 className="text-base font-bold text-gray-900 dark:text-white">{scheme.scheme_name}</h4>
+                      {(scheme.category || scheme.sub_category) && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {scheme.category && <span className="font-medium">{scheme.category}</span>}
+                          {scheme.category && scheme.sub_category && <span className="mx-1">•</span>}
+                          {scheme.sub_category && <span>{scheme.sub_category}</span>}
+                        </p>
+                      )}
                       {scheme.description && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{scheme.description}</p>
                       )}

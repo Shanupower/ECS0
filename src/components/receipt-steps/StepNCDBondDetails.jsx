@@ -8,6 +8,10 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
   const [applicationNumber, setApplicationNumber] = useState('')
   const [form15g15h, setForm15g15h] = useState(false)
 
+  // Determine if it's NCD or Bond based on issuer type
+  const isNCD = issuer?.type === 'NCD' || issuer?.type?.toUpperCase() === 'NCD'
+  const unitLabel = isNCD ? 'NCDs' : 'Bonds'
+
   // Calculate investment amount from units if face value is available
   useEffect(() => {
     if (scheme?.face_value && numberOfUnits) {
@@ -24,6 +28,8 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
       bond_issuer_type: issuer.type,
       bond_scheme_id: scheme.scheme_id,
       bond_scheme_name: scheme.scheme_name,
+      bond_category: scheme.category,
+      bond_sub_category: scheme.sub_category,
       bond_isin: scheme.isin,
       bond_coupon_rate: scheme.coupon_rate,
       bond_face_value: scheme.face_value,
@@ -112,7 +118,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
         {/* Number of Units */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Number of Units {transactionType === 'Redemption' && <span className="text-red-500">*</span>}
+            Number of {unitLabel} {transactionType === 'Redemption' && <span className="text-red-500">*</span>}
             {transactionType === 'Purchase' && scheme?.face_value && (
               <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                 (Face Value: ₹{scheme.face_value.toLocaleString()})
@@ -123,7 +129,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
             type="number"
             value={numberOfUnits}
             onChange={(e) => setNumberOfUnits(e.target.value)}
-            placeholder="Enter number of units"
+            placeholder={`Enter number of ${unitLabel.toLowerCase()}`}
             min="0"
             step="1"
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -157,7 +163,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
             )}
             {scheme?.face_value && investmentAmount && numberOfUnits && (
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                Calculated Units: {Math.floor(parseFloat(investmentAmount) / scheme.face_value)}
+                Calculated {unitLabel}: {Math.floor(parseFloat(investmentAmount) / scheme.face_value)}
               </p>
             )}
           </div>
@@ -167,6 +173,16 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
         <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border-2 border-blue-300 dark:border-blue-700">
           <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Scheme Details</h4>
           <div className="grid grid-cols-2 gap-4 text-sm">
+            {(scheme?.category || scheme?.sub_category) && (
+              <div className="col-span-2">
+                <div className="text-xs text-gray-600 dark:text-gray-400">Category</div>
+                <div className="text-base font-semibold text-gray-900 dark:text-white">
+                  {scheme.category && <span>{scheme.category}</span>}
+                  {scheme.category && scheme.sub_category && <span className="mx-1">•</span>}
+                  {scheme.sub_category && <span>{scheme.sub_category}</span>}
+                </div>
+              </div>
+            )}
             {scheme?.isin && (
               <div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">ISIN</div>

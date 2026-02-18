@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
 import { normalizeReceiptsArray } from '../utils/receiptNormalizer'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { 
   FiClock, 
   FiFilter, 
@@ -24,7 +25,11 @@ import {
   FiArrowUp,
   FiArrowDown,
   FiEdit,
-  FiXCircle
+  FiXCircle,
+  FiBarChart,
+  FiFileText,
+  FiActivity,
+  FiTrendingUp
 } from 'react-icons/fi'
 
 export default function TransactionsPage() {
@@ -41,6 +46,8 @@ export default function TransactionsPage() {
     emp_code: '',
     branch_code: '',
     search: '', // Search by investor name/ID or receipt ID
+    amount_min: '',
+    amount_max: '',
     size: 20,
     sort: 'created_at:desc'
   })
@@ -63,6 +70,8 @@ export default function TransactionsPage() {
   const [rejectRemark, setRejectRemark] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
   const [editData, setEditData] = useState(null)
+  const [summary, setSummary] = useState(null)
+  const [loadingSummary, setLoadingSummary] = useState(false)
 
   const isAdmin = user?.role === 'admin'
 
@@ -74,6 +83,34 @@ export default function TransactionsPage() {
       newExpanded.add(receiptId)
     }
     setExpandedRows(newExpanded)
+  }
+
+  const loadSummary = async () => {
+    if (!token) return
+    
+    setLoadingSummary(true)
+    try {
+      const query = {
+        from: filters.from,
+        to: filters.to,
+        category: filters.category || undefined,
+        status: filters.status || undefined,
+        mode: filters.mode || undefined,
+        search: filters.search || undefined,
+        branch_code: filters.branch_code || undefined,
+        emp_code: filters.emp_code || undefined
+      }
+      
+      // Remove undefined values
+      Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
+      
+      const summaryData = await api.getTransactionSummary(token, query)
+      setSummary(summaryData)
+    } catch (err) {
+      console.error('Error loading summary:', err)
+    } finally {
+      setLoadingSummary(false)
+    }
   }
 
   const loadReceipts = async () => {
@@ -179,7 +216,18 @@ export default function TransactionsPage() {
       )
       
       // Normalize all receipts to use consistent field names (backward compatibility)
-      const normalizedReceipts = normalizeReceiptsArray(receiptsWithMedia)
+      let normalizedReceipts = normalizeReceiptsArray(receiptsWithMedia)
+      
+      // Apply amount range filter on frontend
+      if (filters.amount_min || filters.amount_max) {
+        normalizedReceipts = normalizedReceipts.filter(receipt => {
+          const amount = receipt.investment_amount || receipt.fd_deposit_amount || 0
+          if (filters.amount_min && amount < parseFloat(filters.amount_min)) return false
+          if (filters.amount_max && amount > parseFloat(filters.amount_max)) return false
+          return true
+        })
+      }
+      
       setReceipts(normalizedReceipts)
     } catch (err) {
       console.error('Error loading receipts:', err)
@@ -213,10 +261,11 @@ export default function TransactionsPage() {
   useEffect(() => {
     // Reset to page 1 when any filter changes
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort])
+  }, [filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max])
 
   useEffect(() => {
     loadReceipts()
+    loadSummary()
   }, [token, filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
 
   // Check for success/error messages from receipt creation
@@ -614,7 +663,7 @@ export default function TransactionsPage() {
     }
   }
 
-  const handleDownloadHistory = async () => {
+  const handleDownloadHistory = async (format = 'csv') => {
     if (!token) return
     try {
       const query = {
@@ -628,46 +677,126 @@ export default function TransactionsPage() {
         search: filters.search || undefined
       }
       Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
-      const blob = await api.exportTransactions(token, query)
-      // api.exportTransactions returns text; use fetch-style download instead
-    } catch (err) {
-      console.error('Failed to export transactions via API helper, falling back to direct download:', err)
-    }
 
-    // Fallback: direct browser download using fetch
-    try {
-      const qs = new URLSearchParams({
-        from: filters.from,
-        to: filters.to,
-        ...(isAdmin && filters.branch_code ? { branch_code: filters.branch_code } : (user?.branch_code ? { branch_code: user.branch_code } : {})),
-        ...(isAdmin && filters.emp_code ? { emp_code: filters.emp_code } : {}),
-        ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.category ? { category: filters.category } : {}),
-        ...(filters.mode ? { mode: filters.mode } : {}),
-        ...(filters.search ? { search: filters.search } : {})
-      }).toString()
+      if (format === 'csv' || format === 'excel') {
+        // CSV/Excel export
+        const qs = new URLSearchParams({
+          ...query,
+          format: format === 'excel' ? 'xlsx' : 'csv'
+        }).toString()
 
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/export/transactions?${qs}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-      if (!res.ok) throw new Error('Failed to download transaction history')
-      const csvText = await res.text()
-      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/export/transactions?${qs}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+        if (!res.ok) throw new Error('Failed to download transaction history')
+        const csvText = await res.text()
+        const blob = new Blob([csvText], { type: format === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8;' })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `transactions_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : 'csv'}`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+      } else if (format === 'pdf') {
+        // PDF summary report - create from current data
+        const pdfContent = generatePDFReport(receipts, summary, filters)
+        const blob = new Blob([pdfContent], { type: 'application/pdf' })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `transaction_summary_${new Date().toISOString().split('T')[0]}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+      }
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to download transaction history')
+      setErrorMessage(err.message || 'Failed to export transaction history')
       setShowErrorToast(true)
       setTimeout(() => setShowErrorToast(false), 5000)
     }
+  }
+
+  const generatePDFReport = (receipts, summary, filters) => {
+    // Simple PDF generation using browser print API
+    // For a proper PDF, we'd use a library like jsPDF, but for now we'll create a printable HTML report
+    const reportWindow = window.open('', '_blank')
+    const reportHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Transaction Summary Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #DC2626; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #FEF2F2; color: #DC2626; }
+            .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
+            .summary-card { background: #FEF2F2; padding: 15px; border-radius: 8px; }
+            .summary-card h3 { margin: 0 0 10px 0; color: #DC2626; }
+            .summary-card p { margin: 5px 0; font-size: 18px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>Transaction Summary Report</h1>
+          <p><strong>Date Range:</strong> ${filters.from} to ${filters.to}</p>
+          ${summary ? `
+            <div class="summary">
+              <div class="summary-card">
+                <h3>Total Receipts</h3>
+                <p>${summary.total_receipts || 0}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Total Investment</h3>
+                <p>${formatCurrency(summary.total_investment || 0)}</p>
+              </div>
+              <div class="summary-card">
+                <h3>Average Transaction</h3>
+                <p>${formatCurrency(summary.avg_investment || 0)}</p>
+              </div>
+            </div>
+          ` : ''}
+          <table>
+            <thead>
+              <tr>
+                <th>Receipt No</th>
+                <th>Date</th>
+                <th>Investor</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${receipts.slice(0, 100).map(r => `
+                <tr>
+                  <td>${r.receipt_no || r.receiptNo || 'N/A'}</td>
+                  <td>${formatDate(r.date)}</td>
+                  <td>${r.investor_name || r.investorName || 'N/A'}</td>
+                  <td>${getCategoryDisplayName(r.product_category)}</td>
+                  <td>${formatCurrency(r.investment_amount || r.fd_deposit_amount || 0)}</td>
+                  <td>${r.status || r.transaction_status || 'Pending'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <p style="margin-top: 20px; color: #666; font-size: 12px;">
+            Generated on ${new Date().toLocaleString('en-IN')}
+          </p>
+        </body>
+      </html>
+    `
+    reportWindow.document.write(reportHTML)
+    reportWindow.document.close()
+    setTimeout(() => {
+      reportWindow.print()
+    }, 250)
+    return '' // Return empty string as we're using print dialog
   }
 
   const getRowBackgroundColor = (receipt) => {
@@ -733,15 +862,126 @@ export default function TransactionsPage() {
           <FiRefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline ml-2">Refresh</span>
         </button>
-        <button
-          onClick={handleDownloadHistory}
-          disabled={loading}
-          className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
-        >
-          <FiDownload className="w-5 h-5 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline ml-2">Download CSV</span>
-        </button>
+        <div className="relative group">
+          <button
+            onClick={() => handleDownloadHistory('csv')}
+            disabled={loading}
+            className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
+          >
+            <FiDownload className="w-5 h-5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline ml-2">Export</span>
+          </button>
+          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+            <button
+              onClick={() => handleDownloadHistory('csv')}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-dark-200 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-t-lg"
+            >
+              Download CSV
+            </button>
+            <button
+              onClick={() => handleDownloadHistory('excel')}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-dark-200 hover:bg-gray-50 dark:hover:bg-dark-700"
+            >
+              Download Excel
+            </button>
+            <button
+              onClick={() => handleDownloadHistory('pdf')}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-dark-200 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-b-lg"
+            >
+              Download PDF Report
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Summary Statistics Cards */}
+      {summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
+                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                  {summary.total_receipts || 0}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <FiFileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Investment</div>
+                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(summary.total_investment || 0)}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <span className="text-green-600 dark:text-green-400 text-xl font-bold">₹</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Avg Transaction</div>
+                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(summary.avg_investment || 0)}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <FiBarChart className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Pending</div>
+                <div className="text-2xl sm:text-3xl font-bold text-yellow-600 dark:text-yellow-400">
+                  {summary.status_counts?.Pending || 0}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
+                <FiClock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Completed</div>
+                <div className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400">
+                  {summary.status_counts?.Completed || 0}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <FiCheck className="w-6 h-6 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Failed</div>
+                <div className="text-2xl sm:text-3xl font-bold text-red-600 dark:text-red-400">
+                  {summary.status_counts?.Failed || 0}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                <FiAlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Filters */}
       <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
@@ -764,6 +1004,59 @@ export default function TransactionsPage() {
               placeholder="Search by investor name, investor ID, or receipt ID..."
               className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
             />
+          </div>
+        </div>
+
+        {/* Quick Date Range Selectors */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Quick Select</label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'Today', days: 0 },
+              { label: 'This Week', days: 7 },
+              { label: 'This Month', days: 30 },
+              { label: 'This Quarter', days: 90 },
+              { label: 'This Year', days: 365 },
+              { label: 'Custom', days: null }
+            ].map(({ label, days }) => {
+              const isActive = days !== null && (() => {
+                const today = new Date()
+                const fromDate = new Date(filters.from)
+                const toDate = new Date(filters.to)
+                if (days === 0) {
+                  const todayStr = today.toISOString().slice(0, 10)
+                  return filters.from === todayStr && filters.to === todayStr
+                }
+                const expectedFrom = new Date(today)
+                expectedFrom.setDate(today.getDate() - days)
+                return fromDate.toDateString() === expectedFrom.toDateString() && toDate.toDateString() === today.toDateString()
+              })()
+              
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    if (days === null) return // Custom - do nothing
+                    const today = new Date()
+                    const from = new Date(today)
+                    from.setDate(today.getDate() - days)
+                    setFilters(prev => ({
+                      ...prev,
+                      from: from.toISOString().slice(0, 10),
+                      to: today.toISOString().slice(0, 10)
+                    }))
+                  }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200 hover:bg-gray-200 dark:hover:bg-dark-600'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -987,6 +1280,15 @@ export default function TransactionsPage() {
                         <span className="text-gray-500 dark:text-gray-400">Amount</span>
                         <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(receipt.fd_deposit_amount || receipt.investment_amount || receipt.investmentAmount)}</p>
                       </div>
+                      {(receipt.entry_mode || receipt.channel || receipt.reference_no) && (
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Payment</span>
+                          <p className="font-medium text-gray-900 dark:text-white truncate" title={receipt.reference_no || receipt.channel || ''}>
+                            {receipt.entry_mode || '—'}
+                            {(receipt.reference_no || receipt.channel) && ` • ${(receipt.reference_no || receipt.channel).toString().slice(0, 12)}${((receipt.reference_no || receipt.channel) || '').length > 12 ? '…' : ''}`}
+                          </p>
+                        </div>
+                      )}
                       {isAdmin && (
                         <div>
                           <span className="text-gray-500 dark:text-gray-400">Employee</span>
@@ -1218,6 +1520,20 @@ export default function TransactionsPage() {
                         <tr className="bg-gray-50/50 dark:bg-dark-700/50 border-l-4 border-red-600">
                           <td colSpan="5" className="px-4 py-4">
                             <div className="flex items-center justify-between gap-6">
+                              {/* Payment / Transaction type */}
+                              {(receipt.entry_mode || receipt.channel || receipt.reference_no) && (
+                                <div className="flex flex-col gap-2">
+                                  <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Payment</div>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {receipt.entry_mode || '—'}
+                                    {(receipt.reference_no || receipt.channel) && (
+                                      <span className="text-gray-600 dark:text-dark-400 ml-1">
+                                        • {receipt.reference_no || receipt.channel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                               {/* Status Section */}
                               <div className="flex flex-col gap-2">
                                 <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Status</div>
