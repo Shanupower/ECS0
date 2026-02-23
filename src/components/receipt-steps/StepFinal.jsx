@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { FiUpload, FiFile, FiTrash2, FiCheck, FiAlertCircle, FiRefreshCw } from 'react-icons/fi'
+import { FiUpload, FiFile, FiTrash2, FiCheck, FiAlertCircle, FiRefreshCw, FiPlus } from 'react-icons/fi'
 
-function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '', isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument }) {
+// Support both single (legacy) and array of documents
+function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '', isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument, supportingDocuments, setSupportingDocuments }) {
+  const docs = supportingDocuments != null ? supportingDocuments : (supportingDocument ? [supportingDocument] : [])
+  const setDocs = setSupportingDocuments != null ? setSupportingDocuments : (files => { if (files.length === 1) setSupportingDocument(files[0]); else if (files.length === 0) setSupportingDocument(null) })
   const [transactionType, setTransactionType] = useState('')
   const [offlineDetails, setOfflineDetails] = useState({
     bankName: '',
@@ -46,55 +49,51 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
   }
 
   const handleFileUpload = (event) => {
-    const file = event.target.files[0]
-    if (file) {
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setValidationError('File size must be less than 5MB')
-        return
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) return
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
+    const maxSize = 5 * 1024 * 1024
+    const valid = files.filter(file => {
+      if (file.size > maxSize) {
+        setValidationError('Each file must be less than 5MB')
+        return false
       }
-      
-      // Check file type (images and PDFs)
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
       if (!allowedTypes.includes(file.type)) {
-        setValidationError('Please upload an image (JPEG, PNG, GIF) or PDF file')
-        return
+        setValidationError('Please upload images (JPEG, PNG, GIF) or PDF only')
+        return false
       }
-      
-      setSupportingDocument(file)
+      return true
+    })
+    if (valid.length > 0) {
+      setValidationError('')
+      setDocs([...docs, ...valid])
+      const file = valid[0]
       try {
         const reader = new FileReader()
         reader.onloadend = () => {
-          const dataUrl = reader.result
-          if (typeof dataUrl === 'string') {
-            sessionStorage.setItem('last_supporting_document', JSON.stringify({
-              name: file.name,
-              type: file.type,
-              dataUrl,
-              updatedAt: new Date().toISOString()
-            }))
-            setLastDocMeta({
-              name: file.name,
-              type: file.type,
-              dataUrl
-            })
+          if (typeof reader.result === 'string') {
+            sessionStorage.setItem('last_supporting_document', JSON.stringify({ name: file.name, type: file.type, dataUrl: reader.result, updatedAt: new Date().toISOString() }))
+            setLastDocMeta({ name: file.name, type: file.type, dataUrl: reader.result })
           }
         }
         reader.readAsDataURL(file)
-      } catch (err) {
-        console.warn('Failed to store last document:', err)
-      }
+      } catch (err) { console.warn('Failed to store last document:', err) }
     }
+    event.target.value = ''
   }
 
-  const removeDocument = () => {
-    setSupportingDocument(null)
+  const removeDocument = (index) => {
+    if (index != null) {
+      setDocs(docs.filter((_, i) => i !== index))
+    } else {
+      setDocs([])
+    }
   }
 
   const applyLastDocument = () => {
     if (!lastDocMeta?.dataUrl) return
     const restored = dataUrlToFile(lastDocMeta.dataUrl, lastDocMeta.name || 'document', lastDocMeta.type || 'application/pdf')
-    setSupportingDocument(restored)
+    setDocs([...docs, restored])
   }
 
   const handleSave = () => {
@@ -189,9 +188,9 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
       }
     }
     
-    // Validate supporting document
-    if (!supportingDocument) {
-      setValidationError('Please upload a supporting document (screenshot or PDF)')
+    // Validate supporting document(s)
+    if (!docs.length) {
+      setValidationError('Please upload at least one supporting document (screenshot or PDF)')
       return
     }
     
@@ -435,8 +434,8 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               </div>
             ) : null}
             
-            {/* NCD/Bond-specific display */}
-            {data.product_category === 'BOND' ? (
+            {/* NCD/Bond-specific display (exclude FD headers) */}
+            {(data.product_category === 'BOND' || data.product_category === 'NCD') ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.bond_issuer_name && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -1180,58 +1179,53 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
           </div>
 
 
-          {/* Supporting Document */}
+          {/* Supporting Document(s) */}
           <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
               <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-              Supporting Document *
+              Supporting Document(s) *
             </h3>
-        
-        {!supportingDocument ? (
+            {docs.length === 0 ? (
               <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
-            <FiUpload className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              Upload photo proof or supporting document
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mb-4">
-              Supported formats: JPEG, PNG, GIF, PDF (Max 5MB)
-            </p>
+                <FiUpload className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Upload photo proof or supporting document
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mb-4">
+                  Supported formats: JPEG, PNG, GIF, PDF (Max 5MB each)
+                </p>
                 <label className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-blue-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer">
-              <FiUpload className="w-4 h-4 mr-2" />
-              Choose File
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
-          </div>
-        ) : (
-              <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
-            <div className="flex items-center">
-              <FiFile className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {supportingDocument.name}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {(supportingDocument.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+                  <FiUpload className="w-4 h-4 mr-2" />
+                  Choose File
+                  <input type="file" accept="image/*,.pdf" multiple onChange={handleFileUpload} className="hidden" />
+                </label>
               </div>
-            </div>
-            <button
-              onClick={removeDocument}
-              className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200"
-            >
-              <FiTrash2 className="w-3 h-3 mr-1" />
-              Remove
-            </button>
+            ) : (
+              <div className="space-y-2">
+                {docs.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                    <div className="flex items-center min-w-0">
+                      <FiFile className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => removeDocument(index)} className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-semibold rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 flex-shrink-0 ml-2">
+                      <FiTrash2 className="w-3 h-3 mr-1" /> Remove
+                    </button>
+                  </div>
+                ))}
+                <label className="inline-flex items-center px-4 py-2 mt-2 border border-dashed border-blue-300 dark:border-blue-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                  <FiPlus className="w-4 h-4 mr-2" />
+                  Add more attachments
+                  <input type="file" accept="image/*,.pdf" multiple onChange={handleFileUpload} className="hidden" />
+                </label>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {!supportingDocument && lastDocMeta?.dataUrl && (
+      {docs.length === 0 && lastDocMeta?.dataUrl && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex items-center justify-between">
           <div className="text-sm text-yellow-800 dark:text-yellow-200">
             Use your last uploaded document?

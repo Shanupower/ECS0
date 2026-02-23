@@ -300,9 +300,9 @@ export default function ClientManagementPage() {
         }
       })
       
-      // Add media files
-      mediaFiles.forEach((file, index) => {
-        formDataToSend.append('media', file)
+      // Add attachment files (backend expects field name 'files' for uploadMultiple)
+      mediaFiles.forEach((file) => {
+        formDataToSend.append('files', file)
       })
       
       // Add branches array - normalize each branch
@@ -331,7 +331,7 @@ export default function ClientManagementPage() {
       })
       
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to create customer')
       }
       
@@ -886,6 +886,7 @@ function CustomerModal({
   getFileIcon,
   availableBranches = []
 }) {
+  const { user } = useAuth()
   const pincodeDropdownRef = useRef(null)
 
   const handleChange = (e) => {
@@ -1149,6 +1150,7 @@ function CustomerModal({
               />
             </div>
             
+            {user?.role === 'admin' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
                 Branch(es) *
@@ -1160,9 +1162,10 @@ function CustomerModal({
                 placeholder="Select one or more branches"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                You can select multiple branches for this customer
+                Admin only: map customer to one or more branches
               </p>
             </div>
+            )}
           </div>
 
           {/* Minors Section */}

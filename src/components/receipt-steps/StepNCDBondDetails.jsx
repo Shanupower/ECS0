@@ -12,13 +12,23 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
   const isNCD = issuer?.type === 'NCD' || issuer?.type?.toUpperCase() === 'NCD'
   const unitLabel = isNCD ? 'NCDs' : 'Bonds'
 
-  // Calculate investment amount from units if face value is available
-  useEffect(() => {
-    if (scheme?.face_value && numberOfUnits) {
-      const calculatedAmount = parseFloat(numberOfUnits) * scheme.face_value
-      setInvestmentAmount(calculatedAmount.toString())
+  // Bidirectional sync: units <-> amount (vice versa) when face_value is available
+  const handleUnitsChange = (e) => {
+    const val = e.target.value
+    setNumberOfUnits(val)
+    if (scheme?.face_value && val) {
+      const amount = parseFloat(val) * scheme.face_value
+      setInvestmentAmount(amount.toString())
     }
-  }, [numberOfUnits, scheme?.face_value])
+  }
+  const handleAmountChange = (e) => {
+    const val = e.target.value
+    setInvestmentAmount(val)
+    if (scheme?.face_value && val) {
+      const units = Math.floor(parseFloat(val) / scheme.face_value)
+      setNumberOfUnits(units > 0 ? units.toString() : '')
+    }
+  }
 
   const handleNext = () => {
     const issuer_key = issuer?._key || issuer?.issuer_key
@@ -128,7 +138,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           <input
             type="number"
             value={numberOfUnits}
-            onChange={(e) => setNumberOfUnits(e.target.value)}
+            onChange={handleUnitsChange}
             placeholder={`Enter number of ${unitLabel.toLowerCase()}`}
             min="0"
             step="1"
@@ -151,7 +161,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
             <input
               type="number"
               value={investmentAmount}
-              onChange={(e) => setInvestmentAmount(e.target.value)}
+              onChange={handleAmountChange}
               placeholder="Enter investment amount"
               min={scheme?.min_investment || 0}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"

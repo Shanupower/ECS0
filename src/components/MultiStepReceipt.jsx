@@ -785,9 +785,9 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         }
       })
       
-      // Add media files
-      mediaFiles.forEach((file, index) => {
-        formDataToSend.append('media', file)
+      // Add attachment files (backend expects field name 'files' for uploadMultiple)
+      mediaFiles.forEach((file) => {
+        formDataToSend.append('files', file)
       })
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/customers`, {
@@ -799,7 +799,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       })
       
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.detail || 'Failed to create customer')
       }
       
@@ -1388,7 +1388,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const [insuranceIssuerSeed, setInsuranceIssuerSeed] = useState(null)
   const [insuranceProductSeed, setInsuranceProductSeed] = useState(null)
   const [finalData, setFinalData] = useState(null)
-  const [supportingDocument, setSupportingDocument] = useState(null)
+  const [supportingDocuments, setSupportingDocuments] = useState([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState('')
@@ -1972,7 +1972,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       
       // Use branch-specific receipt creation only for branch users, not regular employees
       let result
-      const files = supportingDocument ? [supportingDocument] : []
+      const files = Array.isArray(supportingDocuments) ? supportingDocuments : (supportingDocuments ? [supportingDocuments] : [])
       
       if (user?.role === 'branch' && user?.branch_code) {
         // Branch users can use branch-specific endpoint
@@ -2002,7 +2002,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       setInsuranceIssuerSeed(null)
       setInsuranceProductSeed(null)
       setFinalData(null)
-      setSupportingDocument(null)
+      setSupportingDocuments([])
       setSaveError('')
       setSaveErrorObj(null)
       setFailureScreenshot(null)
@@ -2558,8 +2558,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           isSaving={isSaving}
           saveError={saveError}
           saveSuccess={saveSuccess}
-          supportingDocument={supportingDocument}
-          setSupportingDocument={setSupportingDocument}
+          supportingDocuments={supportingDocuments}
+          setSupportingDocuments={setSupportingDocuments}
         />
       )}
 
@@ -2595,8 +2595,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           isSaving={isSaving}
           saveError={saveError}
           saveSuccess={saveSuccess}
-          supportingDocument={supportingDocument}
-          setSupportingDocument={setSupportingDocument}
+          supportingDocuments={supportingDocuments}
+          setSupportingDocuments={setSupportingDocuments}
         />
       )}
     </div>
