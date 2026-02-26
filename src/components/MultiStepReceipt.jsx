@@ -6,7 +6,7 @@ import ReportIssueModal from './ReportIssueModal.jsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { normalizeBranchForAPI } from '../utils/branchMapping'
-import { FiPlus, FiX, FiUpload, FiFile, FiTrash2, FiAlertCircle, FiHelpCircle } from 'react-icons/fi'
+import { FiPlus, FiX, FiUpload, FiFile, FiTrash2, FiAlertCircle, FiHelpCircle, FiSave } from 'react-icons/fi'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 import StepMFScheme from './receipt-steps/StepMFScheme.jsx'
 import StepInvestmentType from './receipt-steps/StepInvestmentType.jsx'
@@ -1407,6 +1407,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const [usePreset, setUsePreset] = useState(true)
   const [presetPaymentMode, setPresetPaymentMode] = useState('')
   const [duplicateOverrideKey, setDuplicateOverrideKey] = useState(null)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [draftSavedMessage, setDraftSavedMessage] = useState('')
 
   // Auto-populate employee data from user context
   useEffect(() => {
@@ -2103,6 +2105,46 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
     }
   }
 
+  const handleSaveToDraft = async () => {
+    if (!token) return
+    setSavingDraft(true)
+    setDraftSavedMessage('')
+    try {
+      const draftPayload = {
+        draft_data: {
+          draft_version: 1,
+          step,
+          productTypeSeed,
+          empSeed,
+          investorSeed,
+          mfSchemeSeed,
+          investmentTypeSeed,
+          fdIssuerSeed,
+          fdSchemeSeed,
+          ncdBondIssuerSeed,
+          ncdBondSchemeSeed,
+          insuranceIssuerSeed,
+          insuranceProductSeed,
+          finalData
+        },
+        source: 'manual_save',
+        error_message: null
+      }
+      const result = await api.createReceiptDraft(token, draftPayload)
+      const draftId = result?.draft_id || result?.id || null
+      if (draftId) {
+        localStorage.setItem('failed_receipt_draft_id', draftId)
+        setDraftSavedMessage('Draft saved. You can resume from Transaction History anytime.')
+        localStorage.setItem('receipt_force_refresh', 'true')
+      }
+    } catch (err) {
+      console.error('Save to draft failed:', err)
+      setDraftSavedMessage('Failed to save draft: ' + (err.message || 'Please try again.'))
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
       {/* Failure Popup */}
@@ -2129,10 +2171,23 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
                 </h3>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
                   {saveError 
-                    ? 'We encountered an issue while creating your receipt. Would you like to report this problem?'
+                    ? (failureDraftId 
+                        ? 'Your progress has been saved as a draft. Resume from Transaction History or Create Receipt later.'
+                        : 'We encountered an issue while creating your receipt. Would you like to report this problem?')
                     : 'It looks like you\'ve been on this step for a while. Are you having trouble understanding what to do next or unable to proceed? We\'re here to help!'}
                 </p>
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
+                  {saveError && failureDraftId && (
+                    <button
+                      onClick={() => {
+                        setShowFailurePopup(false)
+                        navigate(`/receipts?draftId=${failureDraftId}`)
+                      }}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      Resume later
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       // Only capture screenshot and generate details if user wants to report
@@ -2260,6 +2315,29 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           insuranceProductSeed={insuranceProductSeed}
           finalData={finalData}
         />
+      )}
+
+      {/* Save to draft - shown during receipt creation (steps 2–6) */}
+      {step >= 2 && step < 7 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-2">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Save your progress and resume later from Transaction History.
+          </p>
+          <div className="flex items-center gap-2">
+            {draftSavedMessage && (
+              <span className="text-sm text-green-600 dark:text-green-400">{draftSavedMessage}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveToDraft}
+              disabled={savingDraft}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+            >
+              <FiSave className="w-4 h-4" />
+              {savingDraft ? 'Saving...' : 'Save to draft'}
+            </button>
+          </div>
+        </div>
       )}
 
       {step === 1 && (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
@@ -15,7 +16,8 @@ import {
   FiAlertCircle,
   FiMapPin,
   FiDollarSign,
-  FiAward
+  FiAward,
+  FiCheckSquare
 } from 'react-icons/fi'
 
 export default function DashboardPage() {
@@ -33,6 +35,7 @@ export default function DashboardPage() {
   })
   const [includePending, setIncludePending] = useState(false)
   const [viewMode, setViewMode] = useState('personal') // 'personal', 'branch', 'all' for admins
+  const [overdueTasks, setOverdueTasks] = useState([])
 
   const loadDashboardData = async () => {
     if (!token) return
@@ -86,6 +89,14 @@ export default function DashboardPage() {
         setBranchStats(branchData)
       } else {
         setBranchStats(null)
+      }
+
+      try {
+        const overdueRes = await api.listTasks(token, { overdue: '1', limit: '7' })
+        setOverdueTasks(overdueRes.items || [])
+      } catch (taskErr) {
+        console.warn('Failed to load overdue tasks:', taskErr)
+        setOverdueTasks([])
       }
       
     } catch (err) {
@@ -362,6 +373,37 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Overdue tasks widget */}
+          <div className="mt-6 bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <FiCheckSquare className="w-5 h-5 text-red-600 dark:text-red-400" />
+                Overdue tasks
+                {overdueTasks.length > 0 && (
+                  <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({overdueTasks.length})</span>
+                )}
+              </h3>
+              <Link
+                to="/tasks"
+                className="text-sm font-medium text-red-600 dark:text-red-400 hover:underline"
+              >
+                View all
+              </Link>
+            </div>
+            {overdueTasks.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No overdue tasks.</p>
+            ) : (
+              <ul className="space-y-2">
+                {(overdueTasks.slice(0, 5)).map((task) => (
+                  <li key={task._key} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-dark-700 last:border-0">
+                    <span className="text-gray-900 dark:text-white font-medium truncate flex-1">{task.title}</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 flex-shrink-0">{task.due_date}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 

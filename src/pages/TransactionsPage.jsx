@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
@@ -29,11 +30,13 @@ import {
   FiBarChart,
   FiFileText,
   FiActivity,
-  FiTrendingUp
+  FiTrendingUp,
+  FiSave
 } from 'react-icons/fi'
 
 export default function TransactionsPage() {
   const { token, user } = useAuth()
+  const navigate = useNavigate()
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -72,6 +75,8 @@ export default function TransactionsPage() {
   const [editData, setEditData] = useState(null)
   const [summary, setSummary] = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
+  const [drafts, setDrafts] = useState([])
+  const [loadingDrafts, setLoadingDrafts] = useState(false)
 
   const isAdmin = user?.role === 'admin'
 
@@ -238,6 +243,20 @@ export default function TransactionsPage() {
     }
   }
 
+  const loadDrafts = async () => {
+    if (!token) return
+    setLoadingDrafts(true)
+    try {
+      const list = await api.listReceiptDrafts(token)
+      setDrafts(Array.isArray(list) ? list : [])
+    } catch (err) {
+      console.error('Failed to load receipt drafts:', err)
+      setDrafts([])
+    } finally {
+      setLoadingDrafts(false)
+    }
+  }
+
   // Load branches for admin users
   useEffect(() => {
     if (isAdmin && token) {
@@ -266,6 +285,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     loadReceipts()
     loadSummary()
+    loadDrafts()
   }, [token, filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
 
   // Check for success/error messages from receipt creation
@@ -274,8 +294,9 @@ export default function TransactionsPage() {
       const forceRefresh = localStorage.getItem('receipt_force_refresh')
       
       if (forceRefresh === 'true') {
-        // Force refresh the receipts list
+        // Force refresh the receipts list and drafts
         loadReceipts()
+        loadDrafts()
         localStorage.removeItem('receipt_force_refresh')
       }
       
@@ -893,6 +914,43 @@ export default function TransactionsPage() {
           </div>
         </div>
       </div>
+
+      {/* My receipt drafts - resume incomplete receipts */}
+      {drafts.length > 0 && (
+        <div className="mb-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20 p-4">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+            <FiSave className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            My drafts
+          </h2>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+            Incomplete receipts you can resume from Create Receipt.
+          </p>
+          <ul className="space-y-2">
+            {drafts.map((draft) => {
+              const id = draft._key || draft.id
+              const created = draft.created_at ? new Date(draft.created_at).toLocaleString() : '—'
+              const source = draft.source === 'failed_receipt' ? 'Saved after error' : draft.source === 'manual_save' ? 'Saved manually' : 'Draft'
+              return (
+                <li key={id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2">
+                  <div className="text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">{created}</span>
+                    <span className="mx-2 text-gray-400">·</span>
+                    <span className="text-gray-700 dark:text-gray-300">{source}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/receipts?draftId=${id}`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                  >
+                    <FiSave className="w-3.5 h-3.5" />
+                    Resume
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* Summary Statistics Cards */}
       {summary && (

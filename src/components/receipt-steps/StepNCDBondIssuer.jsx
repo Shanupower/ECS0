@@ -6,6 +6,7 @@ export default function StepNCDBondIssuer({ onBack, onNext, token }) {
   const [selectedIssuer, setSelectedIssuer] = useState(null)
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all') // 'all' | 'NCD' | 'Bond' etc.
 
   useEffect(() => {
     loadIssuers()
@@ -24,13 +25,31 @@ export default function StepNCDBondIssuer({ onBack, onNext, token }) {
     }
   }
 
-  const filteredIssuers = searchQuery
-    ? issuers.filter(issuer =>
-        issuer.short_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issuer.legal_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issuer.type?.toLowerCase().includes(searchQuery.toLowerCase())
+  // Unique types from issuers (e.g. NCD, Bond) for filter chips
+  const issuerTypes = React.useMemo(() => {
+    const types = new Set()
+    issuers.forEach(issuer => {
+      const t = (issuer.type || '').trim()
+      if (t) types.add(t)
+    })
+    return ['all', ...Array.from(types).sort()]
+  }, [issuers])
+
+  const filteredIssuers = React.useMemo(() => {
+    let list = issuers
+    if (typeFilter && typeFilter !== 'all') {
+      list = list.filter(issuer => (issuer.type || '').toLowerCase() === typeFilter.toLowerCase())
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter(issuer =>
+        issuer.short_name?.toLowerCase().includes(q) ||
+        issuer.legal_name?.toLowerCase().includes(q) ||
+        issuer.type?.toLowerCase().includes(q)
       )
-    : issuers
+    }
+    return list
+  }, [issuers, typeFilter, searchQuery])
 
   const handleNext = () => {
     if (!selectedIssuer) return
@@ -41,6 +60,29 @@ export default function StepNCDBondIssuer({ onBack, onNext, token }) {
     <div>
       <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Select NCD/Bond Issuer</h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose the NCD/Bond issuer</p>
+
+      {/* Type filter: All | NCD | Bond etc. */}
+      {issuerTypes.length > 1 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type</label>
+          <div className="flex flex-wrap gap-2">
+            {issuerTypes.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setTypeFilter(type)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  typeFilter === type
+                    ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-gray-900'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {type === 'all' ? 'All' : type}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-6">

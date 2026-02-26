@@ -124,6 +124,8 @@ export default function SchemeManagementPage() {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [proposedAmfiCodes, setProposedAmfiCodes] = useState({})
   const [updateIfExists, setUpdateIfExists] = useState(false)
+  const [bulkCC, setBulkCC] = useState('')
+  const [bulkSI, setBulkSI] = useState('')
 
   // FD Form Data States
   const [fdIssuerFormData, setFdIssuerFormData] = useState({
@@ -493,6 +495,14 @@ useEffect(() => {
           const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
           if (issuerKey) {
             await loadFDSchemes(issuerKey)
+          }
+        }
+      } else if (activeTab === 'NCDBond') {
+        result = await api.importNCDBondSchemesExcel(token, importFile)
+        if (result.updated > 0 && selectedNcdBondIssuer) {
+          const issuerKey = selectedNcdBondIssuer._key
+          if (issuerKey) {
+            await loadNcdBondSchemes(issuerKey)
           }
         }
       } else if (activeTab === 'Insurance') {
@@ -4467,6 +4477,73 @@ useEffect(() => {
                       <label className="text-sm text-gray-700 dark:text-gray-300">
                         Update existing schemes if they already exist
                       </label>
+                    </div>
+                    
+                    {/* Bulk CC/SI for multiple variants */}
+                    <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg mb-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Apply CC/SI to multiple:</span>
+                      <label className="flex items-center gap-1.5">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">CC (%)</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={bulkCC}
+                          onChange={(e) => setBulkCC(e.target.value)}
+                          placeholder="e.g. 0.5"
+                          className="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">SI (%)</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={bulkSI}
+                          onChange={(e) => setBulkSI(e.target.value)}
+                          placeholder="e.g. 0.25"
+                          className="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ccVal = parseFloat(bulkCC)
+                          const siVal = parseFloat(bulkSI)
+                          if (Number.isNaN(ccVal) && Number.isNaN(siVal)) return
+                          setVariantPreviewData(prev => prev.map(v => ({
+                            ...v,
+                            ...(Number.isFinite(ccVal) ? { cc: ccVal } : {}),
+                            ...(Number.isFinite(siVal) ? { si: siVal } : {})
+                          })))
+                        }}
+                        className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
+                      >
+                        Apply to all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ccVal = parseFloat(bulkCC)
+                          const siVal = parseFloat(bulkSI)
+                          if (Number.isNaN(ccVal) && Number.isNaN(siVal)) return
+                          setVariantPreviewData(prev => prev.map(v => ({
+                            ...v,
+                            ...(v.selected
+                              ? {
+                                  ...(Number.isFinite(ccVal) ? { cc: ccVal } : {}),
+                                  ...(Number.isFinite(siVal) ? { si: siVal } : {})
+                                }
+                              : {})
+                          })))
+                        }}
+                        className="px-3 py-1.5 text-sm bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
+                      >
+                        Apply to selected
+                      </button>
                     </div>
                     
                     <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">

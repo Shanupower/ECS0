@@ -15,6 +15,9 @@ import ClientManagementPage from './pages/ClientManagementPage.jsx'
 import SchemeManagementPage from './pages/SchemeManagementPage.jsx'
 import IssuesPage from './pages/IssuesPage.jsx'
 import MyIssuesPage from './pages/MyIssuesPage.jsx'
+import TasksPage from './pages/TasksPage.jsx'
+import LeadsPage from './pages/LeadsPage.jsx'
+import PortfolioReviewPage from './pages/PortfolioReviewPage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 
 // Page Transition Wrapper
@@ -102,6 +105,18 @@ function AppContent() {
           <Route 
             path="my-issues" 
             element={<PageTransition><MyIssuesPage/></PageTransition>}
+          />
+          <Route 
+            path="tasks" 
+            element={<PageTransition><TasksPage/></PageTransition>}
+          />
+          <Route 
+            path="leads" 
+            element={<PageTransition><LeadsPage/></PageTransition>}
+          />
+          <Route 
+            path="portfolio-review" 
+            element={<PageTransition><ClientRoute><PortfolioReviewPage/></ClientRoute></PageTransition>}
           />
         </Route>
       </Routes>

@@ -20,7 +20,10 @@ import {
   FiBarChart,
   FiUserCheck,
   FiAlertTriangle,
-  FiDatabase
+  FiDatabase,
+  FiCheckSquare,
+  FiTarget,
+  FiClipboard
 } from 'react-icons/fi'
 
 export default function Layout(){
@@ -30,6 +33,7 @@ export default function Layout(){
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isReportIssueModalOpen, setIsReportIssueModalOpen] = useState(false)
   const [pendingIssuesCount, setPendingIssuesCount] = useState(0)
+  const [tasksReminderCount, setTasksReminderCount] = useState(0)
   const dropdownRef = useRef(null)
   
   const handleLogout=()=>{logout();navigate('/login')}
@@ -53,6 +57,28 @@ export default function Layout(){
       return () => clearInterval(interval)
     }
   }, [user?.role, token])
+
+  // Load overdue + due-today task count for Tasks nav badge
+  useEffect(() => {
+    if (!token) return
+    const loadTasksReminderCount = async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10)
+        const [overdueRes, dueTodayRes] = await Promise.all([
+          api.listTasks(token, { overdue: '1', limit: '1', page: '1' }),
+          api.listTasks(token, { due_from: today, due_to: today, status: 'pending,in_progress', limit: '1', page: '1' })
+        ])
+        const overdueTotal = overdueRes.total ?? (overdueRes.items?.length ?? 0)
+        const dueTodayTotal = dueTodayRes.total ?? (dueTodayRes.items?.length ?? 0)
+        setTasksReminderCount(overdueTotal + dueTodayTotal)
+      } catch {
+        setTasksReminderCount(0)
+      }
+    }
+    loadTasksReminderCount()
+    const interval = setInterval(loadTasksReminderCount, 60000)
+    return () => clearInterval(interval)
+  }, [token])
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -75,6 +101,9 @@ export default function Layout(){
     { to: "/dashboard", label: "Dashboard", icon: FiHome },
     { to: "/receipts", label: "Create Receipt", icon: FiFileText },
     { to: "/transactions", label: "Transaction History", icon: FiClock },
+    { to: "/tasks", label: "Tasks", icon: FiCheckSquare },
+    { to: "/leads", label: "Leads", icon: FiTarget },
+    { to: "/portfolio-review", label: "Portfolio Review", icon: FiClipboard },
     { to: "/my-issues", label: "My Issues", icon: FiAlertTriangle },
     ...(isAdmin ? [
       { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
@@ -158,6 +187,8 @@ export default function Layout(){
             
             // Check if this is the "All Issues" link for admin and show badge
             const showBadge = item.to === '/issues' && isAdmin && pendingIssuesCount > 0
+            // Tasks nav: show overdue + due-today count
+            const showTasksBadge = item.to === '/tasks' && tasksReminderCount > 0
             
             return (
               <Link 
@@ -173,6 +204,11 @@ export default function Layout(){
                 {showBadge && (
                   <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
                     {pendingIssuesCount > 99 ? '99+' : pendingIssuesCount}
+                  </span>
+                )}
+                {showTasksBadge && (
+                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                    {tasksReminderCount > 99 ? '99+' : tasksReminderCount}
                   </span>
                 )}
               </Link>

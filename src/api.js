@@ -19,6 +19,7 @@ async function req(path,{method='GET',token,json,query}={}){
     },
     body: json?JSON.stringify(json):undefined
   })
+  if (res.status === 204) return null
   const ct=res.headers.get('content-type')||''
   const data= ct.includes('application/json')?await res.json():await res.text()
   if(!res.ok) {
@@ -126,6 +127,7 @@ export const api={
   // User endpoints
   me:(t)=>req('/api/users/me',{token:t}),
   listUsers:(t)=>req('/api/users',{token:t}),
+  listAssignableUsers:(t)=>req('/api/users/assignable',{token:t}),
   createUser:(t,data)=>req('/api/users',{method:'POST',token:t,json:data}),
   updateUser:(t,id,data)=>req(`/api/users/${id}`,{method:'PATCH',token:t,json:data}),
   changePassword:(t,id,password)=>req(`/api/users/${id}/password`,{method:'PATCH',token:t,json:{password}}),
@@ -147,6 +149,7 @@ export const api={
   downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
   createReceiptDraft:(t,data)=>req('/api/receipt-drafts',{method:'POST',token:t,json:data}),
   getReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{token:t}),
+  listReceiptDrafts:(t)=>req('/api/receipt-drafts',{token:t}),
   getRecentReceipts:(t,limit=10)=>req('/api/receipts/recent',{token:t,query:{limit}}),
   checkReceiptDuplicate:(t,params)=>req('/api/receipts/check-duplicate',{token:t,query:params}),
   
@@ -155,6 +158,7 @@ export const api={
   getCustomer:(t,id)=>req(`/api/customers/${id}`,{token:t}),
   createCustomer:(t,customerData)=>req('/api/customers',{method:'POST',token:t,json:customerData}),
   updateCustomer:(t,id,data)=>req(`/api/customers/${id}`,{method:'PATCH',token:t,json:data}),
+  getPortfolioReview:(t,q)=>req('/api/customers/portfolio-review',{token:t,query:q}),
   deleteCustomer:(t,id)=>req(`/api/customers/${id}`,{method:'DELETE',token:t}),
   searchCustomers:(t,q)=>req('/api/customers/search',{token:t,query:q}),
   searchInvestors:(t,q)=>req('/api/customers/search',{token:t,query:q}),
@@ -199,7 +203,21 @@ export const api={
   updateBranch:(t,code,data)=>req(`/api/branches/${code}`,{method:'PUT',token:t,json:data}),
   deleteBranch:(t,code)=>req(`/api/branches/${code}`,{method:'DELETE',token:t}),
   assignUsersToBranch:(t,code,userIds)=>req(`/api/branches/${code}/users`,{method:'POST',token:t,json:{user_ids:userIds}}),
-  
+
+  // Tasks endpoints
+  listTasks:(t,q)=>req('/api/tasks',{token:t,query:q}),
+  getTask:(t,id)=>req(`/api/tasks/${id}`,{token:t}),
+  createTask:(t,data)=>req('/api/tasks',{method:'POST',token:t,json:data}),
+  updateTask:(t,id,data)=>req(`/api/tasks/${id}`,{method:'PATCH',token:t,json:data}),
+  deleteTask:(t,id)=>req(`/api/tasks/${id}`,{method:'DELETE',token:t}),
+
+  // Leads endpoints
+  listLeads:(t,q)=>req('/api/leads',{token:t,query:q}),
+  getLead:(t,id)=>req(`/api/leads/${id}`,{token:t}),
+  createLead:(t,data)=>req('/api/leads',{method:'POST',token:t,json:data}),
+  updateLead:(t,id,data)=>req(`/api/leads/${id}`,{method:'PATCH',token:t,json:data}),
+  convertLeadToCustomer:(t,id,data)=>req(`/api/leads/${id}/convert`,{method:'POST',token:t,json:data}),
+
   // Export endpoints
   exportReceipts:(t,q)=>req('/api/export/receipts',{token:t,query:q}),
   exportTransactions:(t,q)=>req('/api/export/transactions',{token:t,query:q}),
