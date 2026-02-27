@@ -85,7 +85,8 @@ function createFormData(data, files) {
   return formData
 }
 
-// Receipt creation with files: send payload as JSON so nested objects (e.g. transaction_details) survive multipart
+// Receipt creation with files: send payload as JSON so nested objects (e.g. transaction_details) survive multipart.
+// Append payload first so server parsers reliably get payment/transaction_details.
 function createReceiptFormData(data, files) {
   const formData = new FormData()
   formData.append('payload', JSON.stringify(data))
@@ -325,7 +326,8 @@ export const api={
   updateNCDBondScheme:(t,issuer_key,scheme_id,data)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'PUT',token:t,json:data}),
   deleteNCDBondScheme:(t,issuer_key,scheme_id)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{method:'DELETE',token:t}),
   exportNCDBondSchemesExcel:(t,issuer_key)=>{
-    const qs = issuer_key ? `?issuer_key=${encodeURIComponent(issuer_key)}` : ''
+    // Export all when issuer_key is null/undefined/empty
+    const qs = (issuer_key != null && issuer_key !== '') ? `?issuer_key=${encodeURIComponent(issuer_key)}` : ''
     return fetch(`${BASE}/api/ncd-bonds-schemes/export/excel${qs}`, {
       headers: authHeaders(t)
     }).then(async res => {

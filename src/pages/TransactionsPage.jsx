@@ -637,15 +637,19 @@ export default function TransactionsPage() {
   const getModeDisplay = (receipt) => {
     const mode = getMode(receipt)
     if (!mode) return ''
-    
+
     // For switch over, include mode in description
     if (isSwitchOver(receipt)) {
       return ` • ${mode}`
     }
-    
+
     // For other transactions, just return mode
     return mode
   }
+
+  // Helper: format payment/transaction details for display (receipts are normalized with entry_mode, bank_name, etc.)
+  const hasPaymentDetails = (receipt) => receipt.entry_mode || receipt.channel || receipt.reference_no || receipt.bank_name || receipt.bank_branch || receipt.instrument_no || receipt.instrument_type || receipt.notes
+  const formatPaymentDate = (d) => d ? new Date(d).toLocaleDateString('en-IN') : ''
 
   const getStatusBadge = (receipt) => {
     if (receipt.deleted_at) {
@@ -1338,13 +1342,20 @@ export default function TransactionsPage() {
                         <span className="text-gray-500 dark:text-gray-400">Amount</span>
                         <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(receipt.fd_deposit_amount || receipt.investment_amount || receipt.investmentAmount)}</p>
                       </div>
-                      {(receipt.entry_mode || receipt.channel || receipt.reference_no) && (
+                      {(hasPaymentDetails(receipt)) && (
                         <div>
                           <span className="text-gray-500 dark:text-gray-400">Payment</span>
-                          <p className="font-medium text-gray-900 dark:text-white truncate" title={receipt.reference_no || receipt.channel || ''}>
-                            {receipt.entry_mode || '—'}
-                            {(receipt.reference_no || receipt.channel) && ` • ${(receipt.reference_no || receipt.channel).toString().slice(0, 12)}${((receipt.reference_no || receipt.channel) || '').length > 12 ? '…' : ''}`}
+                          <p className="font-medium text-gray-900 dark:text-white" title={[receipt.bank_name, receipt.bank_branch, receipt.instrument_no || receipt.reference_no, receipt.notes].filter(Boolean).join(' • ') || undefined}>
+                            <span>{receipt.entry_mode || (receipt.bank_name ? 'Offline' : (receipt.notes || receipt.channel ? 'Others' : 'Online')) || '—'}</span>
+                            {(receipt.reference_no || receipt.channel) && (
+                              <span className="text-gray-600 dark:text-gray-400"> • {(receipt.reference_no || receipt.channel).toString().slice(0, 14)}{((receipt.reference_no || receipt.channel) || '').length > 14 ? '…' : ''}</span>
+                            )}
                           </p>
+                          {(receipt.bank_name || receipt.instrument_no || receipt.instrument_date || receipt.txn_date) && (
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 truncate">
+                              {[receipt.bank_name, receipt.instrument_no || (receipt.entry_mode === 'Offline' ? receipt.reference_no : null), formatPaymentDate(receipt.instrument_date || receipt.txn_date)].filter(Boolean).join(' • ')}
+                            </p>
+                          )}
                         </div>
                       )}
                       {isAdmin && (
@@ -1578,16 +1589,46 @@ export default function TransactionsPage() {
                         <tr className="bg-gray-50/50 dark:bg-dark-700/50 border-l-4 border-red-600">
                           <td colSpan="5" className="px-4 py-4">
                             <div className="flex items-center justify-between gap-6">
-                              {/* Payment / Transaction type */}
-                              {(receipt.entry_mode || receipt.channel || receipt.reference_no) && (
+                              {/* Payment / Transaction details – full offline and online info */}
+                              {hasPaymentDetails(receipt) && (
                                 <div className="flex flex-col gap-2">
-                                  <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Payment</div>
-                                  <div className="text-sm text-gray-900 dark:text-white">
-                                    {receipt.entry_mode || '—'}
-                                    {(receipt.reference_no || receipt.channel) && (
-                                      <span className="text-gray-600 dark:text-dark-400 ml-1">
-                                        • {receipt.reference_no || receipt.channel}
-                                      </span>
+                                  <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Payment / Transaction</div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Type</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">
+                                        {receipt.entry_mode || (receipt.bank_name ? 'Offline' : (receipt.notes || receipt.channel ? 'Others' : 'Online')) || '—'}
+                                      </p>
+                                    </div>
+                                    {(receipt.reference_no || receipt.channel || receipt.instrument_no) && (
+                                      <div>
+                                        <span className="text-gray-500 dark:text-gray-400">{receipt.entry_mode === 'Offline' || receipt.instrument_no ? 'Cheque / Instrument No' : 'Reference No'}</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{receipt.instrument_no || receipt.reference_no || receipt.channel}</p>
+                                      </div>
+                                    )}
+                                    {receipt.bank_name && (
+                                      <div>
+                                        <span className="text-gray-500 dark:text-gray-400">Bank</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{receipt.bank_name}</p>
+                                      </div>
+                                    )}
+                                    {receipt.bank_branch && (
+                                      <div>
+                                        <span className="text-gray-500 dark:text-gray-400">Branch</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{receipt.bank_branch}</p>
+                                      </div>
+                                    )}
+                                    {(receipt.instrument_date || receipt.txn_date) && (
+                                      <div>
+                                        <span className="text-gray-500 dark:text-gray-400">Date</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{formatPaymentDate(receipt.instrument_date || receipt.txn_date)}</p>
+                                      </div>
+                                    )}
+                                    {receipt.notes && (
+                                      <div className="sm:col-span-2">
+                                        <span className="text-gray-500 dark:text-gray-400">Notes</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{receipt.notes}</p>
+                                      </div>
                                     )}
                                   </div>
                                 </div>

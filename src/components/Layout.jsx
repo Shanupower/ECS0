@@ -123,7 +123,7 @@ export default function Layout(){
   ]
   
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-dark-900 transition-colors duration-200">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-gray-50 dark:bg-dark-900 transition-colors duration-200">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -132,14 +132,16 @@ export default function Layout(){
         />
       )}
       
-      {/* Sidebar */}
+      {/* Sidebar: constrained to viewport height, scrolls internally when needed */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white dark:bg-dark-800 shadow-lg border-r border-gray-200 dark:border-dark-700 
+        fixed lg:static inset-y-0 left-0 z-50 w-72 flex flex-col flex-shrink-0
+        h-screen max-h-screen lg:max-h-full
+        bg-white dark:bg-dark-800 shadow-lg border-r border-gray-200 dark:border-dark-700 
         transform transition-transform duration-300 ease-in-out lg:translate-x-0
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        {/* Logo Section */}
-        <div className="p-6 border-b border-gray-200 dark:border-dark-700">
+        {/* Logo Section - flex-shrink-0 so nav can scroll */}
+        <div className="flex-shrink-0 p-6 border-b border-gray-200 dark:border-dark-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Logo size={48} />
@@ -158,8 +160,8 @@ export default function Layout(){
           </div>
         </div>
         
-        {/* Navigation */}
-        <nav className="p-4 space-y-2">
+        {/* Navigation - scrolls when content overflows on small laptops */}
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
           {navItems.map((item) => {
             const Icon = item.icon
             const isDisabled = item.disabled
@@ -217,8 +219,8 @@ export default function Layout(){
         </nav>
       </aside>
       
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content - min-h-0 allows flex child to shrink so main can scroll */}
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Header */}
         <header className="bg-white dark:bg-dark-800 shadow-sm border-b border-gray-200 dark:border-dark-700 px-4 lg:px-6 py-3">
           <div className="flex justify-between items-center w-full h-16">
@@ -320,8 +322,8 @@ export default function Layout(){
           </div>
         </header>
         
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-dark-900">
+        {/* Main Content Area - scrolls when content overflows */}
+        <main className="flex-1 min-h-0 overflow-auto bg-gray-50 dark:bg-dark-900">
           <div className="p-4 lg:p-6">
             <Outlet/>
           </div>

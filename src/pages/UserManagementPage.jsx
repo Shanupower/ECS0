@@ -120,7 +120,15 @@ export default function UserManagementPage() {
         }
       }
       
+      const newPassword = trimmedData.password
+      delete trimmedData.password
+      
       await api.updateUser(token, editingUser.id, trimmedData)
+      
+      if (newPassword) {
+        await api.changePassword(token, editingUser.id, newPassword)
+      }
+      
       await loadUsers()
       setEditingUser(null)
       resetForm()
@@ -136,7 +144,12 @@ export default function UserManagementPage() {
   }
 
   const handleDeleteUser = async (userId) => {
-    if (!confirm('Are you sure you want to delete this user?')) return
+    const currentUserId = user?.id ?? user?.sub
+    if (currentUserId && String(userId) === String(currentUserId)) {
+      alert('You cannot delete your own account.')
+      return
+    }
+    if (!confirm('Are you sure you want to delete this user? They will be deactivated and cannot log in.')) return
     
     try {
       await api.deleteUser(token, userId)
@@ -648,15 +661,13 @@ export default function UserManagementPage() {
                           <FiKey className="w-3 h-3 mr-1" />
                           <span className="hidden lg:inline">Password</span>
                         </button>
-                        {user.id !== user.id && ( // Don't allow deleting self
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
-                          >
-                            <FiTrash2 className="w-3 h-3 mr-1" />
-                            <span className="hidden lg:inline">Delete</span>
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
+                        >
+                          <FiTrash2 className="w-3 h-3 mr-1" />
+                          <span className="hidden lg:inline">Delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>

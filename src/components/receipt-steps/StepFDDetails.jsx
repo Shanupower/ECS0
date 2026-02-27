@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 
-export default function StepFDDetails({ onBack, onNext, token, issuer, scheme }) {
+export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false }) {
   const [principalAmount, setPrincipalAmount] = useState('')
   const [tenureMonths, setTenureMonths] = useState('')
   const [payoutFrequency, setPayoutFrequency] = useState('')
@@ -278,8 +278,8 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
 
   return (
     <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">FD Booking Details</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Enter deposit details and review calculation</p>
+      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">{isGovtScheme ? 'Government Scheme Booking Details' : 'FD Booking Details'}</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">{isGovtScheme ? 'Enter scheme details and review calculation' : 'Enter deposit details and review calculation'}</p>
 
       <div className="space-y-6">
         {/* Booking Date */}
@@ -294,35 +294,35 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-            Rate is locked as of this date
+            {isGovtScheme ? 'Scheme rate is locked as of this date' : 'Rate is locked as of this date'}
           </p>
         </div>
 
-        {/* Application/FD Number */}
+        {/* Application/FD or Application/Scheme Number */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Application/FD Number <span className="text-red-500">*</span>
+            {isGovtScheme ? 'Application/Scheme Number' : 'Application/FD Number'} <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={applicationNumber}
             onChange={(e) => setApplicationNumber(e.target.value)}
-            placeholder="Enter application/FD number"
+            placeholder={isGovtScheme ? 'Enter application/scheme number' : 'Enter application/FD number'}
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
             required
           />
         </div>
 
-        {/* Principal Amount */}
+        {/* Principal / Deposit Amount */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Deposit Amount (Principal) (₹) <span className="text-red-500">*</span>
+            {isGovtScheme ? 'Deposit Amount (₹)' : 'Deposit Amount (Principal) (₹)'} <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
             value={principalAmount}
             onChange={(e) => setPrincipalAmount(e.target.value)}
-            placeholder="Enter deposit amount"
+            placeholder={isGovtScheme ? 'Enter deposit amount' : 'Enter deposit amount'}
             min={(scheme?.min_amount || issuer?.min_deposit_amount) ?? 0}
             max={issuer?.max_deposit_amount || undefined}
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
@@ -336,7 +336,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
         {/* Tenure */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Tenure (months) <span className="text-red-500">*</span>
+            {isGovtScheme ? 'Scheme Tenure (months)' : 'Tenure (months)'} <span className="text-red-500">*</span>
           </label>
           
           {/* Show available tenures as clickable buttons if they're specific (not continuous) */}
@@ -363,7 +363,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             type="number"
             value={tenureMonths}
             onChange={(e) => setTenureMonths(e.target.value)}
-            placeholder="Enter tenure"
+            placeholder={isGovtScheme ? 'Enter scheme tenure' : 'Enter tenure'}
             min={scheme.min_tenure_months}
             max={scheme.max_tenure_months}
             className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
@@ -478,7 +478,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme })
             </label>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            Select whether this is a fresh FD or renewal of an existing FD (for reporting and filtering)
+            {isGovtScheme ? 'Select whether this is a fresh scheme or renewal of an existing scheme (for reporting and filtering)' : 'Select whether this is a fresh FD or renewal of an existing FD (for reporting and filtering)'}
           </p>
         </div>
 

@@ -1911,30 +1911,32 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
     }
   }
 
-  const saveToServer = async () => {
+  const saveToServer = async (dataToSave) => {
     if (!token) {
       setSaveError('Not authenticated')
       return
     }
-    
-    if (!finalData) {
+
+    // Use the payload passed from StepFinal (includes payment fields); fallback to state finalData
+    const payload = dataToSave != null ? dataToSave : finalData
+    if (!payload) {
       setSaveError('No data to save')
       return
     }
-    
+
     setIsSaving(true)
     setSaveError('')
-    
+
     try {
       // Validate and sanitize data before sending
-      const validation = validateDataSize(finalData)
+      const validation = validateDataSize(payload)
       if (!validation.isValid) {
         setSaveError(`Data validation failed: ${validation.error}`)
         return
       }
-      
+
       // Sanitize data to prevent field truncation
-      const sanitizedData = sanitizeReceiptData(finalData)
+      const sanitizedData = sanitizeReceiptData(payload)
       
       console.log(`Sending data size: ${(validation.sizeInBytes / 1024).toFixed(2)}KB`)
 
@@ -2465,6 +2467,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           token={token}
           issuer={fdIssuerSeed}
           scheme={fdSchemeSeed}
+          isGovtScheme={productTypeSeed === 'GOVT_FD'}
         />
       )}
 
@@ -2641,7 +2644,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         />
       )}
 
-      {step === 5 && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'BOND' && productTypeSeed !== 'INS' && productTypeSeed !== 'MISC' && (
+      {step === 5 && productTypeSeed && productTypeSeed !== 'MF' && productTypeSeed !== 'FD' && productTypeSeed !== 'GOVT_FD' && productTypeSeed !== 'BOND' && productTypeSeed !== 'NCD' && productTypeSeed !== 'INS' && productTypeSeed !== 'MISC' && (
         <StepProduct
           onBack={() => setStep(3)}
           onNext={(_, normalized) => {
@@ -2664,7 +2667,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepFinal 
           data={finalData} 
           onBack={() => {
-            const needsDetailsStep = ['MF', 'FD', 'BOND', 'INS'].includes(productTypeSeed)
+            const needsDetailsStep = ['MF', 'FD', 'GOVT_FD', 'BOND', 'INS'].includes(productTypeSeed)
             setStep(needsDetailsStep ? 6 : 5)
           }} 
           onSave={saveToServer}
