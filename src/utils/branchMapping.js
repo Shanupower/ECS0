@@ -17,6 +17,7 @@ export const BRANCH_MAPPINGS = {
   'CHEMBUR': 'CHEMBUR - MUMBAI',
   'MADIPAKKAM': 'CHENNAI - MADIPAKKAM', 
   'CHENNAI': 'CHENNAI RO',
+  'TINDIVANAM': 'TINDIVANAM - TAMIL NADU',
   'KUKATPALLY': 'KUKAT PALLY',
   'VIZAG': 'GAJUWAKA', // Database VIZAG maps to employee GAJUWAKA
 }
@@ -71,7 +72,9 @@ export const API_BRANCH_MAPPINGS = {
   'VELACHERY': 'CHENNAI',
   'MEHDIPATNAM': 'HABSIGUDA',
   'VANASTHALIPURAM': 'DILSUKHNAGAR',
-  'TINDIVANAM - TAMIL NADU': 'CHENNAI',
+  'TINDIVANAM - TAMIL NADU': 'TINDIVANAM',
+  'TINDIVANAM': 'TINDIVANAM',
+  'Thindivam branch': 'TINDIVANAM',
   'KOLKATA': 'CHENNAI',
   'CHANDA NAGAR': 'HABSIGUDA',
   'NELLORE': 'VIJAYAWADA',
@@ -189,6 +192,9 @@ export function normalizeBranchForAPI(branchName) {
   }
   
   // Special handling for common patterns based on actual employee data
+  if (lowerBranchName.includes('thindivanam') || lowerBranchName.includes('thindivam')) {
+    return 'TINDIVANAM'
+  }
   if (lowerBranchName.includes('madipakkam')) {
     return 'MADIPAKKAM'
   }
@@ -287,6 +293,7 @@ export function getAllValidBranches() {
     'RAJAHMUNDRY',
     'SECUNDERABAD',
     'SUCHITRA',
+    'TINDIVANAM - TAMIL NADU',
     'TRIMULGHERRY',
     'VIJAYAWADA',
     'VIZAG',

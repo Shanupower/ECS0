@@ -14,6 +14,7 @@ import {
   FiEye,
   FiFilter,
   FiDownload,
+  FiUpload,
   FiRefreshCw,
   FiAlertCircle,
   FiCheckCircle,
@@ -35,6 +36,14 @@ export default function ClientManagementPage() {
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  
+  // Export/Import (admin + master key)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [masterKey, setMasterKey] = useState('')
+  const [importFile, setImportFile] = useState(null)
+  const [exportImportLoading, setExportImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState(null)
   
   // Form state
   const [formData, setFormData] = useState({
@@ -482,6 +491,58 @@ export default function ClientManagementPage() {
     setSuccess('')
   }
 
+  const handleExportCustomers = async () => {
+    if (!masterKey.trim()) {
+      setError('Master key is required for export.')
+      return
+    }
+    setExportImportLoading(true)
+    setError('')
+    try {
+      const blob = await api.exportCustomers(token, masterKey.trim())
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `customers_${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      setSuccess('Customers exported successfully.')
+      setShowExportModal(false)
+      setMasterKey('')
+    } catch (err) {
+      setError(err.message || 'Export failed.')
+    } finally {
+      setExportImportLoading(false)
+    }
+  }
+
+  const handleImportCustomers = async () => {
+    if (!masterKey.trim()) {
+      setError('Master key is required for import.')
+      return
+    }
+    if (!importFile) {
+      setError('Please select a CSV file.')
+      return
+    }
+    setExportImportLoading(true)
+    setError('')
+    setImportResult(null)
+    try {
+      const result = await api.importCustomers(token, masterKey.trim(), importFile)
+      setImportResult(result)
+      setSuccess(`Imported ${result.imported} customer(s).`)
+      if (result.imported > 0) fetchCustomers(currentPage, searchTerm)
+      setImportFile(null)
+      setShowImportModal(false)
+      setMasterKey('')
+    } catch (err) {
+      setError(err.message || 'Import failed.')
+    } finally {
+      setExportImportLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchCustomers()
   }, [])
@@ -507,7 +568,24 @@ export default function ClientManagementPage() {
             Branch: {user?.branch || 'Unknown Branch'}
           </p>
         </div>
-        <div className="mt-3 sm:mt-0">
+        <div className="mt-3 sm:mt-0 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => { setShowExportModal(true); setMasterKey(''); setError('') }}
+            className="inline-flex items-center px-3 py-2 sm:px-4 bg-gray-600 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
+            title="Export customers to CSV (admin + master key required)"
+          >
+            <FiDownload className="w-4 h-4 mr-2 flex-shrink-0" />
+            Export
+          </button>
+          <button
+            onClick={() => { setShowImportModal(true); setMasterKey(''); setImportFile(null); setImportResult(null); setError('') }}
+            className="inline-flex items-center px-3 py-2 sm:px-4 bg-gray-600 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
+            title="Import customers from CSV (admin + master key required)"
+          >
+            <FiUpload className="w-4 h-4 mr-2 flex-shrink-0" />
+            Import
+          </button>
+          <span className="hidden sm:inline text-gray-400 dark:text-dark-500 text-sm">|</span>
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex items-center px-3 py-2 sm:px-4 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
@@ -541,6 +619,65 @@ export default function ClientManagementPage() {
           <button onClick={clearMessages} className="ml-3 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200">
             <FiX className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Export Customers Modal (admin + master key) */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={() => setShowExportModal(false)}>
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-xl max-w-sm w-full p-6 border border-gray-200 dark:border-dark-700" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Export Customers</h3>
+            <p className="text-sm text-gray-600 dark:text-dark-300 mb-4">Enter master key to download customer details as CSV.</p>
+            <input
+              type="password"
+              value={masterKey}
+              onChange={e => setMasterKey(e.target.value)}
+              placeholder="Master key"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={handleExportCustomers} disabled={exportImportLoading} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium">
+                {exportImportLoading ? 'Exporting…' : 'Export'}
+              </button>
+              <button onClick={() => { setShowExportModal(false); setMasterKey('') }} className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-gray-700 dark:text-dark-300 hover:bg-gray-50 dark:hover:bg-dark-700 text-sm font-medium">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Customers Modal (admin + master key) */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={() => setShowImportModal(false)}>
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-xl max-w-sm w-full p-6 border border-gray-200 dark:border-dark-700" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Import Customers</h3>
+            <p className="text-sm text-gray-600 dark:text-dark-300 mb-4">Upload a CSV with columns: Name, PAN, and optionally Investor ID, Email, Mobile, Address1, City, State, Pin, Branch(es).</p>
+            <input
+              type="password"
+              value={masterKey}
+              onChange={e => setMasterKey(e.target.value)}
+              placeholder="Master key"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white mb-3"
+            />
+            <input
+              type="file"
+              accept=".csv"
+              onChange={e => setImportFile(e.target.files?.[0] || null)}
+              className="w-full text-sm text-gray-600 dark:text-dark-300 mb-4 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-600 file:text-white file:text-sm file:font-medium file:cursor-pointer"
+            />
+            {importResult && (
+              <p className="text-sm text-green-600 dark:text-green-400 mb-2">Imported: {importResult.imported} of {importResult.total_rows}. {importResult.errors?.length ? `Errors: ${importResult.errors.length}` : ''}</p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={handleImportCustomers} disabled={exportImportLoading || !importFile} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium">
+                {exportImportLoading ? 'Importing…' : 'Import'}
+              </button>
+              <button onClick={() => { setShowImportModal(false); setMasterKey(''); setImportFile(null); setImportResult(null) }} className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-gray-700 dark:text-dark-300 hover:bg-gray-50 dark:hover:bg-dark-700 text-sm font-medium">
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -10,6 +10,16 @@ export function AuthProvider({children}){
     if(token) localStorage.setItem('ecs_token',token); else localStorage.removeItem('ecs_token')
     if(user) localStorage.setItem('ecs_user',JSON.stringify(user)); else localStorage.removeItem('ecs_user')
   },[token,user])
+
+  // Fetch fresh profile when we have a token (e.g. after refresh) so must_change_password and profile are current
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    api.me(token).then((profile) => {
+      if (!cancelled) setUser(profile)
+    }).catch(() => { if (!cancelled) setUser(null) })
+    return () => { cancelled = true }
+  }, [token])
   
   // Set up token expiration callback
   useEffect(()=>{
@@ -19,26 +29,33 @@ export function AuthProvider({children}){
     const out=await api.login(c,p)
     setToken(out.token)
     setIsTokenExpired(false)
-    // Fetch user profile after login
     try {
       const userProfile = await api.me(out.token)
       setUser(userProfile)
     } catch (error) {
-      // If /api/users/me doesn't exist, try /api/auth/profile
       try {
         const userProfile = await api.req('/api/auth/profile', { token: out.token })
         setUser(userProfile.user || userProfile)
       } catch (profileError) {
         console.error('Failed to fetch user profile:', profileError)
-        // Set basic user info from login response if available
         setUser({ emp_code: c, role: 'employee' })
       }
+    }
+  }
+
+  const refreshUser = async () => {
+    if (!token) return
+    try {
+      const userProfile = await api.me(token)
+      setUser(userProfile)
+    } catch (e) {
+      console.error('Failed to refresh user:', e)
     }
   }
 
   const logout=()=>{setToken('');setUser(null);setIsTokenExpired(false);localStorage.removeItem('branchInfo')}
   const handleTokenExpiration=()=>{setIsTokenExpired(true)}
   const clearTokenExpiration=()=>{setIsTokenExpired(false)}
-  return <AuthCtx.Provider value={{token,user,login,logout,isTokenExpired,handleTokenExpiration,clearTokenExpiration}}>{children}</AuthCtx.Provider>
+  return <AuthCtx.Provider value={{token,user,login,logout,refreshUser,isTokenExpired,handleTokenExpiration,clearTokenExpiration}}>{children}</AuthCtx.Provider>
 }
 export const useAuth=()=>useContext(AuthCtx)

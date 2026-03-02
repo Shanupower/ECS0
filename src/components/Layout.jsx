@@ -5,6 +5,8 @@ import { api } from '../api'
 import Logo from './Logo'
 import DarkModeToggle from './DarkModeToggle'
 import ReportIssueModal from './ReportIssueModal'
+import ChangePasswordModal from './ChangePasswordModal'
+import ProfileModal from './ProfileModal'
 import { 
   FiHome, 
   FiFileText, 
@@ -32,6 +34,7 @@ export default function Layout(){
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isReportIssueModalOpen, setIsReportIssueModalOpen] = useState(false)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [pendingIssuesCount, setPendingIssuesCount] = useState(0)
   const [tasksReminderCount, setTasksReminderCount] = useState(0)
   const dropdownRef = useRef(null)
@@ -123,7 +126,8 @@ export default function Layout(){
   ]
   
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-gray-50 dark:bg-dark-900 transition-colors duration-200">
+    <>
+      <div className="flex h-screen min-h-0 overflow-hidden bg-gray-50 dark:bg-dark-900 transition-colors duration-200">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -301,6 +305,13 @@ export default function Layout(){
                         <p className="text-xs text-gray-500 dark:text-dark-400">{user?.branch}</p>
                       )}
                     </div>
+                    <button
+                      onClick={() => { setIsDropdownOpen(false); setIsProfileModalOpen(true) }}
+                      className="w-full flex items-center px-4 py-2 text-sm text-gray-700 dark:text-dark-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-400 transition-colors duration-200"
+                    >
+                      <FiUser className="w-4 h-4 mr-3" />
+                      Profile
+                    </button>
                     {/* Mobile dark mode toggle */}
                     <div className="px-4 py-2 border-b border-gray-100 dark:border-dark-700 sm:hidden">
                       <div className="flex items-center justify-between">
@@ -329,12 +340,17 @@ export default function Layout(){
           </div>
         </main>
       </div>
+      </div>
       
       {/* Report Issue Modal */}
       <ReportIssueModal 
         isOpen={isReportIssueModalOpen} 
         onClose={() => setIsReportIssueModalOpen(false)} 
       />
-    </div>
+      {/* Change password popup when user still has default password */}
+      <ChangePasswordModal isOpen={!!user?.must_change_password} />
+      {/* Profile modal (email, phone, password) */}
+      <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
+    </>
   )
 }

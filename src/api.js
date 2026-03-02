@@ -127,6 +127,7 @@ export const api={
   
   // User endpoints
   me:(t)=>req('/api/users/me',{token:t}),
+  updateMyProfile:(t,data)=>req('/api/users/me',{method:'PATCH',token:t,json:data}),
   listUsers:(t)=>req('/api/users',{token:t}),
   listAssignableUsers:(t)=>req('/api/users/assignable',{token:t}),
   createUser:(t,data)=>req('/api/users',{method:'POST',token:t,json:data}),
@@ -222,7 +223,32 @@ export const api={
   // Export endpoints
   exportReceipts:(t,q)=>req('/api/export/receipts',{token:t,query:q}),
   exportTransactions:(t,q)=>req('/api/export/transactions',{token:t,query:q}),
-  exportCustomers:(t)=>req('/api/export/customers',{token:t}),
+  exportCustomers:(t,masterKey)=>{
+    const headers = { ...authHeaders(t) }
+    if (masterKey) headers['X-Master-Key'] = masterKey
+    return fetch(`${BASE}/api/export/customers`, { method: 'GET', headers }).then(async res => {
+      if (!res.ok) {
+        if (res.status === 401 && tokenExpirationCallback) tokenExpirationCallback()
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || err.error || res.statusText)
+      }
+      return res.blob()
+    })
+  },
+  importCustomers:(t,masterKey,file)=>{
+    const form = new FormData()
+    form.append('file', file)
+    const headers = { ...authHeaders(t) }
+    if (masterKey) headers['X-Master-Key'] = masterKey
+    return fetch(`${BASE}/api/export/customers/import`, { method: 'POST', headers, body: form }).then(async res => {
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (res.status === 401 && tokenExpirationCallback) tokenExpirationCallback()
+        throw new Error(data.detail || data.error || res.statusText)
+      }
+      return data
+    })
+  },
   exportUsers:(t)=>req('/api/export/users',{token:t}),
   exportBranches:(t)=>req('/api/export/branches',{token:t}),
   
