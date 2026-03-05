@@ -124,6 +124,7 @@ export const api={
   // Auth endpoints
   login:(c,p)=>req('/api/auth/login',{method:'POST',json:{emp_code:c,password:p}}),
   register:(data)=>req('/api/auth/register',{method:'POST',json:data}),
+  impersonate:(t,empCode)=>req('/api/auth/impersonate',{method:'POST',token:t,json:{emp_code:empCode}}),
   
   // User endpoints
   me:(t)=>req('/api/users/me',{token:t}),
@@ -149,6 +150,7 @@ export const api={
   getReceiptMedia:(t,id)=>req(`/api/receipts/${id}/media`,{token:t}),
   downloadReceiptMedia:(t,id,mediaId)=>req(`/api/receipts/${id}/media/${mediaId}`,{token:t}),
   downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
+  uploadReceiptMedia:(t,id,files)=>reqWithFiles(`/api/receipts/${id}/media`,{method:'POST',token:t,formData:createFormData({},files)}),
   createReceiptDraft:(t,data)=>req('/api/receipt-drafts',{method:'POST',token:t,json:data}),
   getReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{token:t}),
   listReceiptDrafts:(t)=>req('/api/receipt-drafts',{token:t}),

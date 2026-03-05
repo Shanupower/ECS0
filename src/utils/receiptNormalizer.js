@@ -341,59 +341,59 @@ export function normalizeReceiptFields(receipt) {
     ? (getValue('product_details.fd.tax.form_15g_15h', 'fd_form_15g_15h', 'fdForm15g15h') || false)
     : null
 
-  // Transaction details (online/offline) (from structured.payment or flat)
+  // Transaction details (online/offline) (prefer latest flat fields, fall back to structured.payment)
   normalized.entry_mode = getValue(
-    'payment.entry_mode',
-    'transaction_details.entry_mode',
     'entry_mode',
+    'transaction_details.entry_mode',
+    'payment.entry_mode',
     'entryMode',
     'transactionType'
   )
   normalized.channel = getValue(
-    'payment.channel',
-    'transaction_details.channel',
-    'channel',
     'transaction_channel',
+    'channel',
+    'transaction_details.channel',
+    'payment.channel',
     'othersTransactionType'
   )
   normalized.reference_no = getValue(
-    'payment.reference_no',
-    'transaction_details.reference_no',
+    'transaction_reference_no',
     'reference_no',
     'referenceNo',
-    'transaction_reference_no',
+    'transaction_details.reference_no',
+    'payment.reference_no',
     'transactionNumber'
   )
   normalized.txn_date = getValue(
-    'payment.transaction_date',
-    'transaction_details.txn_date',
     'txn_date',
-    'txnDate'
+    'txnDate',
+    'transaction_details.txn_date',
+    'payment.transaction_date'
   )
   normalized.bank_name = getValue(
-    'payment.instrument.bank.name',
-    'transaction_details.bank_name',
     'bank_name',
-    'bankName'
+    'bankName',
+    'transaction_details.bank_name',
+    'payment.instrument.bank.name'
   )
   normalized.account_last4 = getValue(
-    'payment.account_last4',
-    'transaction_details.account_last4',
     'account_last4',
-    'accountLast4'
+    'accountLast4',
+    'transaction_details.account_last4',
+    'payment.account_last4'
   )
   normalized.notes = getValue(
-    'payment.notes',
-    'transaction_details.notes',
+    'transaction_notes',
     'notes',
-    'transaction_notes'
+    'transaction_details.notes',
+    'payment.notes'
   )
   
-  // Payment instrument details (from structured.payment.instrument or flat)
-  normalized.instrument_type = getValue('payment.instrument.type', 'instrument_type', 'instrumentType')
-  normalized.instrument_no = getValue('payment.instrument.number', 'instrument_no', 'instrumentNo')
-  normalized.instrument_date = getValue('payment.instrument.date', 'instrument_date', 'instrumentDate')
-  normalized.bank_branch = getValue('payment.instrument.bank.branch', 'bank_branch', 'bankBranch')
+  // Payment instrument details (prefer flat fields, fall back to structured.payment.instrument)
+  normalized.instrument_type = getValue('instrument_type', 'instrumentType', 'payment.instrument.type')
+  normalized.instrument_no = getValue('instrument_no', 'instrumentNo', 'payment.instrument.number')
+  normalized.instrument_date = getValue('instrument_date', 'instrumentDate', 'payment.instrument.date')
+  normalized.bank_branch = getValue('bank_branch', 'bankBranch', 'payment.instrument.bank.branch')
 
   // Status and metadata
   normalized.status = receipt.status || receipt.transaction_status || 'Pending'

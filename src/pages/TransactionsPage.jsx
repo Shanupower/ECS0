@@ -471,16 +471,27 @@ export default function TransactionsPage() {
 
   const handleEdit = (receipt) => {
     setSelectedReceipt(receipt)
-    // Pre-populate edit data with current receipt values
-      // Receipt is already normalized, so we can use snake_case fields directly
-      setEditData({
+    // Pre-populate edit data with current receipt values (receipt is already normalized)
+    setEditData({
+      // Core fields
       date: receipt.date || '',
       investment_amount: receipt.investment_amount || receipt.fd_deposit_amount || '',
       scheme_name: receipt.scheme_name || receipt.fd_scheme_name || '',
       folio_policy_no: receipt.folio_policy_no || '',
       mode: receipt.mode || '',
       txn_type: receipt.txn_type || '',
-      // Add more fields as needed
+      // Transaction / payment details
+      entry_mode: receipt.entry_mode || '',
+      transaction_channel: receipt.channel || receipt.transaction_channel || '',
+      transaction_reference_no: receipt.reference_no || receipt.transaction_reference_no || '',
+      txn_date: receipt.txn_date || receipt.date || '',
+      instrument_type: receipt.instrument_type || '',
+      instrument_no: receipt.instrument_no || '',
+      instrument_date: receipt.instrument_date || '',
+      bank_name: receipt.bank_name || '',
+      bank_branch: receipt.bank_branch || '',
+      transaction_notes: receipt.notes || '',
+      account_last4: receipt.account_last4 || ''
     })
     setShowEditModal(true)
   }
@@ -1964,6 +1975,142 @@ export default function TransactionsPage() {
                       <option value="Additional">Additional</option>
                       <option value="Redemption">Redemption</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Entry Mode
+                    </label>
+                    <select
+                      value={editData.entry_mode}
+                      onChange={(e) => setEditData({ ...editData, entry_mode: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    >
+                      <option value="">Select Entry Mode</option>
+                      <option value="Online">Online</option>
+                      <option value="Offline">Offline</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Transaction / Reference Number
+                    </label>
+                    <input
+                      type="text"
+                      value={editData.transaction_reference_no}
+                      onChange={(e) => setEditData({ ...editData, transaction_reference_no: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Channel
+                    </label>
+                    <input
+                      type="text"
+                      value={editData.transaction_channel}
+                      onChange={(e) => setEditData({ ...editData, transaction_channel: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Transaction Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editData.txn_date || ''}
+                      onChange={(e) => setEditData({ ...editData, txn_date: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Bank Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editData.bank_name}
+                      onChange={(e) => setEditData({ ...editData, bank_name: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Bank Branch
+                    </label>
+                    <input
+                      type="text"
+                      value={editData.bank_branch}
+                      onChange={(e) => setEditData({ ...editData, bank_branch: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Instrument Type
+                    </label>
+                    <select
+                      value={editData.instrument_type || ''}
+                      onChange={(e) => setEditData({ ...editData, instrument_type: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    >
+                      <option value="">Select Instrument Type</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="NEFT">NEFT</option>
+                      <option value="RTGS">RTGS</option>
+                      <option value="UPI">UPI</option>
+                      <option value="IMPS">IMPS</option>
+                      <option value="DD">DD</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Instrument / Cheque Number
+                    </label>
+                    <input
+                      type="text"
+                      value={editData.instrument_no || ''}
+                      onChange={(e) => setEditData({ ...editData, instrument_no: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Instrument Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editData.instrument_date || ''}
+                      onChange={(e) => setEditData({ ...editData, instrument_date: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Transaction Notes
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={editData.transaction_notes || ''}
+                      onChange={(e) => setEditData({ ...editData, transaction_notes: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent resize-none"
+                      placeholder="Any notes about this transaction"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Account Last 4 Digits
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={editData.account_last4 || ''}
+                      onChange={(e) => setEditData({ ...editData, account_last4: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    />
                   </div>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { getAllValidBranches } from '../utils/branchMapping'
+import { normalizeBranchForDB, normalizeBranchForEmployee, normalizeBranchForAPI, getAllValidBranches } from '../utils/branchMapping'
 import SearchableSelect from '../components/SearchableSelect'
 import MultiSelect from '../components/MultiSelect'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
@@ -314,10 +314,10 @@ export default function CustomerManagementPage() {
         formDataToSend.append('files', file)
       })
       
-      // Add branches array — use branch names from API as-is (no mapping)
+      // Add branches array — normalize to DB format
       const branches = formData.branches && formData.branches.length > 0
-        ? formData.branches.map(b => (b && String(b).trim()) || '').filter(Boolean)
-        : [user?.branch || user?.branch_name || 'UNASSIGNED'].filter(Boolean)
+        ? formData.branches.map(b => normalizeBranchForDB(b)).filter(Boolean)
+        : [normalizeBranchForDB(user?.branch || user?.branch_name || 'UNASSIGNED')].filter(Boolean)
       
       // Send branches array - FormData with bracket notation for arrays (Express/multer will parse as array)
       branches.forEach((branch) => {
@@ -377,10 +377,10 @@ export default function CustomerManagementPage() {
     try {
       const token = localStorage.getItem('ecs_token')
       
-      // Prepare update data — use branch names as-is from dropdown (from API)
+      // Prepare update data — normalize branches for API/DB and keep display names from dropdown
       const updateData = { ...formData }
       if (updateData.branches && updateData.branches.length > 0) {
-        updateData.branches = updateData.branches.map(b => (b && String(b).trim()) || '').filter(Boolean)
+        updateData.branches = updateData.branches.map(b => normalizeBranchForAPI(b)).filter(Boolean)
         updateData.branches_display = formData.branches
       }
       // Minors array is already in the correct format
@@ -445,11 +445,18 @@ export default function CustomerManagementPage() {
   // Open edit modal
   const openEditModal = (customer) => {
     setSelectedCustomer(customer)
-    // Use branch names as stored (from DB) — no mapping
-    const rm = customer.relationship_manager_display != null
+    // Prefer display names if present; otherwise map DB branch codes to employee format
+    const rawRm = customer.relationship_manager_display != null
       ? customer.relationship_manager_display
       : customer.relationship_manager
-    const branchesArray = Array.isArray(rm) ? [...rm] : rm ? [rm] : []
+    let branchesArray
+    if (Array.isArray(rawRm)) {
+      branchesArray = rawRm.map(b => normalizeBranchForEmployee(b))
+    } else if (rawRm) {
+      branchesArray = [normalizeBranchForEmployee(rawRm)]
+    } else {
+      branchesArray = []
+    }
     
     // Extract DOB - handle null, undefined, or alternative field names
     const dob = customer.date_of_birth || customer.dob || customer.dateOfBirth || ''
@@ -475,9 +482,18 @@ export default function CustomerManagementPage() {
   }
 
   // Open view modal
-  const openViewModal = (customer) => {
-    setSelectedCustomer(customer)
-    setShowViewModal(true)
+  const openViewModal = async (customer) => {
+    try {
+      // Refresh customer from API so media_documents and minors are up to date
+      const fresh = await api.getCustomer(token, customer.investor_id)
+      setSelectedCustomer(fresh)
+      setShowViewModal(true)
+    } catch (err) {
+      // Fallback to existing customer data if API call fails
+      console.error('Failed to load customer details:', err)
+      setSelectedCustomer(customer)
+      setShowViewModal(true)
+    }
   }
 
   // Close modals
@@ -1746,6 +1762,8 @@ function CustomerModal({
 
 // View Customer Modal Component
 function ViewCustomerModal({ customer, onClose }) {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1917,7 +1935,49 @@ function ViewCustomerModal({ customer, onClose }) {
               </div>
             </div>
           )}
-          
+
+          {/* Documents Section */}
+          {customer.media_documents && customer.media_documents.length > 0 && (
+            <div className="pt-6 border-t border-gray-200 dark:border-dark-700">
+              <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-4">
+                Documents ({customer.media_documents.length})
+              </h4>
+              <div className="space-y-3">
+                {customer.media_documents.map((doc) => {
+                  const href = `${baseUrl}/uploads/${doc.filename}`
+                  const sizeKB = doc.file_size ? Math.round(doc.file_size / 1024) : null
+                  return (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between border border-gray-200 dark:border-dark-600 rounded-lg px-3 py-2 bg-gray-50 dark:bg-dark-700"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {doc.original_name || doc.filename}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-dark-300">
+                          {doc.mime_type || 'File'}
+                          {sizeKB !== null && ` • ${sizeKB} KB`}
+                          {doc.uploaded_at && ` • Uploaded ${new Date(doc.uploaded_at).toLocaleString()}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/40"
+                        >
+                          View
+                        </a>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end pt-4">
             <button
               onClick={onClose}

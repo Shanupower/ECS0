@@ -264,6 +264,7 @@ export default function SchemeManagementPage() {
     tds_applicable: true,
     show_form15g15h_option: true,
     is_active: true,
+    // CC/SI now managed at rate-slab level; keep here only for backward compatibility (not edited in UI)
     cc: 0,
     si: 0,
     rate_slabs: []
@@ -277,6 +278,8 @@ export default function SchemeManagementPage() {
     base_interest_rate_pa: 0,
     compounding_frequency: 'Quarterly',
     effective_yield_pa: null,
+    cc: 0,
+    si: 0,
     notes_public_display: '',
     is_active: true
   })
@@ -2733,6 +2736,39 @@ useEffect(() => {
                       </div>
                     </>
                   )}
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CC % (Commission Credit)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.0001"
+                        value={fdSlabFormData.cc}
+                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, cc: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 1.25"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        SI % (Service Income)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.0001"
+                        value={fdSlabFormData.si}
+                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, si: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 0.50"
+                      />
+                    </div>
+                  </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

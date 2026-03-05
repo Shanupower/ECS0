@@ -1974,21 +1974,34 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         }
       }
       
-      // Use branch-specific receipt creation only for branch users, not regular employees
-      let result
       const files = Array.isArray(supportingDocuments) ? supportingDocuments : (supportingDocuments ? [supportingDocuments] : [])
       
+      // First, create the receipt without uploading files to avoid large multipart payload issues
+      let result
       if (user?.role === 'branch' && user?.branch_code) {
         // Branch users can use branch-specific endpoint
-        result = await api.createBranchReceipt(token, user.branch_code, sanitizedData, files)
+        result = await api.createBranchReceipt(token, user.branch_code, sanitizedData)
       } else {
         // All other users (employees, admins) use regular receipt creation
-        result = await api.createReceipt(token, sanitizedData, files)
+        result = await api.createReceipt(token, sanitizedData)
+      }
+      
+      const receiptId = result.id || result.receiptNo || result.receipt_id || result._key || 'Unknown'
+
+      // Then, upload supporting documents against the created receipt (best-effort; don't block receipt save)
+      if (files.length > 0 && receiptId && receiptId !== 'Unknown') {
+        try {
+          await api.uploadReceiptMedia(token, receiptId, files)
+        } catch (uploadErr) {
+          console.error('Supporting document upload failed:', uploadErr)
+          // Keep receipt saved; show a non-blocking warning message alongside success toast
+          localStorage.setItem('receipt_upload_error', uploadErr.message || 'Failed to upload supporting documents')
+        }
       }
       
       // Show success message and store in localStorage for toast
-      const receiptId = result.id || result.receiptNo || result.receipt_id || 'Unknown'
-      const successMessage = `Receipt saved successfully! Receipt ID: ${receiptId}`
+      const successId = receiptId
+      const successMessage = `Receipt saved successfully! Receipt ID: ${successId}`
       
       // Store success message in localStorage for toast notification
       localStorage.setItem('receipt_success_message', successMessage)
