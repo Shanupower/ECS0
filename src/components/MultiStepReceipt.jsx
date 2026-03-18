@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import PrintReceipt from './PrintReceipt.jsx'
 import SearchableSelect from './SearchableSelect.jsx'
 import ReportIssueModal from './ReportIssueModal.jsx'
+import { Card, Button } from './ui'
+import { useToast } from './ui/Toast.jsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { normalizeBranchForAPI } from '../utils/branchMapping'
 import { FiPlus, FiX, FiUpload, FiFile, FiTrash2, FiAlertCircle, FiHelpCircle, FiSave } from 'react-icons/fi'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
 import StepMFScheme from './receipt-steps/StepMFScheme.jsx'
@@ -24,6 +25,7 @@ import StepMiscDetails from './receipt-steps/StepMiscDetails.jsx'
 import StepProductType from './receipt-steps/StepProductType.jsx'
 import StepProduct from './receipt-steps/StepProduct.jsx'
 import StepFinal from './receipt-steps/StepFinal.jsx'
+import { getAmcCategoryById } from '../data/mf_amc_categories'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
 // import empData from '../data/empdata.json' // Removed - using backend API instead
@@ -86,7 +88,7 @@ async function loadInvestorsFromAPI(token) {
 }
 
 // Load investors with pagination for better performance
-async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50, userBranch = null) {
+async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50) {
   try {
     if (token) {
       // Prepare query parameters
@@ -139,7 +141,7 @@ async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50, userBr
 }
 
 // Search investors using API data with pagination
-async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBranch = null) {
+async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
   try {
     // Try to use the search API endpoint first for better performance
     if (query && query.length >= 2) {
@@ -189,64 +191,111 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
           ? searchResults.minors 
           : []
         
+        const rawQuery = (query || '').trim().toLowerCase()
+
         // Transform customers to expected format
-        const transformedCustomers = customers.map(customer => {
-          const transformed = {
-            investorId: customer.investor_id,
-            investorName: customer.name,
+        let transformedCustomers = customers.map(customer => {
+          const investorName = customer.name || ''
+          const pan = customer.pan || ''
+          const investorId = customer.investor_id
+
+          // Local ranking to further prioritize exact PAN/name matches in UI
+          let localScore = 0
+          const nameLower = investorName.toLowerCase()
+          const panLower = pan.toLowerCase()
+
+          if (rawQuery && panLower && panLower === rawQuery) {
+            localScore += 100
+          }
+          if (rawQuery && nameLower && nameLower === rawQuery) {
+            localScore += 80
+          }
+
+          return {
+            investorId,
+            investorName,
             investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
             pinCode: customer.pin || customer.pin_code || '',
-            pan: customer.pan || '',
+            pan,
             email: customer.email || '',
             isMinor: false,
             parentName: null,
-            parentInvestorId: null
+            parentInvestorId: null,
+            hasMinors: customer.has_minors || (Array.isArray(customer.minors) && customer.minors.length > 0),
+            minorsCount: typeof customer.minors_count === 'number'
+              ? customer.minors_count
+              : (Array.isArray(customer.minors) ? customer.minors.length : 0),
+            localScore
           }
-          return transformed
         })
-        
-        // Transform minors to expected format
-        const transformedMinors = minors.map(minor => {
-          // Compute address - use parent's address if use_same_address is true
-          let address = ''
-          if (minor.use_same_address) {
-            // Find parent customer to get address
-            const parent = customers.find(c => c.investor_id === minor.parent_investor_id)
-            if (parent) {
-              address = `${parent.address1 || ''} ${parent.address2 || ''} ${parent.address3 || ''}`.trim()
+
+        // Sort by localScore (desc) as a safety net on top of backend ranking
+        if (rawQuery) {
+          transformedCustomers = transformedCustomers.sort((a, b) => {
+            if ((b.localScore || 0) !== (a.localScore || 0)) {
+              return (b.localScore || 0) - (a.localScore || 0)
             }
+            return String(a.investorName || '').localeCompare(String(b.investorName || ''))
+          })
+        }
+        
+        // Helper to transform a minor to the expected format (parent can be customer object for nested minors)
+        const transformMinor = (minor, parentCustomer) => {
+          const parent = parentCustomer || customers.find(c => c.investor_id === minor.parent_investor_id)
+          const useSameAddress = minor.use_same_address !== false
+          let address = ''
+          if (useSameAddress && parent) {
+            address = `${parent.address1 || ''} ${parent.address2 || ''} ${parent.address3 || ''}`.trim()
           } else {
             address = `${minor.address1 || ''} ${minor.address2 || ''} ${minor.address3 || ''}`.trim()
           }
-          
           return {
             investorId: minor.investor_id,
             investorName: `${minor.name} (Minor - ${minor.relationship_type === 'child' ? 'Child' : 'Ward'})`,
             investorAddress: address,
-            pinCode: minor.use_same_address 
-              ? (customers.find(c => c.investor_id === minor.parent_investor_id)?.pin || minor.pin || '')
-              : (minor.pin || ''),
+            pinCode: useSameAddress && parent ? (parent.pin || minor.pin || '') : (minor.pin || ''),
             pan: minor.pan || '',
             email: '',
             isMinor: true,
-            parentName: minor.parent_name || '',
-            parentInvestorId: minor.parent_investor_id
+            parentName: parent ? (parent.name || minor.parent_name || '') : (minor.parent_name || ''),
+            parentInvestorId: parent ? parent.investor_id : minor.parent_investor_id
           }
-        })
-        
-        // Combine customers and minors
-        const transformedResults = [...transformedCustomers, ...transformedMinors]
+        }
+
+        // Transform minors from API (minors that matched the search directly)
+        const transformedMinorsFromApi = minors.map(minor => transformMinor(minor, null))
+
+        // Also add minors nested under each customer so they are selectable when searching by major
+        const seenMinorIds = new Set(transformedMinorsFromApi.map(m => m.investorId))
+        const minorsFromCustomers = []
+        for (const customer of customers) {
+          const nestedMinors = customer.minors || []
+          for (const minor of nestedMinors) {
+            if (minor.investor_id != null && !seenMinorIds.has(minor.investor_id)) {
+              seenMinorIds.add(minor.investor_id)
+              minorsFromCustomers.push(transformMinor(
+                { ...minor, parent_investor_id: customer.investor_id, parent_name: customer.name },
+                customer
+              ))
+            }
+          }
+        }
+
+        const allMinors = [...transformedMinorsFromApi, ...minorsFromCustomers]
+
+        // Combine customers and minors (majors first, then all minors as selectable rows)
+        const transformedResults = [...transformedCustomers, ...allMinors]
         
         if (transformedResults.length > 0) {
-          console.log(`Search API returned ${customers.length} customers and ${minors.length} minors`)
-          
+          const totalFromApi = searchResults.pagination?.total ?? transformedResults.length
+          const hasNext = searchResults.pagination?.hasNext ?? false
           return {
-            results: transformedResults,
+            results: transformedResults.slice(0, limit),
             pagination: {
-              page: page,
-              limit: limit,
-              total: searchResults.pagination?.total || transformedResults.length,
-              hasMore: searchResults.pagination?.hasNext || false
+              page,
+              limit,
+              total: totalFromApi,
+              hasMore: hasNext
             }
           }
         } else {
@@ -258,7 +307,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1, userBr
     }
     
     // Fallback: Load paginated investors from API
-    const paginatedInvestors = await loadInvestorsFromAPIPaginated(token, page, limit, userBranch)
+    const paginatedInvestors = await loadInvestorsFromAPIPaginated(token, page, limit)
     
     if (!query || query.length < 2) {
       return {
@@ -376,7 +425,7 @@ function StepHeader({ step, productType }) {
         ['Details', 6],
         ['Preview', 7],
       ]
-    } else if (productType === 'FD') {
+    } else if (productType === 'FD' || productType === 'GOVT_FD') {
       return [
         ['Employee', 1],
         ['Investor', 2],
@@ -426,144 +475,212 @@ function StepHeader({ step, productType }) {
   }
 
   const stepLabels = getStepLabels()
-  
-  // Calculate progress based on actual step position in the labels array
+  const totalSteps = stepLabels.length
+
+  // Progress bar: avoid "resetting" when moving from steps 1–3 (no product) to step 4+ (product-specific).
+  // Before product type is chosen we use 7 as denominator (longest flow); after, use actual totalSteps.
   const getStepProgress = () => {
     const currentStepIndex = stepLabels.findIndex(([_, stepNumber]) => stepNumber === step)
     if (currentStepIndex === -1) return 0
-    return ((currentStepIndex + 1) / stepLabels.length) * 100
+    const completed = currentStepIndex + 1
+    // Steps 1–3: show progress out of 7 so bar doesn't jump backward when product flow has more steps
+    const denominator = !productType && step <= 3 ? 7 : totalSteps
+    return Math.min(100, (completed / denominator) * 100)
   }
 
   const pct = getStepProgress()
 
   return (
-    <div className="stepper-wrap" style={{ margin: '4px 0 10px' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, minWidth: 0 }}>
-        {stepLabels.map(([label, stepNumber], i) => (
-          <React.Fragment key={label}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="mb-4 min-w-0">
+      <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-1">
+        <div className="inline-flex flex-nowrap items-center gap-0.5 rounded-xl border-2 border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-1 min-h-[44px] shadow-[var(--dashboard-shadow)]">
+          {stepLabels.map(([label, stepNumber], i) => (
+            <React.Fragment key={label}>
               <div
-                className={`w-7 h-7 rounded-full grid place-items-center font-bold text-xs border shadow-sm ${
-                  step === stepNumber 
-                    ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 border-transparent' 
-                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700'
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-200 flex-shrink-0 ${
+                  step === stepNumber
+                    ? 'bg-[var(--dashboard-primary)] text-white border-2 border-[var(--dashboard-primary)] shadow-md'
+                    : 'text-[var(--dashboard-muted)] bg-transparent border-2 border-transparent hover:bg-[var(--dashboard-border)]/50 hover:text-[var(--dashboard-text)]'
                 }`}
               >
-                {/* Step counter removed */}
+                <span className={`w-6 h-6 rounded-full grid place-items-center text-xs font-bold flex-shrink-0 ${
+                  step === stepNumber ? 'bg-white/25 text-white border border-white/30' : 'bg-[var(--dashboard-border)] text-[var(--dashboard-text)] border border-[var(--dashboard-border)]'
+                }`}>
+                  {stepNumber}
+                </span>
+                <span className={`text-xs font-semibold whitespace-nowrap ${step === stepNumber ? 'text-white' : 'text-[var(--dashboard-text)]'}`}>{label}</span>
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 font-semibold whitespace-nowrap">{label}</div>
-            </div>
-            {i < stepLabels.length - 1 && <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700 min-w-6" />}
-          </React.Fragment>
-        ))}
+              {i < stepLabels.length - 1 && <div className="w-px h-5 bg-[var(--dashboard-border)] flex-shrink-0 mx-0.5" />}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 h-2 w-full rounded-full bg-[var(--dashboard-border)] overflow-hidden">
+        <div className="h-full rounded-full bg-[var(--dashboard-primary)] transition-all duration-500 ease-out" style={{ width: `${pct}%` }} />
       </div>
     </div>
   )
 }
 
-function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdIssuerSeed, fdSchemeSeed, ncdBondIssuerSeed, ncdBondSchemeSeed, insuranceIssuerSeed, insuranceProductSeed, finalData }) {
+const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
+
+function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdIssuerSeed, fdSchemeSeed, ncdBondIssuerSeed, ncdBondSchemeSeed, insuranceIssuerSeed, insuranceProductSeed, finalData, receiptNo = null, draftId = null }) {
+  const [collapsed, setCollapsed] = useState(true)
+  const rawProduct = productTypeSeed || finalData?.product_category || ''
+  const productLabel = PRODUCT_TYPE_LABELS[rawProduct] || rawProduct || ''
   const summary = {
+    receipt: receiptNo != null ? String(receiptNo) : (draftId != null ? `#${String(draftId).padStart(7, '0')}` : ''),
     employee: empSeed.employeeName || empSeed.empCode || '',
     investor: investorSeed.investorInfo?.investorName || investorSeed.investorId || '',
-    product: productTypeSeed || finalData?.product_category || '',
+    product: productLabel,
+    mode: finalData?.mode || '',
     issuer: finalData?.issuer_company || finalData?.issuerCompany ||
       fdIssuerSeed?.short_name || ncdBondIssuerSeed?.short_name || insuranceIssuerSeed?.short_name ||
       mfSchemeSeed?.selectedAmc?.amc_name || '',
-    scheme: finalData?.scheme_name || finalData?.schemeName ||
+    scheme: (finalData?.scheme_name || finalData?.schemeName ||
       fdSchemeSeed?.scheme_name || ncdBondSchemeSeed?.scheme_name || insuranceProductSeed?.product_name ||
-      mfSchemeSeed?.selectedScheme?.scheme_name || finalData?.service_name || '',
+      mfSchemeSeed?.selectedScheme?.scheme_name || finalData?.service_name || '') +
+      (productTypeSeed === 'MF' && (finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id) && (finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id) !== 'MF'
+        ? ` (${finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.label})`
+        : ''),
     amount: finalData?.investment_amount || finalData?.investmentAmount || finalData?.fd_deposit_amount || finalData?.service_price || ''
   }
+  const amountNum = typeof summary.amount === 'number' ? summary.amount : (typeof summary.amount === 'string' && summary.amount !== '' ? parseFloat(summary.amount.replace(/[^0-9.-]/g, '')) : NaN)
+  const totalDisplay = !isNaN(amountNum) && amountNum > 0 ? `₹ ${Number(amountNum).toLocaleString('en-IN')}` : (summary.amount != null && summary.amount !== '' ? (typeof summary.amount === 'number' ? `₹ ${Number(summary.amount).toLocaleString('en-IN')}` : summary.amount) : '₹ 0')
+  const amountDisplay = summary.amount != null && summary.amount !== '' ? (typeof summary.amount === 'number' ? `₹${Number(summary.amount).toLocaleString('en-IN')}` : summary.amount) : '—'
 
-  if (!summary.employee && !summary.investor && !summary.product) return null
+  if (!summary.employee && !summary.investor && !summary.product && summary.receipt === '') return null
 
-  return (
-    <div className="mb-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-      <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Live Preview</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Employee</span>
-          <span className="text-gray-900 dark:text-gray-100">{summary.employee || '—'}</span>
+  const rowClass = 'flex justify-between items-baseline gap-4 py-3.5 border-b border-[var(--stroke)]/80 text-body'
+  const labelClass = 'text-helper text-[var(--text-muted)] flex-shrink-0'
+  const valueClass = 'text-[var(--text-primary)] font-medium text-right min-w-0 break-words'
+
+  const content = (
+    <div className="flex flex-col gap-0">
+      {summary.receipt !== '' && (
+        <div className={rowClass}>
+          <span className={labelClass}>Receipt</span>
+          <span className={`${valueClass} truncate max-w-[75%]`} title={summary.receipt}>{summary.receipt}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Investor</span>
-          <span className="text-gray-900 dark:text-gray-100">{summary.investor || '—'}</span>
+      )}
+      <div className={rowClass}>
+        <span className={labelClass}>Employee</span>
+        <span className={`${valueClass} truncate max-w-[75%]`} title={summary.employee || undefined}>{summary.employee || '—'}</span>
+      </div>
+      <div className={rowClass}>
+        <span className={labelClass}>Investor</span>
+        <span className={`${valueClass} truncate max-w-[75%]`} title={summary.investor || undefined}>{summary.investor || '—'}</span>
+      </div>
+      <div className={rowClass}>
+        <span className={labelClass}>Product</span>
+        <span className={valueClass}>{summary.product || '—'}</span>
+      </div>
+      {summary.mode && (
+        <div className={rowClass}>
+          <span className={labelClass}>Mode</span>
+          <span className={valueClass}>{summary.mode}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Product</span>
-          <span className="text-gray-900 dark:text-gray-100">{summary.product || '—'}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Issuer</span>
-          <span className="text-gray-900 dark:text-gray-100">{summary.issuer || '—'}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Scheme</span>
-          <span className="text-gray-900 dark:text-gray-100">{summary.scheme || '—'}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500 dark:text-gray-400">Amount</span>
-          <span className="text-gray-900 dark:text-gray-100">{summary.amount || '—'}</span>
-        </div>
+      )}
+      <div className={rowClass}>
+        <span className={labelClass}>Issuer</span>
+        <span className={`${valueClass} truncate max-w-[75%]`} title={summary.issuer || undefined}>{summary.issuer || '—'}</span>
+      </div>
+      <div className={rowClass}>
+        <span className={labelClass}>Scheme</span>
+        <span className={`${valueClass} truncate max-w-[75%]`} title={summary.scheme || undefined}>{summary.scheme || '—'}</span>
+      </div>
+      <div className={rowClass}>
+        <span className={labelClass}>Amount</span>
+        <span className={valueClass}>{amountDisplay}</span>
+      </div>
+      <div className={`${rowClass} border-b-0 pb-0`}>
+        <span className={labelClass}>Total</span>
+        <span className="text-[var(--text-primary)] font-semibold">{totalDisplay}</span>
       </div>
     </div>
+  )
+
+  return (
+    <Card padding="lg" className="mb-4 shadow-glow border border-[var(--stroke)] bg-[var(--card-bg)]/90 backdrop-blur-xl min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-5">
+        <span className="text-section-title text-[var(--text-primary)] tracking-tight">Live Preview</span>
+        <button
+          type="button"
+          onClick={() => setCollapsed(c => !c)}
+          className="lg:hidden rounded-full px-3 py-1.5 text-caption font-medium text-[var(--accent)] hover:bg-[var(--link-hover-bg)] hover:text-[var(--link-hover)] transition-colors"
+        >
+          {collapsed ? 'Show' : 'Hide'}
+        </button>
+      </div>
+      <div className="hidden lg:block">{content}</div>
+      {!collapsed && <div className="lg:hidden">{content}</div>}
+    </Card>
   )
 }
 
 function StepEmployee({ user, onNext }) {
-  // Auto-populate from user context (comes from API)
+  // Auto-populate from user context (API may send branch as id; prefer branch_name / branch_code for display)
   const code = user?.emp_code || ''
   const employeeName = user?.name || ''
-  const branch = user?.branch || ''
-  
-  // Employee data is now coming from the user context (API), so no need for static lookup
+  const branchDisplay = user?.branch_name || user?.branch_code || user?.branch || ''
+  const branch = branchDisplay
+
   const isValidEmployee = code && employeeName
 
   return (
-    <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 1 — Employee</h3>
-      <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-        <div className="col" style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column' }}>
-          <label className="text-sm text-gray-600 dark:text-gray-400 my-2 font-semibold">Employee Code</label>
-          <input
-            value={code}
-            readOnly
-            placeholder="e.g., ECS497"
-            className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-not-allowed text-gray-900 dark:text-gray-100"
-          />
-          <div className="text-xs text-gray-500 dark:text-gray-400">Auto-filled from your login credentials.</div>
-        </div>
-      </div>
-
-      {code && (
-        <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
-          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Employee Preview</h3>
-          <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Name</label>
-              <div className="text-gray-900 dark:text-gray-100">{employeeName || '-'}</div>
-            </div>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Branch</label>
-              <div className="text-gray-900 dark:text-gray-100">{branch || '-'}</div>
-            </div>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Email</label>
-              <div className="text-gray-900 dark:text-gray-100">{user?.email || '-'}</div>
-            </div>
+    <div className="space-y-6">
+      <Card padding="lg" hover={false} className="border-0 shadow-none bg-transparent">
+        <h3 className="text-section-title text-[var(--text-primary)] mt-0 mb-1">Employee</h3>
+        <p className="text-helper text-[var(--text-muted)] mb-6">Confirm your details from your login.</p>
+        <div className="space-y-4 max-w-md">
+          <div>
+            <label className="text-label text-[var(--text-secondary)] block mb-1.5">Employee code</label>
+            <input
+              value={code}
+              readOnly
+              placeholder="e.g. ECS497"
+              className="w-full rounded-input border border-[var(--stroke)] bg-[var(--card-hover)] px-4 py-3 text-body text-[var(--text-primary)] placeholder:text-[var(--placeholder)] cursor-not-allowed"
+            />
+            <p className="text-helper text-[var(--text-muted)] mt-1.5">Auto-filled from your login credentials.</p>
           </div>
         </div>
-      )}
 
-      <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button
-          onClick={() => onNext({ empCode: code || '', employeeName: employeeName || '', branch: branch || '' })}
-          disabled={!code}
-          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-        >
-          Continue
-        </button>
-      </div>
+        {code && (
+          <div className="mt-6 pt-6 border-t border-[var(--stroke)]">
+            <h4 className="text-card-title text-[var(--text-primary)] mb-4">Preview</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <span className="text-helper text-[var(--text-muted)]">Name</span>
+                <p className="text-body font-medium text-[var(--text-primary)] mt-0.5">{employeeName || '—'}</p>
+              </div>
+              <div>
+                <span className="text-helper text-[var(--text-muted)]">Branch</span>
+                <p className="text-body font-medium text-[var(--text-primary)] mt-0.5">{branch || '—'}</p>
+              </div>
+              <div>
+                <span className="text-helper text-[var(--text-muted)]">Email</span>
+                <p className="text-body font-medium text-[var(--text-primary)] mt-0.5 truncate">{user?.email || '—'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 mt-8">
+          <Button
+            variant="primary"
+            onClick={() => onNext({
+              empCode: code || '',
+              employeeName: employeeName || '',
+              branch: branch || '',
+              branch_name: user?.branch_name || '',
+              branch_code: user?.branch_code || ''
+            })}
+            disabled={!code}
+          >
+            Continue
+          </Button>
+        </div>
+      </Card>
     </div>
   )
 }
@@ -571,8 +688,11 @@ function StepEmployee({ user, onNext }) {
 function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
+  const [selectedMajorWithMinors, setSelectedMajorWithMinors] = useState(null) // full major customer with minors, when selected is major
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [isLoadingCustomer, setIsLoadingCustomer] = useState(false)
+  const selectedCardRef = useRef(null)
+  const continueButtonsRef = useRef(null)
   const [newCustomer, setNewCustomer] = useState({
     title: '',
     name: '',
@@ -685,12 +805,12 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'image/webp']
       
       if (file.size > maxSize) {
-        alert(`File ${file.name} is too large. Maximum size is 10MB.`)
+        toast.error(`File ${file.name} is too large. Maximum size is 10MB.`)
         return false
       }
       
       if (!allowedTypes.includes(file.type)) {
-        alert(`File ${file.name} has an unsupported format. Please upload images or PDF files.`)
+        toast.error(`File ${file.name} has an unsupported format. Please upload images or PDF files.`)
         return false
       }
       
@@ -734,11 +854,24 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
     setMediaFiles([])
   }
 
-  // Fetch full customer details when clicked
+  // Fetch full customer details when clicked (minors: use search result; majors: fetch from API)
   const handleSelectCustomer = async (customer) => {
+    // Minors are nested under majors in the backend; GET /customers/:id only returns majors. Use search result as-is.
+    if (customer.isMinor) {
+      setSelected({
+        investorId: customer.investorId,
+        investorName: customer.investorName,
+        investorAddress: customer.investorAddress || '',
+        pinCode: customer.pinCode || '',
+        pan: customer.pan || '',
+        email: customer.email || ''
+      })
+      setSelectedMajorWithMinors(null)
+      return
+    }
     setIsLoadingCustomer(true)
     try {
-      // Fetch full customer details from the API
+      // Fetch full customer details from the API (majors only)
       const fullCustomerData = await api.getCustomer(token, customer.investorId)
       
       console.log('Full customer data fetched:', fullCustomerData)
@@ -755,21 +888,32 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       
       console.log('Transformed selected customer:', transformedCustomer)
       setSelected(transformedCustomer)
+      setSelectedMajorWithMinors(fullCustomerData)
     } catch (error) {
       console.error('Error fetching customer details:', error)
       // Fallback to using the search result data if API call fails
       setSelected(customer)
-      alert('Could not fetch complete customer details. Using available data.')
+      setSelectedMajorWithMinors(null)
+      toast.error('Could not fetch complete customer details. Using available data.')
     } finally {
       setIsLoadingCustomer(false)
     }
   }
 
+  // Auto-scroll to the bottom so Continue button is visible when a customer is selected
+  useEffect(() => {
+    if (!selected) return
+    const id = setTimeout(() => {
+      continueButtonsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 100)
+    return () => clearTimeout(id)
+  }, [selected])
+
   const handleCreateCustomer = async () => {
     // Validate form
     const validation = validateCustomerForm(newCustomer)
     if (!validation.valid) {
-      alert('Please fix the following errors:\n\n' + validation.errors.join('\n'))
+      toast.error('Please fix the following errors:\n\n' + validation.errors.join('\n'))
       return
     }
     
@@ -817,21 +961,22 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       
       // Select the newly created customer
       setSelected(createdCustomer)
+      setSelectedMajorWithMinors(null)
       setShowCreateForm(false)
       resetCustomerForm()
       
-      alert(`Customer created successfully! ${result.media_files > 0 ? `(${result.media_files} files uploaded)` : ''}`)
+      toast.success(`Customer created successfully! ${result.media_files > 0 ? `(${result.media_files} files uploaded)` : ''}`)
       
       // Refresh the search results to include the new customer
       if (q && q.length >= 2) {
-        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1, user?.branch)
+        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1)
         setResults(searchResponse.results)
         setAllResults(searchResponse.results)
         setPagination(searchResponse.pagination)
       }
       
     } catch (err) {
-      alert('Failed to create customer: ' + err.message)
+      toast.error('Failed to create customer: ' + err.message)
     } finally {
       setIsCreating(false)
     }
@@ -845,42 +990,40 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
     total: 0,
     hasMore: false
   })
-  const [allResults, setAllResults] = useState([]) // For accumulating results
+  const PAGE_SIZE = 4
 
-  // Use useEffect to handle async search with debouncing
+  // Use useEffect to handle async search with debouncing (always fetches page 1)
   useEffect(() => {
     const performSearch = async () => {
       if (!q || q.length < 2) {
         setResults([])
-        setAllResults([])
         setPagination({
           page: 1,
-          limit: 50,
+          limit: PAGE_SIZE,
           total: 0,
           hasMore: false
         })
         return
       }
-      
+
       setIsSearching(true)
       try {
-        console.log(`Starting search for: "${q}"`)
-        const searchResponse = await searchInvestorsFromAPI(token, q, 50, 1, user?.branch)
-        console.log('Search response received:', searchResponse)
-        console.log('Results count:', searchResponse.results?.length || 0)
-        
-        setResults(searchResponse.results)
-        setAllResults(searchResponse.results)
-        setPagination(searchResponse.pagination)
-        
-        console.log('State updated with results:', searchResponse.results?.length || 0)
+        const searchResponse = await searchInvestorsFromAPI(token, q, PAGE_SIZE, 1)
+        setResults(searchResponse.results || [])
+        const pag = searchResponse.pagination || {}
+        const total = pag.total ?? (searchResponse.results?.length || 0)
+        setPagination({
+          page: 1,
+          limit: PAGE_SIZE,
+          total,
+          hasMore: pag.hasMore ?? (1 * PAGE_SIZE < total)
+        })
       } catch (error) {
         console.error('Search error:', error)
         setResults([])
-        setAllResults([])
         setPagination({
           page: 1,
-          limit: 50,
+          limit: PAGE_SIZE,
           total: 0,
           hasMore: false
         })
@@ -889,42 +1032,51 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       }
     }
 
-    const debounceTimer = setTimeout(performSearch, 300) // 300ms debounce
+    const debounceTimer = setTimeout(performSearch, 300)
     return () => clearTimeout(debounceTimer)
   }, [q, token])
 
-  // Load more results for pagination
-  const loadMoreResults = async () => {
-    if (!pagination.hasMore || isSearching) return
-    
+  // Go to a specific page (prev/next)
+  const goToPage = async (pageNum) => {
+    if (!q || q.length < 2 || pageNum < 1 || isSearching) return
+    const totalPages = Math.ceil((pagination.total || 0) / PAGE_SIZE) || 1
+    if (pageNum > totalPages) return
+
     setIsSearching(true)
     try {
-      const nextPage = pagination.page + 1
-      const searchResponse = await searchInvestorsFromAPI(token, q, 50, nextPage, user?.branch)
-      
-      setAllResults(prev => [...prev, ...searchResponse.results])
-      setPagination(searchResponse.pagination)
+      const searchResponse = await searchInvestorsFromAPI(token, q, PAGE_SIZE, pageNum)
+      setResults(searchResponse.results || [])
+      const pag = searchResponse.pagination || {}
+      const total = pag.total ?? pagination.total
+      setPagination({
+        page: pageNum,
+        limit: PAGE_SIZE,
+        total: total ?? 0,
+        hasMore: pag.hasMore ?? (pageNum * PAGE_SIZE < total)
+      })
     } catch (error) {
-      console.error('Load more error:', error)
+      console.error('Page change error:', error)
     } finally {
       setIsSearching(false)
     }
   }
 
   return (
-    <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 2 — Investor</h3>
+    <div className="space-y-6">
+      <Card padding="lg" hover={false} className="border-0 shadow-none bg-transparent">
+        <h3 className="text-section-title text-[var(--text-primary)] mt-0 mb-1">Investor</h3>
+        <p className="text-helper text-[var(--text-muted)] mb-6">Search and select the investor or create a new customer.</p>
 
       {recentInvestors.length > 0 && (
-        <div className="mb-4">
-          <label className="text-sm text-gray-600 dark:text-gray-400 my-2 font-semibold">Recent Investors</label>
+        <div className="mb-6">
+          <span className="text-label text-[var(--text-secondary)] block mb-2">Recent investors</span>
           <div className="flex flex-wrap gap-2">
             {recentInvestors.map(inv => (
               <button
                 key={inv.investorId}
                 type="button"
                 onClick={() => handleSelectCustomer(inv)}
-                className="px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                className="rounded-pill border border-[var(--stroke)] bg-[var(--card-bg)] px-3 py-1.5 text-caption font-medium text-[var(--text-primary)] hover:bg-[var(--card-hover)] hover:border-[var(--accent)]/40 transition-colors"
               >
                 {inv.investorName || inv.investorId}
               </button>
@@ -933,48 +1085,46 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         </div>
       )}
 
-      <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-        <div className="col" style={{ flex: '1 1 320px' }}>
-          <label className="text-sm text-gray-600 dark:text-gray-400 my-2 font-semibold">
-            Search Investor (ID / Name / Address / PAN / Email)
-          </label>
-          <input
-            value={q}
-            onChange={e => { setQ(e.target.value); setSelected(null) }}
-            placeholder="Type any part of ID, name, address, PAN, or email"
-            className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            Showing {allResults.length} results
-            {pagination.total > 0 && ` of ${pagination.total}`}
-            {pagination.hasMore && ' (scroll for more)'}
-          </div>
-        </div>
+      <div className="space-y-4 mb-6">
+        <label className="text-label text-[var(--text-secondary)] block">Search by ID, name, address, PAN or email</label>
+        <input
+          value={q}
+          onChange={e => { setQ(e.target.value); setSelected(null); setSelectedMajorWithMinors(null) }}
+          placeholder="Type to search…"
+          className="w-full rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-4 py-3 text-body text-[var(--text-primary)] placeholder:text-[var(--placeholder)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+        />
+        <p className="text-helper text-[var(--text-muted)]">
+          {q && q.length >= 2 && pagination.total > 0
+            ? `Page ${pagination.page} of ${Math.ceil(pagination.total / PAGE_SIZE) || 1} (${pagination.total} results)`
+            : q && q.length >= 2
+              ? 'Search with at least 2 characters'
+              : 'Type to search…'}
+        </p>
       </div>
 
       {/* Create New Customer Button */}
-      <div className="mt-4 flex justify-end">
-        <button
+      <div className="mb-6">
+        <Button
+          variant="secondary"
+          icon={<FiPlus className="w-4 h-4" />}
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-red-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-red-300 bg-blue-50 dark:bg-red-900/40 hover:bg-blue-100 dark:hover:bg-red-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
         >
-          <FiPlus className="w-4 h-4 mr-2" />
-          {showCreateForm ? 'Cancel' : 'Create New Customer'}
-        </button>
+          {showCreateForm ? 'Cancel' : 'Create new customer'}
+        </Button>
       </div>
 
       {/* Enhanced Create New Customer Form */}
       {showCreateForm && (
-        <div className="mt-4 border border-blue-200 dark:border-red-700 rounded-2xl bg-blue-50 dark:bg-red-900/20 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Create New Customer</h3>
+        <div className="mb-6 rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-6">
+          <h4 className="text-card-title text-[var(--text-primary)] mb-4">Create new customer</h4>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Title</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Title</label>
                 <select
                   value={newCustomer.title}
                   onChange={e => setNewCustomer(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 >
                   <option value="">Select Title</option>
                   <option value="Mr.">Mr.</option>
@@ -985,20 +1135,20 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Customer Name *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Customer Name *</label>
                 <input
                   type="text"
                   value={newCustomer.name}
                   onChange={e => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Enter customer name"
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">PAN Number *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">PAN Number *</label>
                 <input
                   type="text"
                   value={newCustomer.pan}
@@ -1008,25 +1158,25 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                   maxLength="10"
                   title={getTitle('pan')}
                   required
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Email *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Email *</label>
                 <input
                   type="email"
                   value={newCustomer.email}
                   onChange={e => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="user@example.com"
                   required
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Mobile *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Mobile *</label>
                 <input
                   type="tel"
                   value={newCustomer.mobile}
@@ -1036,23 +1186,23 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                   maxLength="10"
                   title={getTitle('mobile')}
                   required
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Date of Birth</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Date of Birth</label>
                 <input
                   type="date"
                   value={newCustomer.date_of_birth}
                   onChange={e => setNewCustomer(prev => ({ ...prev, date_of_birth: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
             </div>
 
             {/* PIN Code with lookup */}
             <div className="relative">
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">PIN Code (Enter to auto-fill location)</label>
+              <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">PIN Code (Enter to auto-fill location)</label>
               <input
                 type="text"
                 value={newCustomer.pin}
@@ -1061,36 +1211,36 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                 pattern={getPattern('pin')}
                 maxLength="6"
                 title={getTitle('pin')}
-                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
               />
               
               {/* Loading indicator */}
               {pincodeLoading && (
                 <div className="absolute right-3 top-8">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[var(--dashboard-primary)]"></div>
                 </div>
               )}
               
               {/* Pincode suggestions dropdown */}
               {showPincodeDropdown && pincodeSuggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-10 w-full mt-1 bg-[var(--dashboard-card)] border border-[var(--dashboard-border)] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                   {pincodeSuggestions.map((suggestion, index) => (
                     <button
                       key={index}
                       type="button"
                       onClick={() => selectPincodeSuggestion(suggestion)}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none"
+                      className="w-full px-3 py-2.5 text-left text-[var(--text-primary)] hover:bg-[var(--card-hover)] focus:bg-[var(--card-hover)] focus:outline-none transition-colors"
                     >
                       <div className="flex justify-between items-center">
                         <div>
-                          <div className="font-medium text-gray-900 dark:text-white">
+                          <div className="font-medium text-[var(--dashboard-text)]">
                             {suggestion.pincode}
                           </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                          <div className="text-sm text-[var(--dashboard-muted)]">
                             {suggestion.city}, {suggestion.state}
                           </div>
                         </div>
-                        <div className="text-xs text-gray-400 dark:text-gray-500">
+                        <div className="text-xs text-[var(--dashboard-muted)]">
                           {suggestion.country}
                         </div>
                       </div>
@@ -1102,73 +1252,73 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Address Line 1</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Address Line 1</label>
                 <input
                   type="text"
                   value={newCustomer.address1}
                   onChange={e => setNewCustomer(prev => ({ ...prev, address1: e.target.value }))}
                   placeholder="Enter address line 1"
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Address Line 2</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Address Line 2</label>
                 <input
                   type="text"
                   value={newCustomer.address2}
                   onChange={e => setNewCustomer(prev => ({ ...prev, address2: e.target.value }))}
                   placeholder="Enter address line 2"
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Address Line 3</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Address Line 3</label>
                 <input
                   type="text"
                   value={newCustomer.address3}
                   onChange={e => setNewCustomer(prev => ({ ...prev, address3: e.target.value }))}
                   placeholder="Enter address line 3"
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">City *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">City *</label>
                 <input
                   type="text"
                   value={newCustomer.city}
                   onChange={e => setNewCustomer(prev => ({ ...prev, city: e.target.value }))}
                   placeholder="Enter city"
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">State *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">State *</label>
                 <input
                   type="text"
                   value={newCustomer.state}
                   onChange={e => setNewCustomer(prev => ({ ...prev, state: e.target.value }))}
                   placeholder="Enter state"
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Country *</label>
+                <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Country *</label>
                 <input
                   type="text"
                   value={newCustomer.country || 'India'}
                   onChange={e => setNewCustomer(prev => ({ ...prev, country: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
             </div>
 
             {/* Media Upload Section */}
             <div className="space-y-2">
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Supporting Documents</label>
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+              <label className="text-sm text-[var(--dashboard-muted)] font-semibold">Supporting Documents</label>
+              <div className="border-2 border-dashed border-[var(--dashboard-border)] rounded-lg p-4 text-center hover:border-[var(--dashboard-primary)]/60 transition-colors">
                 <input
                   type="file"
                   multiple
@@ -1179,11 +1329,11 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                 />
                 <label
                   htmlFor="media-upload-receipt"
-                  className="inline-flex items-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
+                  className="inline-flex items-center px-4 py-2.5 rounded-full border border-[var(--stroke)] text-body font-semibold text-[var(--text-primary)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 transition-all duration-200 cursor-pointer shadow-sm"
                 >
                   📎 Upload Documents
                 </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-[var(--dashboard-muted)] mt-1">
                   Supported formats: JPEG, PNG, GIF, WebP, PDF (Max 10MB each)
                 </p>
               </div>
@@ -1191,19 +1341,19 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
               {/* Display uploaded files */}
               {mediaFiles.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-400">
+                  <h4 className="text-sm font-medium text-[var(--dashboard-text)]">
                     Uploaded Files ({mediaFiles.length})
                   </h4>
                   <div className="space-y-1 max-h-24 overflow-y-auto">
                     {mediaFiles.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <div key={index} className="flex items-center justify-between p-2 bg-[var(--dashboard-bg)] rounded-lg">
                         <div className="flex items-center space-x-2">
                           <span className="text-sm">{getFileIcon(file)}</span>
                           <div>
-                            <p className="text-xs font-medium text-gray-900 dark:text-white truncate max-w-32">
+                            <p className="text-xs font-medium text-[var(--dashboard-text)] truncate max-w-32">
                               {file.name}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <p className="text-xs text-[var(--dashboard-muted)]">
                               {(file.size / 1024 / 1024).toFixed(2)} MB
                             </p>
                           </div>
@@ -1211,7 +1361,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                         <button
                           type="button"
                           onClick={() => removeMediaFile(index)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-xs"
+                          className="text-[var(--error)] hover:text-[var(--error)] hover:bg-[var(--error-muted)] text-caption"
                         >
                           ✕
                         </button>
@@ -1226,7 +1376,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
               <button
                 onClick={handleCreateCustomer}
                 disabled={isCreating || !newCustomer.name.trim()}
-                className="inline-flex items-center px-4 py-2 border border-green-300 dark:border-green-600 text-sm font-semibold rounded-lg text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2.5 rounded-full border border-[var(--success)]/50 text-body font-semibold text-[var(--success)] bg-[var(--success-muted)] hover:bg-[var(--success)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isCreating ? 'Creating...' : 'Create Customer'}
               </button>
@@ -1235,7 +1385,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                   setShowCreateForm(false)
                   resetCustomerForm()
                 }}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md"
+                className="inline-flex items-center px-4 py-2.5 rounded-full border border-[var(--stroke)] text-body font-semibold text-[var(--text-primary)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 transition-all duration-200 shadow-sm"
               >
                 <FiX className="w-4 h-4 mr-2" />
                 Cancel
@@ -1245,72 +1395,82 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         </div>
       )}
 
-      <div className="max-h-65 overflow-auto border border-gray-200 dark:border-gray-700 rounded-xl relative">
+      <div className="max-h-[65vh] overflow-auto rounded-card border border-[var(--stroke)] bg-[var(--card-bg)]">
         {isLoadingCustomer && (
-          <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center z-10 rounded-xl">
+          <div className="absolute inset-0 bg-[var(--card-bg)]/90 flex items-center justify-center z-10 rounded-card">
             <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading customer details...</p>
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[var(--stroke)] border-t-[var(--accent)]" />
+              <p className="mt-2 text-body text-[var(--text-muted)]">Loading customer details…</p>
             </div>
           </div>
         )}
         {isSearching ? (
           <div className="p-8 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Searching investors...</p>
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[var(--stroke)] border-t-[var(--accent)]" />
+            <p className="mt-2 text-body text-[var(--text-muted)]">Searching investors…</p>
           </div>
-        ) : allResults.length === 0 && q && q.length >= 2 ? (
+        ) : results.length === 0 && q && q.length >= 2 ? (
           <div className="p-8 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">No investors found matching your search.</p>
+            <p className="text-body text-[var(--text-muted)]">No investors found matching your search.</p>
           </div>
         ) : (
           <>
-          <table className="w-full border-collapse text-sm min-w-160">
+          <table className="w-full border-collapse text-body min-w-0 table-fixed">
             <thead>
-              <tr className="bg-gray-50 dark:bg-gray-700">
-                <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">ID</th>
-                <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">Name</th>
-                <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">PAN</th>
-                <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">Email</th>
-                <th className="text-left px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">PIN</th>
+              <tr className="bg-[var(--card-hover)]">
+                <th className="text-left px-4 py-3 border-b border-[var(--stroke)] text-table-header w-[120px]">ID</th>
+                <th className="text-left px-4 py-3 border-b border-[var(--stroke)] text-table-header">Name</th>
+                <th className="text-left px-4 py-3 border-b border-[var(--stroke)] text-table-header w-[7.5rem] min-w-[7.5rem]">PAN</th>
               </tr>
             </thead>
             <tbody>
-              {allResults.map((it, i) => {
+              {results.map((it, i) => {
                 const isSel = selected && String(selected.investorId) === String(it.investorId)
                 return (
                   <tr
                     key={`${it.investorId}-${i}`}
                     onClick={() => handleSelectCustomer(it)}
-                    className={`cursor-pointer ${isSel ? 'bg-gray-100 dark:bg-gray-600' : 'bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    className={`cursor-pointer border-b border-[var(--stroke)] transition-colors ${isSel ? 'bg-[var(--accent-muted)]' : i % 2 === 0 ? 'bg-[var(--canvas)] hover:bg-[var(--card-hover)]' : 'bg-[var(--card-hover)]/50 hover:bg-[var(--card-hover)]'}`}
                   >
-                    <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.investorId ?? ''}</td>
-                    <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.investorName ?? ''}</td>
-                    <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.pan ?? ''}</td>
-                    <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.email ?? ''}</td>
-                    <td className="px-3 py-2.5 border-b border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100">{it.pinCode ?? ''}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)] truncate" title={String(it.investorId ?? '')}>{it.investorId ?? ''}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)] min-w-0 truncate" title={it.investorName ?? ''}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{it.investorName ?? ''}</span>
+                        {it.hasMinors && it.minorsCount > 0 && (
+                          <span className="inline-flex flex-shrink-0 items-center rounded-full bg-[var(--accent-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-strong)]">
+                            Minors: {it.minorsCount}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--text-primary)] whitespace-nowrap" title={it.pan ?? ''}>{it.pan ?? '—'}</td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
           
-          {/* Load More Button */}
-          {pagination.hasMore && (
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 text-center">
+          {/* Pagination: Prev | Page X of Y | Next */}
+          {q && q.length >= 2 && pagination.total > 0 && (
+            <div className="flex items-center justify-center gap-3 p-4 border-t border-[var(--dashboard-border)]">
               <button
-                onClick={loadMoreResults}
-                disabled={isSearching}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center justify-center mx-auto"
+                type="button"
+                onClick={() => goToPage(pagination.page - 1)}
+                disabled={isSearching || pagination.page <= 1}
+                className="px-3 py-2 rounded-lg text-body font-medium border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSearching ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Loading...
-                  </>
-                ) : (
-                  'Load More Results'
-                )}
+                Previous
+              </button>
+              <span className="text-body text-[var(--text-muted)]">
+                Page {pagination.page} of {Math.ceil(pagination.total / PAGE_SIZE) || 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => goToPage(pagination.page + 1)}
+                disabled={isSearching || !pagination.hasMore}
+                className="px-3 py-2 rounded-lg text-body font-medium border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
               </button>
             </div>
           )}
@@ -1319,53 +1479,105 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       </div>
 
       {selected && (
-        <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 p-4">
-          <h3 className="m-0 mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">Investor Preview</h3>
-          <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">ID</label>
-              <div className="text-gray-900 dark:text-gray-100">{selected.investorId || '-'}</div>
+        <div ref={selectedCardRef} className="mt-4">
+          <Card padding="md" hover={false}>
+          <h4 className="text-card-title text-[var(--text-primary)] mb-4">Selected investor</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <span className="text-helper text-[var(--text-muted)]">ID</span>
+              <p className="text-body font-medium text-[var(--text-primary)] mt-0.5">{selected.investorId || '—'}</p>
             </div>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Name</label>
-              <div className="text-gray-900 dark:text-gray-100">{selected.investorName || '-'}</div>
+            <div>
+              <span className="text-helper text-[var(--text-muted)]">Name</span>
+              <p className="text-body font-medium text-[var(--text-primary)] mt-0.5">{selected.investorName || '—'}</p>
             </div>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">PAN</label>
-              <div className="text-gray-900 dark:text-gray-100">{selected.pan || '-'}</div>
+            <div>
+              <span className="text-helper text-[var(--text-muted)]">PAN</span>
+              <p className="text-body font-medium text-[var(--text-primary)] mt-0.5">{selected.pan || '—'}</p>
             </div>
-          </div>
-          <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Email</label>
-              <div className="text-gray-900 dark:text-gray-100">{selected.email || '-'}</div>
+            <div>
+              <span className="text-helper text-[var(--text-muted)]">Email</span>
+              <p className="text-body font-medium text-[var(--text-primary)] mt-0.5 truncate">{selected.email || '—'}</p>
             </div>
-            <div className="col" style={{ flex: '1 1 320px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">PIN</label>
-              <div className="text-gray-900 dark:text-gray-100">{selected.pinCode || '-'}</div>
+            <div>
+              <span className="text-helper text-[var(--text-muted)]">PIN</span>
+              <p className="text-body font-medium text-[var(--text-primary)] mt-0.5">{selected.pinCode || '—'}</p>
             </div>
-          </div>
-          <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
-            <div className="col" style={{ flex: '1 1 640px' }}>
-              <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold">Address</label>
-              <div className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{selected.investorAddress || '-'}</div>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <span className="text-helper text-[var(--text-muted)]">Address</span>
+              <p className="text-body font-medium text-[var(--text-primary)] mt-0.5 whitespace-pre-wrap break-words">{selected.investorAddress || '—'}</p>
             </div>
           </div>
+
+          {/* Minors under this major: show as selectable when selected is the major */}
+          {selectedMajorWithMinors && selected && String(selected.investorId) === String(selectedMajorWithMinors.investor_id) && selectedMajorWithMinors.minors && selectedMajorWithMinors.minors.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-[var(--stroke)]">
+              <p className="text-helper text-[var(--text-muted)] mb-2">Or select a minor for this receipt:</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedMajorWithMinors.minors.map((minor) => {
+                  const useSameAddress = minor.use_same_address !== false
+                  const address = useSameAddress
+                    ? `${selectedMajorWithMinors.address1 || ''} ${selectedMajorWithMinors.address2 || ''} ${selectedMajorWithMinors.address3 || ''}`.trim()
+                    : `${minor.address1 || ''} ${minor.address2 || ''} ${minor.address3 || ''}`.trim()
+                  const minorAsSelected = {
+                    investorId: minor.investor_id,
+                    investorName: `${minor.name} (Minor - ${minor.relationship_type === 'child' ? 'Child' : 'Ward'})`,
+                    investorAddress: address,
+                    pinCode: useSameAddress ? (selectedMajorWithMinors.pin || minor.pin || '') : (minor.pin || ''),
+                    pan: minor.pan || '',
+                    email: minor.email || ''
+                  }
+                  return (
+                    <button
+                      key={minor.investor_id}
+                      type="button"
+                      onClick={() => setSelected(minorAsSelected)}
+                      className="rounded-pill border border-[var(--stroke)] bg-[var(--card-bg)] px-3 py-2 text-caption font-medium text-[var(--text-primary)] hover:bg-[var(--card-hover)] hover:border-[var(--accent)]/40 transition-colors"
+                    >
+                      {minor.name} (Minor)
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* When selected is a minor and we have the parent, offer to switch back to major */}
+          {selectedMajorWithMinors && selected && String(selected.investorId) !== String(selectedMajorWithMinors.investor_id) && (
+            <div className="mt-4 pt-4 border-t border-[var(--stroke)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected({
+                    investorId: selectedMajorWithMinors.investor_id,
+                    investorName: selectedMajorWithMinors.name || selectedMajorWithMinors.investor_name || '—',
+                    investorAddress: `${selectedMajorWithMinors.address1 || ''} ${selectedMajorWithMinors.address2 || ''} ${selectedMajorWithMinors.address3 || ''}`.trim() || '—',
+                    pinCode: selectedMajorWithMinors.pin || '',
+                    pan: selectedMajorWithMinors.pan || '',
+                    email: selectedMajorWithMinors.email || ''
+                  })
+                }}
+                className="text-caption font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+              >
+                Use parent ({selectedMajorWithMinors.name || selectedMajorWithMinors.investor_id}) instead
+              </button>
+            </div>
+          )}
+          </Card>
         </div>
       )}
 
-      <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">
-          Back
-        </button>
-        <button
+      <div ref={continueButtonsRef} className="flex flex-wrap gap-3 mt-6">
+        <Button variant="ghost" onClick={onBack}>Back</Button>
+        <Button
+          variant="primary"
           onClick={() => onFound({ investorId: selected ? selected.investorId : '', info: selected || null })}
           disabled={!selected}
-          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
         >
           Continue
-        </button>
+        </Button>
       </div>
+      </Card>
     </div>
   )
 }
@@ -1375,8 +1587,9 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
 export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const { token, user } = useAuth()
   const navigate = useNavigate()
+  const toast = useToast()
   const [step, setStep] = useState(1)
-  const [empSeed, setEmpSeed] = useState({ empCode: '', employeeName: '', branch: '' })
+  const [empSeed, setEmpSeed] = useState({ empCode: '', employeeName: '', branch: '', branch_name: '', branch_code: '' })
   const [investorSeed, setInvestorSeed] = useState({ investorId: '', investorInfo: null })
   const [productTypeSeed, setProductTypeSeed] = useState('')
   const [mfSchemeSeed, setMfSchemeSeed] = useState(null) // Stores selectedAmc, selectedScheme, hasExistingFolio, folioNumber
@@ -1524,7 +1737,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
     setEmpSeed(draftData.empSeed || empSeed)
     setInvestorSeed(draftData.investorSeed || investorSeed)
     setProductTypeSeed(draftData.productTypeSeed || '')
-    setMfSchemeSeed(draftData.mfSchemeSeed || null)
+    setMfSchemeSeed(draftData.mfSchemeSeed ? { ...draftData.mfSchemeSeed, selectedAmcCategory: draftData.mfSchemeSeed.selectedAmcCategory || getAmcCategoryById('MF') } : null)
     setInvestmentTypeSeed(draftData.investmentTypeSeed || '')
     setFdIssuerSeed(draftData.fdIssuerSeed || null)
     setFdSchemeSeed(draftData.fdSchemeSeed || null)
@@ -1668,11 +1881,13 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const buildBase = () => {
     const base = {
       // Receipt identification
-      receipt_no: genReceiptNo({ branch: empSeed.branch, empCode: empSeed.empCode }),
+      receipt_no: genReceiptNo({ branch: empSeed.branch_code || empSeed.branch_name || empSeed.branch, empCode: empSeed.empCode }),
       date: new Date().toISOString().slice(0, 10),
       
       // Employee information
-      branch: empSeed.branch || '',
+      branch: (empSeed.branch_name || empSeed.branch_code || empSeed.branch || '').toString().trim(),
+      branch_name: empSeed.branch_name || null,
+      branch_code: empSeed.branch_code || null,
       employee_name: empSeed.employeeName || '',
       emp_code: empSeed.empCode || '',
       
@@ -1733,6 +1948,10 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       scheme_option: mfSchemeSeed.selectedScheme.option || null,
       scheme_type: mfSchemeSeed.selectedScheme.type || null,
       scheme_is_nfo: mfSchemeSeed.selectedScheme.is_nfo || false,
+      
+      // MF AMC category (SIF, PMS, AIF, GIFT CITY FUNDS; default MF)
+      mf_amc_category: mfSchemeSeed.selectedAmcCategory?.id || 'MF',
+      mf_amc_category_min_investment: mfSchemeSeed.selectedAmcCategory?.minInvestment ?? null,
       
       // Investment details
       investment_amount: transactionData.investment_amount || transactionData.investmentAmount || null,
@@ -1988,10 +2207,26 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       
       const receiptId = result.id || result.receiptNo || result.receipt_id || result._key || 'Unknown'
 
-      // Then, upload supporting documents against the created receipt (best-effort; don't block receipt save)
+      // Then, upload supporting documents against the created receipt and verify they were persisted
       if (files.length > 0 && receiptId && receiptId !== 'Unknown') {
         try {
-          await api.uploadReceiptMedia(token, receiptId, files)
+          const uploadResult = await api.uploadReceiptMedia(token, receiptId, files)
+          // Backend returns { message, files: [...] }; use files.length; if shape is missing, assume all saved
+          const uploadedCount = (uploadResult && Array.isArray(uploadResult.files))
+            ? uploadResult.files.length
+            : files.length
+
+          if (uploadedCount < files.length) {
+            console.warn('Not all supporting documents were saved for receipt', {
+              receiptId,
+              attempted: files.length,
+              saved: uploadedCount
+            })
+            localStorage.setItem(
+              'receipt_upload_error',
+              `Some supporting documents may not have been saved (saved ${uploadedCount} of ${files.length}).`
+            )
+          }
         } catch (uploadErr) {
           console.error('Supporting document upload failed:', uploadErr)
           // Keep receipt saved; show a non-blocking warning message alongside success toast
@@ -2012,7 +2247,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       localStorage.removeItem('failed_receipt_draft_id')
       setDuplicateOverrideKey(null)
       setStep(1)
-      setEmpSeed({ empCode: '', employeeName: '', branch: '' })
+      setEmpSeed({ empCode: '', employeeName: '', branch: '', branch_name: '', branch_code: '' })
       setInvestorSeed({ investorId: '', investorInfo: null })
       setProductTypeSeed('')
       setInvestmentTypeSeed('')
@@ -2161,30 +2396,24 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+    <div className="w-full max-w-6xl mx-0 pl-0 pr-4 lg:pr-6 relative">
       {/* Failure Popup */}
       {showFailurePopup && (
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="rounded-card shadow-glow border border-[var(--stroke)] bg-[var(--card-bg)] p-6">
             <div className="flex items-start space-x-3">
               <div className="flex-shrink-0">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  saveError 
-                    ? 'bg-red-100 dark:bg-red-900/30' 
-                    : 'bg-blue-100 dark:bg-blue-900/30'
+                  saveError ? 'bg-[var(--error-muted)]' : 'bg-[var(--accent-muted)]'
                 }`}>
-                  <FiAlertCircle className={`w-5 h-5 ${
-                    saveError 
-                      ? 'text-red-600 dark:text-red-400' 
-                      : 'text-blue-600 dark:text-blue-400'
-                  }`} />
+                  <FiAlertCircle className={`w-5 h-5 ${saveError ? 'text-[var(--error)]' : 'text-[var(--accent)]'}`} />
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                <h3 className="text-body font-semibold text-[var(--text-primary)] mb-1">
                   {saveError ? 'Receipt Creation Failed' : 'Feeling Stuck?'}
                 </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                <p className="text-caption text-[var(--text-muted)] mb-3">
                   {saveError 
                     ? (failureDraftId 
                         ? 'Your progress has been saved as a draft. Resume from Transaction History or Create Receipt later.'
@@ -2198,7 +2427,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
                         setShowFailurePopup(false)
                         navigate(`/receipts?draftId=${failureDraftId}`)
                       }}
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+                      className="px-3 py-2 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-caption font-medium transition-colors"
                     >
                       Resume later
                     </button>
@@ -2249,7 +2478,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
                       }
                     }}
                     disabled={isCapturingScreenshot}
-                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center space-x-1 disabled:cursor-not-allowed"
+                    className="flex-1 px-3 py-2 rounded-full bg-[var(--error)] hover:bg-[var(--error)]/90 disabled:opacity-50 text-white text-caption font-medium flex items-center justify-center space-x-1 disabled:cursor-not-allowed transition-colors"
                   >
                     {isCapturingScreenshot ? (
                       <>
@@ -2271,7 +2500,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
                         navigate('/transactions')
                       }
                     }}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="px-3 py-2 rounded-full border border-[var(--stroke)] text-[var(--text-primary)] text-caption font-medium hover:bg-[var(--card-hover)] transition-colors"
                   >
                     Dismiss
                   </button>
@@ -2284,7 +2513,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
                     navigate('/transactions')
                   }
                 }}
-                className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                className="flex-shrink-0 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card-hover)] transition-colors"
               >
                 <FiX size={18} />
               </button>
@@ -2316,7 +2545,11 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepHeader step={step} productType={productTypeSeed} />
       )}
 
+      {/* Main column has min width; preview grows to use remaining space (no empty strip on the right) */}
+      <div className="lg:grid lg:grid-cols-[minmax(560px,1fr)_minmax(200px,16rem)] lg:gap-6 lg:items-start">
+        <div className={`space-y-4 ${step >= 7 ? 'lg:col-span-2' : ''}`}>
       {step < 7 && (
+        <div className="lg:hidden">
         <LivePreview
           empSeed={empSeed}
           investorSeed={investorSeed}
@@ -2329,30 +2562,33 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           insuranceIssuerSeed={insuranceIssuerSeed}
           insuranceProductSeed={insuranceProductSeed}
           finalData={finalData}
+          draftId={draftId}
         />
+        </div>
       )}
 
       {/* Save to draft - shown during receipt creation (steps 2–6) */}
       {step >= 2 && step < 7 && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-2">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Save your progress and resume later from Transaction History.
-          </p>
-          <div className="flex items-center gap-2">
-            {draftSavedMessage && (
-              <span className="text-sm text-green-600 dark:text-green-400">{draftSavedMessage}</span>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveToDraft}
-              disabled={savingDraft}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-            >
-              <FiSave className="w-4 h-4" />
-              {savingDraft ? 'Saving...' : 'Save to draft'}
-            </button>
+        <Card padding="sm" className="mb-2 border-0 shadow-none bg-transparent">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-caption text-[var(--text-muted)]">
+              Save your progress and resume later from Transaction History.
+            </p>
+            <div className="flex items-center gap-2">
+              {draftSavedMessage && (
+                <span className="text-caption text-[var(--success)]">{draftSavedMessage}</span>
+              )}
+              <Button
+                variant="secondary"
+                icon={<FiSave className="w-4 h-4" />}
+                onClick={handleSaveToDraft}
+                disabled={savingDraft}
+              >
+                {savingDraft ? 'Saving...' : 'Save to draft'}
+              </Button>
+            </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {step === 1 && (
@@ -2383,7 +2619,9 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
             const preset = receiptPresets[type]
             if (usePreset && preset) {
               if (preset.productType === 'MF') {
+                const mfAmcCat = getAmcCategoryById(preset.mf_amc_category || 'MF')
                 setMfSchemeSeed({
+                  selectedAmcCategory: mfAmcCat,
                   selectedAmc: { amc_code: preset.amc_code, amc_name: preset.amc_name },
                   selectedScheme: { scheme_code: preset.scheme_code, scheme_name: preset.scheme_name, display_name: preset.scheme_name },
                   hasExistingFolio: false,
@@ -2607,6 +2845,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
             setStep(5) // Next: Investment Type selection
           }}
           token={token}
+          initialAmcCategoryId={mfSchemeSeed?.selectedAmcCategory?.id || receiptPresets.MF?.mf_amc_category || 'MF'}
           initialAmcCode={mfSchemeSeed?.selectedAmc?.amc_code || receiptPresets.MF?.amc_code || ''}
           initialSchemeCode={mfSchemeSeed?.selectedScheme?.scheme_code || receiptPresets.MF?.scheme_code || ''}
           recentAmcs={recentIssuersByType.MF}
@@ -2693,6 +2932,26 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           setSupportingDocuments={setSupportingDocuments}
         />
       )}
+        </div>
+        {step < 7 && (
+          <aside className="hidden lg:block lg:sticky lg:top-24 w-full min-w-0">
+            <LivePreview
+              empSeed={empSeed}
+              investorSeed={investorSeed}
+              productTypeSeed={productTypeSeed}
+              mfSchemeSeed={mfSchemeSeed}
+              fdIssuerSeed={fdIssuerSeed}
+              fdSchemeSeed={fdSchemeSeed}
+              ncdBondIssuerSeed={ncdBondIssuerSeed}
+              ncdBondSchemeSeed={ncdBondSchemeSeed}
+              insuranceIssuerSeed={insuranceIssuerSeed}
+              insuranceProductSeed={insuranceProductSeed}
+              finalData={finalData}
+              draftId={draftId}
+            />
+          </aside>
+        )}
+      </div>
     </div>
   )
 }

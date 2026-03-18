@@ -162,7 +162,7 @@ export default function BranchManagement() {
   if (!isAdmin) {
     return (
       <div className="p-4 sm:p-6">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
+        <div className="inline-flex items-center px-4 py-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--error)]">
           <FiAlertCircle className="h-5 w-5 mr-2" />
           Access denied. This page is only available to administrators.
         </div>
@@ -175,14 +175,14 @@ export default function BranchManagement() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Branch Management</h1>
-          <p className="text-gray-600 dark:text-dark-400 mt-1">Create and manage branches, assign users</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Branch Management</h1>
+          <p className="text-[var(--text-secondary)] mt-1">Create and manage branches, assign users</p>
         </div>
         <div className="flex space-x-3">
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+            className="flex items-center px-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
           >
             <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -199,14 +199,14 @@ export default function BranchManagement() {
 
       {/* Success/Error Messages */}
       {success && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg flex items-center">
+        <div className="px-4 py-3 rounded-lg border border-[var(--success)]/70 bg-[var(--success-muted)] text-[var(--success)] flex items-center">
           <FiCheck className="h-5 w-5 mr-2" />
           {success}
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
+        <div className="px-4 py-3 rounded-lg border border-[var(--error)]/70 bg-[var(--error-muted)] text-[var(--error)] flex items-center">
           <FiAlertCircle className="h-5 w-5 mr-2" />
           {error}
         </div>
@@ -240,19 +240,19 @@ export default function BranchManagement() {
       )}
 
       {/* Search and Filter Bar */}
-      <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+      <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiSearch className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                <FiSearch className="h-4 w-4 text-[var(--text-muted)]" />
               </div>
               <input
                 type="text"
                 placeholder="Search branches by name or code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full pl-10 pr-4 py-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
               />
             </div>
           </div>
@@ -260,7 +260,7 @@ export default function BranchManagement() {
             <select 
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500"
+              className="px-4 py-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             >
               <option value="">All Types</option>
               <option value="operational">Operational</option>
@@ -270,7 +270,7 @@ export default function BranchManagement() {
             <select 
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500"
+              className="px-4 py-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             >
               <option value="">All Status</option>
               <option value="active">Active</option>
@@ -281,27 +281,27 @@ export default function BranchManagement() {
       </div>
 
       {/* Branches Grid - Card View */}
-      <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+      <div className="rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
         <div className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Branches ({branches.length})</h3>
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">All Branches ({branches.length})</h3>
             <div className="flex items-center gap-2">
               <button 
-              onClick={() => setViewMode('card')}
-              className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
-                viewMode === 'card'
-                  ? 'border-red-600 bg-red-600 text-white'
-                  : 'border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-700 dark:text-dark-200'
-              }`}>
+                onClick={() => setViewMode('card')}
+                className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                  viewMode === 'card'
+                    ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                    : 'border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]'
+                }`}>
                 Card View
               </button>
               <button 
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
-                viewMode === 'table'
-                  ? 'border-red-600 bg-red-600 text-white'
-                  : 'border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-700 dark:text-dark-200'
-              }`}>
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                  viewMode === 'table'
+                    ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                    : 'border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]'
+                }`}>
                 Table View
               </button>
             </div>
@@ -311,30 +311,41 @@ export default function BranchManagement() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-dark-700">
-                    <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Branch Code</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Branch Name</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Type</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Users</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Status</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-900 dark:text-white">Actions</th>
+                  <tr className="border-b border-[var(--stroke)]/70 bg-[var(--card-hover)]">
+                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Branch Code</th>
+                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Branch Name</th>
+                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Type</th>
+                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Users</th>
+                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Status</th>
+                    <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-[var(--card-bg)]">
                   {branches.map((branch) => (
-                    <tr key={branch.branch_code} className="border-b border-gray-100 dark:border-dark-700 hover:bg-gray-50 dark:hover:bg-dark-700">
-                      <td className="py-3 px-4 text-gray-900 dark:text-white font-medium">{branch.branch_code}</td>
-                      <td className="py-3 px-4 text-gray-900 dark:text-white">{branch.branch_name}</td>
-                      <td className="py-3 px-4 text-gray-600 dark:text-dark-400">{branch.branch_type || 'Operational'}</td>
-                      <td className="py-3 px-4 text-gray-600 dark:text-dark-400">
-                        {users.filter(u => u.branch_code === branch.branch_code).length} users
+                    <tr
+                      key={branch.branch_code}
+                      className="border-b border-[var(--stroke)]/60 hover:bg-[var(--card-bg-opaque)]"
+                    >
+                      <td className="py-3 px-4 text-[var(--text-primary)] font-medium">
+                        {branch.branch_code}
+                      </td>
+                      <td className="py-3 px-4 text-[var(--text-primary)]">
+                        {branch.branch_name}
+                      </td>
+                      <td className="py-3 px-4 text-[var(--text-secondary)]">
+                        {branch.branch_type || 'Operational'}
+                      </td>
+                      <td className="py-3 px-4 text-[var(--text-secondary)]">
+                        {users.filter((u) => u.branch_code === branch.branch_code).length} users
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          branch.is_active 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            branch.is_active
+                              ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                              : 'bg-[var(--error-muted)] text-[var(--error)]'
+                          }`}
+                        >
                           {branch.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
@@ -345,7 +356,7 @@ export default function BranchManagement() {
                               setSelectedBranch(branch)
                               setShowUserAssignment(true)
                             }}
-                            className="p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors duration-200"
+                            className="p-2 rounded-lg text-[var(--accent)] hover:bg-[var(--accent-muted)]/40 transition-colors duration-200"
                             title="Assign Users"
                           >
                             <FiUsers className="w-4 h-4" />
@@ -354,21 +365,21 @@ export default function BranchManagement() {
                             onClick={() => {
                               setSelectedBranchForInsights(branch)
                             }}
-                            className="p-2 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors duration-200"
+                            className="p-2 rounded-lg text-[var(--info)] hover:bg-[var(--info-muted)]/40 transition-colors duration-200"
                             title="View Performance"
                           >
                             <FiBarChart className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => setEditingBranch(branch)}
-                            className="p-2 text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded-lg transition-colors duration-200"
+                            className="p-2 rounded-lg text-[var(--warn)] hover:bg-[var(--warn-muted)]/40 transition-colors duration-200"
                             title="Edit Branch"
                           >
                             <FiEdit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteBranch(branch.branch_code)}
-                            className="p-2 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors duration-200"
+                            className="p-2 rounded-lg text-[var(--error)] hover:bg-[var(--error-muted)]/40 transition-colors duration-200"
                             title="Delete Branch"
                           >
                             <FiTrash2 className="w-4 h-4" />
@@ -384,97 +395,106 @@ export default function BranchManagement() {
           
           {viewMode === 'card' && (
             loading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-              <span className="ml-2 text-gray-600 dark:text-dark-400">Loading branches...</span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {branches.map((branch) => {
-                const branchUsers = users.filter(u => u.branch_code === branch.branch_code)
-                return (
-                  <div key={branch.branch_code} className="bg-gradient-to-br from-white to-gray-50 dark:from-dark-700 dark:to-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-dark-600 hover:shadow-md transition-all duration-200 p-5">
-                    {/* Branch Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <FiMapPin className="w-6 h-6 text-red-600 dark:text-red-400" />
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                <span className="ml-2 text-[var(--text-secondary)]">Loading branches...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {branches.map((branch) => {
+                  const branchUsers = users.filter((u) => u.branch_code === branch.branch_code)
+                  return (
+                    <div
+                      key={branch.branch_code}
+                      className="rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg-opaque)] hover:bg-[var(--card-hover)] transition-all duration-200 p-5"
+                    >
+                      {/* Branch Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 bg-[var(--error-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                            <FiMapPin className="w-6 h-6 text-[var(--error)]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-lg font-bold text-[var(--text-primary)] truncate">
+                              {branch.branch_name}
+                            </h4>
+                            <p className="text-sm text-[var(--text-secondary)]">{branch.branch_code}</p>
+                            <span
+                              className={`inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${
+                                branch.is_active
+                                  ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                                  : 'bg-[var(--error-muted)] text-[var(--error)]'
+                              }`}
+                            >
+                              {branch.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate">{branch.branch_name}</h4>
-                          <p className="text-sm text-gray-500 dark:text-dark-400">{branch.branch_code}</p>
-                          <span className={`inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${
-                            branch.is_active 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                          }`}>
-                            {branch.is_active ? 'Active' : 'Inactive'}
-                          </span>
+                      </div>
+
+                      {/* Branch Stats */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="p-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)]">
+                          <div className="text-xs text-[var(--text-secondary)] mb-1">Users</div>
+                          <div className="text-xl font-bold text-[var(--text-primary)]">{branchUsers.length}</div>
+                        </div>
+                        <div className="p-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)]">
+                          <div className="text-xs text-[var(--text-secondary)] mb-1">Type</div>
+                          <div className="text-sm font-semibold text-[var(--text-primary)] capitalize">
+                            {branch.branch_type || 'Operational'}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Branch Stats */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-white dark:bg-dark-800 p-3 rounded-lg border border-gray-200 dark:border-dark-600">
-                        <div className="text-xs text-gray-500 dark:text-dark-400 mb-1">Users</div>
-                        <div className="text-xl font-bold text-gray-900 dark:text-white">{branchUsers.length}</div>
-                      </div>
-                      <div className="bg-white dark:bg-dark-800 p-3 rounded-lg border border-gray-200 dark:border-dark-600">
-                        <div className="text-xs text-gray-500 dark:text-dark-400 mb-1">Type</div>
-                        <div className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{branch.branch_type || 'Operational'}</div>
+                      {/* Branch Info */}
+                      {branch.address && (
+                        <div className="mb-4 text-sm text-[var(--text-secondary)] line-clamp-2">
+                          {branch.address}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-2 pt-4 border-t border-[var(--stroke)]/70">
+                        <button
+                          onClick={() => {
+                            setSelectedBranch(branch)
+                            setShowUserAssignment(true)
+                          }}
+                          className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[var(--accent-muted)] text-[var(--accent)] hover:bg-[var(--accent-muted)]/80 text-sm font-medium transition-colors"
+                          title="Assign Users"
+                        >
+                          <FiUsers className="w-4 h-4 mr-1.5" />
+                          Users ({branchUsers.length})
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedBranchForInsights(branch)
+                          }}
+                          className="px-3 py-2 rounded-lg bg-[var(--info-muted)] text-[var(--info)] hover:bg-[var(--info-muted)]/80 transition-colors"
+                          title="View Performance"
+                        >
+                          <FiBarChart className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingBranch(branch)}
+                          className="px-3 py-2 rounded-lg bg-[var(--warn-muted)] text-[var(--warn)] hover:bg-[var(--warn-muted)]/80 transition-colors"
+                          title="Edit Branch"
+                        >
+                          <FiEdit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBranch(branch.branch_code)}
+                          className="px-3 py-2 rounded-lg bg-[var(--error-muted)] text-[var(--error)] hover:bg-[var(--error-muted)]/80 transition-colors"
+                          title="Delete Branch"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-
-                    {/* Branch Info */}
-                    {branch.address && (
-                      <div className="mb-4 text-sm text-gray-600 dark:text-dark-400 line-clamp-2">
-                        {branch.address}
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-dark-600">
-                      <button
-                        onClick={() => {
-                          setSelectedBranch(branch)
-                          setShowUserAssignment(true)
-                        }}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 text-sm font-medium transition-colors"
-                        title="Assign Users"
-                      >
-                        <FiUsers className="w-4 h-4 mr-1.5" />
-                        Users ({branchUsers.length})
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedBranchForInsights(branch)
-                        }}
-                        className="px-3 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
-                        title="View Performance"
-                      >
-                        <FiBarChart className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setEditingBranch(branch)}
-                        className="px-3 py-2 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors"
-                        title="Edit Branch"
-                      >
-                        <FiEdit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteBranch(branch.branch_code)}
-                        className="px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
-                        title="Delete Branch"
-                      >
-                        <FiTrash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
+                  )
+                })}
+              </div>
+            )
           )}
 
           {!loading && branches.length === 0 && (
@@ -582,28 +602,28 @@ function CreateBranchForm({ onSubmit, onCancel }) {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New Branch</h3>
+    <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
+      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Create New Branch</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch Code *</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Code *</label>
             <input
               type="text"
               value={formData.branch_code}
               onChange={(e) => setFormData(prev => ({ ...prev, branch_code: e.target.value.toUpperCase() }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
               placeholder="e.g., MEDAK"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch Name *</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Name *</label>
             <input
               type="text"
               value={formData.branch_name}
               onChange={(e) => setFormData(prev => ({ ...prev, branch_name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
               placeholder="e.g., Medak Branch"
               required
             />
@@ -611,11 +631,11 @@ function CreateBranchForm({ onSubmit, onCancel }) {
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch Type</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Type</label>
           <select
             value={formData.branch_type}
             onChange={(e) => setFormData(prev => ({ ...prev, branch_type: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
           >
             <option value="operational">Operational</option>
             <option value="head_office">Head Office</option>
@@ -624,11 +644,11 @@ function CreateBranchForm({ onSubmit, onCancel }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Address</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Address</label>
           <textarea
             value={formData.address}
             onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             rows="3"
             placeholder="Branch address"
           />
@@ -636,34 +656,34 @@ function CreateBranchForm({ onSubmit, onCancel }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Phone</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Phone</label>
             <input
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
               placeholder="Phone number"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Email</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
               placeholder="Email address"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch Password</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Password</label>
           <input
             type="password"
             value={formData.password}
             onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             placeholder="Branch login password"
             required
           />
@@ -673,7 +693,7 @@ function CreateBranchForm({ onSubmit, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-gray-600 dark:text-dark-400 hover:text-gray-800 dark:hover:text-dark-200 transition-colors duration-200"
+            className="px-4 py-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-200"
           >
             Cancel
           </button>
@@ -708,26 +728,26 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Edit Branch: {branch.branch_code}</h3>
+    <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
+      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Edit Branch: {branch.branch_code}</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch Name *</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Name *</label>
           <input
             type="text"
             value={formData.branch_name}
             onChange={(e) => setFormData(prev => ({ ...prev, branch_name: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             required
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch Type</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Type</label>
           <select
             value={formData.branch_type}
             onChange={(e) => setFormData(prev => ({ ...prev, branch_type: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
           >
             <option value="operational">Operational</option>
             <option value="head_office">Head Office</option>
@@ -736,43 +756,43 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Address</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Address</label>
           <textarea
             value={formData.address}
             onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             rows="3"
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Phone</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Phone</label>
             <input
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Email</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">New Password (leave empty to keep current)</label>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">New Password (leave empty to keep current)</label>
           <input
             type="password"
             value={formData.password}
             onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             placeholder="Enter new password"
           />
         </div>
@@ -781,7 +801,7 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-gray-600 dark:text-dark-400 hover:text-gray-800 dark:hover:text-dark-200 transition-colors duration-200"
+            className="px-4 py-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-200"
           >
             Cancel
           </button>
@@ -856,15 +876,15 @@ function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+      <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-xl shadow-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
         <div className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
               Assign Users to {branch.branch_name}
             </h3>
-            <button
+              <button
               onClick={onCancel}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors duration-200"
             >
               <FiX className="w-5 h-5" />
             </button>
@@ -874,21 +894,21 @@ function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
           <div className="mb-4 space-y-3">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiSearch className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                <FiSearch className="h-4 w-4 text-[var(--text-muted)]" />
               </div>
               <input
                 type="text"
                 placeholder="Search users by name, email, or employee code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
               />
             </div>
             <div className="flex gap-2">
               <select
                 value={filterRole}
                 onChange={(e) => setFilterRole(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                className="flex-1 px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] text-sm focus:outline-none"
               >
                 <option value="">All Roles</option>
                 <option value="employee">Employee</option>
@@ -898,7 +918,7 @@ function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                className="flex-1 px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] text-sm focus:outline-none"
               >
                 <option value="">All Status</option>
                 <option value="active">Active Only</option>
@@ -907,7 +927,7 @@ function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
               <button
                 type="button"
                 onClick={handleSelectAll}
-                className="px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-700 dark:text-dark-200 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-600 transition-colors text-sm"
+                className="px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] transition-colors text-sm"
               >
                 {selectedUserIds.length === filteredUsers.length && filteredUsers.length > 0 ? 'Deselect All' : 'Select All'}
               </button>

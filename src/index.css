@@ -1,4 +1,6 @@
-/* Import the multistep form styles */
+/* Design tokens – Apple-inspired glassmorphism */
+@import './theme/theme.css';
+/* Legacy / receipt / print */
 @import './styles.css';
 
 @tailwind base;

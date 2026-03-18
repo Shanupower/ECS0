@@ -35,6 +35,8 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
   const [sumAssured, setSumAssured] = useState('')
   const [term, setTerm] = useState('')
   const [premiumPayTerm, setPremiumPayTerm] = useState('')
+  const [premiumPaymentTermType, setPremiumPaymentTermType] = useState('') // '' | 'Single Premium' | 'Limited Pay' | '5' | '10' | '12' | '15' | '20' | '25' | '30' | 'Other'
+  const [premiumPayTermOther, setPremiumPayTermOther] = useState('') // when type === 'Other'
   const [paymentSchedule, setPaymentSchedule] = useState('')
 
   const [ridersLoading, setRidersLoading] = useState(false)
@@ -89,15 +91,44 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
     const productName = product?.product_name || ''
     const insuranceAmount = parseFloat(premiumAmount)
 
-    // CC/SI: for Life use Fresh vs Renewal rates based on txnType; for Health/General use single cc/si
+    // Resolve Premium Payment Term for payload (used by backend for PPT-based CC/SI)
+    const pptValue = premiumPaymentTermType === 'Other'
+      ? (premiumPayTermOther ? parseFloat(premiumPayTermOther) : null)
+      : (premiumPaymentTermType === 'Single Premium' || premiumPaymentTermType === 'Limited Pay'
+          ? premiumPaymentTermType
+          : (premiumPaymentTermType ? parseFloat(premiumPaymentTermType) : (premiumPayTerm ? parseFloat(premiumPayTerm) : null)))
+    const insurancePremiumPaymentTerm = pptValue != null && pptValue !== '' ? pptValue : (premiumPayTerm ? parseFloat(premiumPayTerm) : null)
+
+    // CC/SI: use ppt_slabs when product has them (Life PPT-based); else Fresh/Renewal or flat product cc/si
     const isLife = (product?.category || '').toLowerCase() === 'life'
-    const hasFreshRenewalRates = isLife && (product?.cc_fresh != null || product?.cc_renewal != null)
-    const ccPercent = hasFreshRenewalRates
-      ? (txnType === 'Renewal' ? parseFloat(product?.cc_renewal ?? product?.cc ?? 0) : parseFloat(product?.cc_fresh ?? product?.cc ?? 0))
-      : parseFloat(product?.cc ?? 0)
-    const siPercent = hasFreshRenewalRates
-      ? (txnType === 'Renewal' ? parseFloat(product?.si_renewal ?? product?.si ?? 0) : parseFloat(product?.si_fresh ?? product?.si ?? 0))
-      : parseFloat(product?.si ?? 0)
+    const pptSlabs = product?.ppt_slabs && Array.isArray(product.ppt_slabs) ? product.ppt_slabs : []
+    let ccPercent = parseFloat(product?.cc ?? 0)
+    let siPercent = parseFloat(product?.si ?? 0)
+    if (isLife && pptSlabs.length > 0 && (insurancePremiumPaymentTerm !== null && insurancePremiumPaymentTerm !== undefined || insurancePremiumPaymentTerm === 'Single Premium' || insurancePremiumPaymentTerm === 'Limited Pay')) {
+      const singleOrZero = insurancePremiumPaymentTerm === 'Single Premium' || insurancePremiumPaymentTerm === 0 || insurancePremiumPaymentTerm === ''
+      const limitedPay = insurancePremiumPaymentTerm === 'Limited Pay'
+      const pptYears = typeof insurancePremiumPaymentTerm === 'number' && !Number.isNaN(insurancePremiumPaymentTerm) ? insurancePremiumPaymentTerm : null
+      let slab = null
+      if (singleOrZero) slab = pptSlabs.find(s => s.ppt_type === 'Single Premium')
+      else if (limitedPay) slab = pptSlabs.find(s => s.ppt_type === 'Limited Pay')
+      else if (pptYears != null) {
+        slab = pptSlabs.find(s => {
+          if (s.ppt_type !== 'PPT') return false
+          const min = s.ppt_years_min != null ? Number(s.ppt_years_min) : null
+          const max = s.ppt_years_max != null ? Number(s.ppt_years_max) : null
+          if (min != null && pptYears < min) return false
+          if (max != null && pptYears > max) return false
+          return true
+        })
+      }
+      if (slab) {
+        ccPercent = parseFloat(slab.cc ?? product?.cc ?? 0)
+        siPercent = parseFloat(slab.si ?? product?.si ?? 0)
+      }
+    } else if (isLife && (product?.cc_fresh != null || product?.cc_renewal != null)) {
+      ccPercent = txnType === 'Renewal' ? parseFloat(product?.cc_renewal ?? product?.cc ?? 0) : parseFloat(product?.cc_fresh ?? product?.cc ?? 0)
+      siPercent = txnType === 'Renewal' ? parseFloat(product?.si_renewal ?? product?.si ?? 0) : parseFloat(product?.si_fresh ?? product?.si ?? 0)
+    }
     const ccAmount = Math.round((ccPercent / 100) * insuranceAmount * 100) / 100
     const siAmount = Math.round((siPercent / 100) * insuranceAmount * 100) / 100
 
@@ -132,7 +163,8 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
       insurance_policy_period: simpleForm && policyPeriod ? parseFloat(policyPeriod) || null : (policyPeriod || null),
       insurance_sum_assured: sumAssured ? parseFloat(sumAssured) : null,
       insurance_term: term ? parseFloat(term) : null,
-      insurance_premium_pay_term: premiumPayTerm ? parseFloat(premiumPayTerm) : null,
+      insurance_premium_pay_term: typeof insurancePremiumPaymentTerm === 'number' ? insurancePremiumPaymentTerm : (premiumPayTerm ? parseFloat(premiumPayTerm) : null),
+      insurance_premium_payment_term: insurancePremiumPaymentTerm,
       insurance_payment_schedule: paymentSchedule || null,
       insurance_money_back: product?.money_back || false,
       insurance_old_policy_no: txnType === 'Renewal' ? (oldRenewalPolicyNo || '').trim() || null : null,
@@ -324,14 +356,40 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
 
             <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
               <div className="col" style={{ flex: '1 1 320px' }}>
-                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Premium Pay Term (Years)</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={premiumPayTerm}
-                  onChange={e => setPremiumPayTerm(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Premium Payment Term (PPT)</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Used for CC/SI calculation when product has PPT slabs</p>
+                <select
+                  value={premiumPaymentTermType}
+                  onChange={e => {
+                    const v = e.target.value
+                    setPremiumPaymentTermType(v)
+                    if (v && v !== 'Other') setPremiumPayTerm(v === 'Single Premium' || v === 'Limited Pay' ? '' : v)
+                  }}
+                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select PPT...</option>
+                  <option value="Single Premium">Single Premium</option>
+                  <option value="Limited Pay">Limited Pay</option>
+                  <option value="5">5 years</option>
+                  <option value="10">10 years</option>
+                  <option value="12">12 years</option>
+                  <option value="15">15 years</option>
+                  <option value="20">20 years</option>
+                  <option value="25">25 years</option>
+                  <option value="30">30 years</option>
+                  <option value="Other">Other (enter years)</option>
+                </select>
+                {premiumPaymentTermType === 'Other' && (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={premiumPayTermOther || premiumPayTerm}
+                    onChange={e => { setPremiumPayTermOther(e.target.value); setPremiumPayTerm(e.target.value) }}
+                    placeholder="Years"
+                    className="mt-2 w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                )}
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>
                 <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Payment Schedule</label>

@@ -89,13 +89,12 @@ export default function MultiSelect({
                   className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-md text-sm"
                 >
                   {label}
-                  <button
-                    type="button"
+                  <span
                     onClick={(e) => handleRemove(e, optValue)}
-                    className="hover:bg-red-200 dark:hover:bg-red-900/50 rounded-full p-0.5"
+                    className="hover:bg-red-200 dark:hover:bg-red-900/50 rounded-full p-0.5 cursor-pointer"
                   >
                     <FiX className="w-3 h-3" />
-                  </button>
+                  </span>
                 </span>
               )
             })}

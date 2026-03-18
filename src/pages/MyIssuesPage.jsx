@@ -191,26 +191,26 @@ export default function MyIssuesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <FiAlertTriangle className="w-6 h-6 text-red-600 mr-3" />
+          <FiAlertTriangle className="w-6 h-6 text-[var(--warn)] mr-3" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">My Issues</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">View issues you have reported</p>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">My Issues</h1>
+            <p className="text-[var(--text-secondary)] mt-1">View issues you have reported</p>
           </div>
         </div>
         <button
           onClick={loadIssues}
           disabled={loading}
-          className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-700 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
+          className="flex items-center space-x-2 px-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] hover:bg-[var(--card-hover)] transition-colors disabled:opacity-50"
         >
-          <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
+          <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[var(--accent)]' : 'text-[var(--text-muted)]'}`} />
+          <span className="text-sm font-medium text-[var(--text-secondary)]">Refresh</span>
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center space-x-2">
-          <FiAlertCircle className="text-red-500" size={20} />
-          <span className="text-red-700 dark:text-red-300">{error}</span>
+        <div className="border border-[var(--error)]/70 bg-[var(--error-muted)] rounded-lg p-4 flex items-center space-x-2 text-[var(--error)]">
+          <FiAlertCircle size={20} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -218,29 +218,29 @@ export default function MyIssuesPage() {
         {/* Issues List */}
         <div className="lg:col-span-2 space-y-4">
           {/* Filters */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-4 space-y-4">
+          <div className="rounded-lg shadow p-4 space-y-4 border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex flex-wrap gap-4">
               <div className="flex-1 min-w-[200px]">
                 <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] w-4 h-4" />
                   <input
                     type="text"
                     placeholder="Search issues..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-dark-700 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
                   />
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <FiFilter className="text-gray-400" />
+                <FiFilter className="text-[var(--text-muted)]" />
                 <select
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value)
                     setPage(1)
                   }}
-                  className="px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 >
                   <option value="all">All Status</option>
                   <option value="open">Open</option>
@@ -253,41 +253,41 @@ export default function MyIssuesPage() {
           </div>
 
           {/* Issues Table */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow overflow-hidden">
+          <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
             {loading ? (
               <div className="p-8 text-center">
-                <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 dark:text-gray-400">Loading issues...</p>
+                <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto mb-2" />
+                <p className="text-[var(--text-muted)]">Loading issues...</p>
               </div>
             ) : filteredIssues.length === 0 ? (
               <div className="p-8 text-center">
-                <FiAlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 dark:text-gray-400">No issues found</p>
+                <FiAlertTriangle className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-2" />
+                <p className="text-[var(--text-muted)]">No issues found</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-dark-700">
+                  <thead className="bg-[var(--card-hover)]">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Title</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Priority</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Title</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Priority</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Created</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-dark-700">
+                  <tbody className="divide-y divide-[var(--stroke)]/70">
                     {filteredIssues.map((issue) => (
                       <tr 
                         key={issue.id} 
-                        className={`hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer ${selectedIssue?.id === issue.id ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                        className={`hover:bg-[var(--card-bg-opaque)] cursor-pointer ${selectedIssue?.id === issue.id ? 'bg-[var(--accent-muted)]/40' : ''}`}
                         onClick={() => viewIssue(issue)}
                       >
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">#{issue.id}</td>
+                        <td className="px-4 py-3 text-sm text-[var(--text-primary)]">#{issue.id}</td>
                         <td className="px-4 py-3 text-sm">
-                          <div className="font-medium text-gray-900 dark:text-gray-100">{issue.title}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">
+                          <div className="font-medium text-[var(--text-primary)]">{issue.title}</div>
+                          <div className="text-xs text-[var(--text-secondary)] truncate max-w-xs">
                             {issue.description}
                           </div>
                         </td>
@@ -302,7 +302,7 @@ export default function MyIssuesPage() {
                             <span className="ml-1 capitalize">{issue.status?.replace('_', ' ')}</span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
                           {formatDate(issue.created_at)}
                         </td>
                         <td className="px-4 py-3">
@@ -311,7 +311,7 @@ export default function MyIssuesPage() {
                               e.stopPropagation()
                               viewIssue(issue)
                             }}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            className="text-[var(--accent)] hover:text-[var(--accent)]/90"
                           >
                             <FiEye className="w-4 h-4" />
                           </button>
@@ -325,22 +325,22 @@ export default function MyIssuesPage() {
 
             {/* Pagination */}
             {total > pageSize && (
-              <div className="px-4 py-3 border-t border-gray-200 dark:border-dark-700 flex items-center justify-between">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
+              <div className="px-4 py-3 border-t border-[var(--stroke)] flex items-center justify-between bg-[var(--card-bg-opaque)]">
+                <div className="text-sm text-[var(--text-secondary)]">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} issues
                 </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="px-3 py-1 border border-gray-300 dark:border-dark-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark-700"
+                    className="px-3 py-1 border border-[var(--stroke)] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed bg-[var(--card-bg)] hover:bg-[var(--card-hover)] text-[var(--text-primary)]"
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setPage(p => p + 1)}
                     disabled={page * pageSize >= total}
-                    className="px-3 py-1 border border-gray-300 dark:border-dark-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark-700"
+                    className="px-3 py-1 border border-[var(--stroke)] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed bg-[var(--card-bg)] hover:bg-[var(--card-hover)] text-[var(--text-primary)]"
                   >
                     Next
                   </button>
@@ -353,32 +353,32 @@ export default function MyIssuesPage() {
         {/* Issue Details Sidebar */}
         {selectedIssue && (
           <div className="lg:col-span-1">
-            <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-6 space-y-4 sticky top-4">
+            <div className="rounded-lg shadow p-6 space-y-4 sticky top-4 border border-[var(--stroke)] bg-[var(--card-bg)]">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Issue #{selectedIssue.id}</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Issue #{selectedIssue.id}</h2>
                 <button
                   onClick={() => setSelectedIssue(null)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 >
                   <FiX className="w-5 h-5" />
                 </button>
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</h3>
-                <p className="text-gray-900 dark:text-gray-100">{selectedIssue.title}</p>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Title</h3>
+                <p className="text-[var(--text-primary)]">{selectedIssue.title}</p>
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</h3>
-                <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{selectedIssue.description}</p>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Description</h3>
+                <p className="text-[var(--text-primary)] whitespace-pre-wrap">{selectedIssue.description}</p>
               </div>
 
               {selectedIssue.receipt_draft_id && (
                 <div>
                   <button
                     onClick={() => navigate(`/receipts?draftId=${selectedIssue.receipt_draft_id}`)}
-                    className="w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:bg-[var(--accent)]/90 transition-colors"
                   >
                     Recreate Receipt from Draft
                   </button>
@@ -387,13 +387,13 @@ export default function MyIssuesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Priority</h3>
                   <span className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${priorityColors[selectedIssue.priority] || priorityColors.medium}`}>
                     {selectedIssue.priority || 'medium'}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Status</h3>
                   <span className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${statusColors[selectedIssue.status] || statusColors.open}`}>
                     {getStatusIcon(selectedIssue.status)}
                     <span className="ml-1 capitalize">{selectedIssue.status?.replace('_', ' ')}</span>
@@ -402,13 +402,13 @@ export default function MyIssuesPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Created</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{formatDate(selectedIssue.created_at)}</p>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Created</h3>
+                <p className="text-sm text-[var(--text-secondary)]">{formatDate(selectedIssue.created_at)}</p>
               </div>
 
               {selectedIssue.photo && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Photo</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Photo</h3>
                   <div className="relative">
                     {(() => {
                       // Get filename from photo object, or extract from file_path if needed
@@ -425,13 +425,13 @@ export default function MyIssuesPage() {
                             issueId={selectedIssue.id}
                             filename={filename}
                             alt="Issue photo"
-                            className="w-full rounded-lg border border-gray-200 dark:border-dark-700"
+                            className="w-full rounded-lg border border-[var(--stroke)]"
                             token={token}
                           />
                         )
                       } else {
                         return (
-                          <div className="text-sm text-gray-500 dark:text-gray-400 p-2 bg-gray-50 dark:bg-dark-700 rounded">
+                          <div className="text-sm text-[var(--text-secondary)] p-2 bg-[var(--card-bg-opaque)] rounded">
                             Photo filename not available
                           </div>
                         )
@@ -442,17 +442,17 @@ export default function MyIssuesPage() {
               )}
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fixes/Responses</h3>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Fixes/Responses</h3>
                 <div className="space-y-3 max-h-64 overflow-y-auto">
                   {selectedIssue.fixes && selectedIssue.fixes.length > 0 ? (
                     selectedIssue.fixes.map((fix, idx) => (
-                      <div key={idx} className="bg-gray-50 dark:bg-dark-700 rounded-lg p-3">
-                        <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{fix.text}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDate(fix.created_at)}</p>
+                      <div key={idx} className="rounded-lg p-3 bg-[var(--card-bg-opaque)]">
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{fix.text}</p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-1">{formatDate(fix.created_at)}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No fixes/responses yet</p>
+                    <p className="text-sm text-[var(--text-secondary)]">No fixes/responses yet</p>
                   )}
                 </div>
               </div>

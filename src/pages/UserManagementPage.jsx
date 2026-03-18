@@ -14,13 +14,15 @@ import {
   FiMapPin,
   FiShield,
   FiSearch,
-  FiChevronDown
+  FiChevronDown,
+  FiDatabase
 } from 'react-icons/fi'
 
 export default function UserManagementPage() {
   const { token, user } = useAuth()
   const [users, setUsers] = useState([])
   const [branches, setBranches] = useState([])
+  const [branchesError, setBranchesError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -32,6 +34,7 @@ export default function UserManagementPage() {
     email: '',
     branch: '',
     role: 'employee',
+    monthly_target: '',
     password: ''
   })
   const [fieldErrors, setFieldErrors] = useState({})
@@ -63,12 +66,14 @@ export default function UserManagementPage() {
   const loadBranches = async () => {
     if (!token) return
     
+    setBranchesError('')
     try {
       const branchesData = await api.listBranches(token)
       setBranches(Array.isArray(branchesData) ? branchesData : [])
     } catch (err) {
       console.error('Failed to load branches:', err)
-      // Don't show error to user, just log it
+      setBranchesError(err.message || 'Failed to load branches')
+      setBranches([])
     }
   }
 
@@ -87,6 +92,8 @@ export default function UserManagementPage() {
           trimmedData[key] = typeof value === 'string' ? value.trim() : value
         }
       }
+      if (trimmedData.monthly_target === '') trimmedData.monthly_target = null
+      else if (trimmedData.monthly_target != null) trimmedData.monthly_target = Number(trimmedData.monthly_target)
       
       await api.createUser(token, trimmedData)
       await loadUsers()
@@ -122,6 +129,8 @@ export default function UserManagementPage() {
       
       const newPassword = trimmedData.password
       delete trimmedData.password
+      if (trimmedData.monthly_target === '') trimmedData.monthly_target = null
+      else if (trimmedData.monthly_target != null) trimmedData.monthly_target = Number(trimmedData.monthly_target)
       
       await api.updateUser(token, editingUser.id, trimmedData)
       
@@ -159,6 +168,16 @@ export default function UserManagementPage() {
     }
   }
 
+  const handleDeleteUserRelatedData = async (userId) => {
+    if (!confirm('This will permanently delete this user’s receipt drafts, assigned tasks, and leads. Are you sure you want to continue?')) return
+    try {
+      await api.deleteUserRelatedData(token, userId)
+      alert('User related drafts, tasks, and leads deleted successfully.')
+    } catch (err) {
+      alert('Failed to delete user related data: ' + err.message)
+    }
+  }
+
   const handleChangePassword = async (userId, newPassword) => {
     if (!newPassword) {
       alert('Please enter a new password')
@@ -180,9 +199,25 @@ export default function UserManagementPage() {
       email: '',
       branch: '',
       role: 'employee',
+      monthly_target: '',
       password: ''
     })
     setFieldErrors({})
+  }
+
+  // Branch option value is branch_code (e.g. "1", "2", "3"); display uses branch_name for understanding.
+  const getBranchFormValue = (userBranch, userBranchCode) => {
+    const raw = userBranch != null ? String(userBranch).trim() : ''
+    const codeRaw = userBranchCode != null ? String(userBranchCode).trim() : ''
+    if (!raw && !codeRaw) return ''
+    const match = branchOptions.find(
+      (b) =>
+        String(b.branch_code) === raw ||
+        String(b.branch_name) === raw ||
+        String(b.branch_code) === codeRaw ||
+        String(b.branch_name) === codeRaw
+    )
+    return match ? (match.branch_code || match.branch_name) : raw || codeRaw
   }
 
   const startEdit = (user) => {
@@ -191,14 +226,48 @@ export default function UserManagementPage() {
       emp_code: user.emp_code || '',
       name: user.name || '',
       email: user.email || '',
-      branch: user.branch || '',
+      branch: getBranchFormValue(user.branch, user.branch_code),
       role: user.role || 'employee',
+      monthly_target: user.monthly_target != null ? String(user.monthly_target) : '',
       password: ''
     })
   }
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN')
+  }
+
+  // Use branches from API; if empty, derive from users so dropdown still works (e.g. when branches API fails)
+  // Values are branch_code (1, 2, 3); labels are branch_name for normalised display.
+  const branchOptions = branches.length > 0
+    ? branches
+    : (() => {
+        const seen = new Set()
+        const fromUsers = []
+        users.forEach((u) => {
+          const b = u.branch != null ? String(u.branch).trim() : ''
+          if (b && !seen.has(b)) {
+            seen.add(b)
+            fromUsers.push({ branch_code: b, branch_name: b })
+          }
+        })
+        return fromUsers.sort((a, b) => (a.branch_name || '').localeCompare(b.branch_name || ''))
+      })()
+
+  // Display normalised branch name for understanding; avoid showing bare codes like "1", "2".
+  const getUserBranchDisplay = (branchValue) => {
+    if (!branchValue) return ''
+    const raw = String(branchValue)
+    const match = branchOptions.find(
+      (b) =>
+        String(b.branch_code) === raw ||
+        String(b.branch_name) === raw
+    )
+    const label = match?.branch_name
+    // If we have a real name and it's not just the code, show it
+    if (label && label !== String(match.branch_code)) return label
+    // Otherwise, show a friendlier label based on the code
+    return `Branch ${raw}`
   }
 
   // Filter users based on search query
@@ -215,7 +284,7 @@ export default function UserManagementPage() {
   if (!isAdmin) {
     return (
       <div className="text-center py-12">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg inline-flex items-center">
+        <div className="inline-flex items-center px-6 py-4 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--error)]">
           <FiAlertCircle className="w-5 h-5 mr-2" />
           Access denied. Admin privileges required.
         </div>
@@ -230,15 +299,15 @@ export default function UserManagementPage() {
         <div className="flex items-center">
           <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 mr-2 sm:mr-3" />
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">User Management</h1>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">Manage system users and permissions</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">User Management</h1>
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">Manage system users and permissions</p>
           </div>
         </div>
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
           <button
             onClick={loadUsers}
             disabled={loading}
-            className="inline-flex items-center px-3 py-2 sm:px-4 border border-gray-300 dark:border-gray-600 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+            className="inline-flex items-center px-3 py-2 sm:px-4 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-xs sm:text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50"
           >
             <FiRefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
@@ -256,7 +325,7 @@ export default function UserManagementPage() {
 
       {loading && (
         <div className="text-center py-12">
-          <div className="inline-flex items-center px-4 py-2 text-gray-500 dark:text-gray-400">
+          <div className="inline-flex items-center px-4 py-2 text-[var(--text-muted)]">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 mr-3"></div>
             Loading users...
           </div>
@@ -264,7 +333,7 @@ export default function UserManagementPage() {
       )}
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
+        <div className="border border-[var(--error)]/60 bg-[var(--error-muted)] text-[var(--error)] px-4 py-3 rounded-lg flex items-center">
           <FiAlertCircle className="h-5 w-5 mr-2" />
           {error}
         </div>
@@ -272,17 +341,17 @@ export default function UserManagementPage() {
 
       {/* Search Bar */}
       {!loading && !error && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] p-4">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+              <FiSearch className="h-5 w-5 text-[var(--text-muted)]" />
             </div>
-            <input
+              <input
               type="text"
               placeholder="Search by name, email, employee code, or branch..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             />
           </div>
         </div>
@@ -291,10 +360,10 @@ export default function UserManagementPage() {
       {/* Create/Edit User Modal */}
       {(showCreateForm || editingUser) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-md border border-gray-200 dark:border-gray-700">
+          <div className="bg-[var(--card-bg)] p-8 rounded-xl shadow-lg w-full max-w-md border border-[var(--stroke)]">
             <div className="flex items-center mb-6">
               <FiUser className="w-5 h-5 text-red-600 mr-2" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <h3 className="text-xl font-semibold text-[var(--text-primary)]">
                 {editingUser ? 'Edit User' : 'Create User'}
               </h3>
             </div>
@@ -302,17 +371,17 @@ export default function UserManagementPage() {
             <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser} className="space-y-4">
               {/* General error message */}
               {fieldErrors._general && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start">
-                  <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-2 flex-shrink-0" />
-                  <span className="text-sm text-red-700 dark:text-red-300">{fieldErrors._general}</span>
+                <div className="bg-[var(--error-muted)] border border-[var(--error)]/70 rounded-lg p-3 flex items-start">
+                  <FiAlertCircle className="h-5 w-5 text-[var(--error)] mt-0.5 mr-2 flex-shrink-0" />
+                  <span className="text-sm text-[var(--error)]">{fieldErrors._general}</span>
                 </div>
               )}
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Employee Code</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Employee Code</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiUser className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <FiUser className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
                   <input
                     type="text"
@@ -330,14 +399,14 @@ export default function UserManagementPage() {
                     }}
                     className={`w-full pl-10 pr-4 py-3 border ${
                       fieldErrors.emp_code 
-                        ? 'border-red-500 dark:border-red-500' 
-                        : 'border-gray-300 dark:border-gray-600'
-                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
+                        ? 'border-[var(--error)]' 
+                        : 'border-[var(--stroke)]'
+                    } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                     required
                   />
                 </div>
                 {fieldErrors.emp_code && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                  <p className="mt-1 text-sm text-[var(--error)] flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.emp_code}
                   </p>
@@ -345,7 +414,7 @@ export default function UserManagementPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Name</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -361,13 +430,13 @@ export default function UserManagementPage() {
                   }}
                   className={`w-full p-3 border ${
                     fieldErrors.name 
-                      ? 'border-red-500 dark:border-red-500' 
-                      : 'border-gray-300 dark:border-gray-600'
-                  } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
+                      ? 'border-[var(--error)]' 
+                      : 'border-[var(--stroke)]'
+                  } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                   required
                 />
                 {fieldErrors.name && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                  <p className="mt-1 text-sm text-[var(--error)] flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.name}
                   </p>
@@ -375,10 +444,10 @@ export default function UserManagementPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiMail className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <FiMail className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
                   <input
                     type="email"
@@ -395,14 +464,14 @@ export default function UserManagementPage() {
                     }}
                     className={`w-full pl-10 pr-4 py-3 border ${
                       fieldErrors.email 
-                        ? 'border-red-500 dark:border-red-500' 
-                        : 'border-gray-300 dark:border-gray-600'
-                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
+                        ? 'border-[var(--error)]' 
+                        : 'border-[var(--stroke)]'
+                    } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                     required
                   />
                 </div>
                 {fieldErrors.email && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                  <p className="mt-1 text-sm text-[var(--error)] flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.email}
                   </p>
@@ -410,10 +479,10 @@ export default function UserManagementPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Branch</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-                    <FiMapPin className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <FiMapPin className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
                   <select
                     value={formData.branch}
@@ -429,24 +498,34 @@ export default function UserManagementPage() {
                     }}
                     className={`w-full pl-10 pr-10 py-3 border ${
                       fieldErrors.branch 
-                        ? 'border-red-500 dark:border-red-500' 
-                        : 'border-gray-300 dark:border-gray-600'
-                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 appearance-none cursor-pointer`}
+                        ? 'border-[var(--error)]' 
+                        : 'border-[var(--stroke)]'
+                    } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 appearance-none cursor-pointer focus:outline-none`}
                     required
                   >
                     <option value="">Select a branch</option>
-                    {branches.map((branch) => (
-                      <option key={branch.branch_code || branch.branch_name} value={branch.branch_name}>
-                        {branch.branch_name}
-                      </option>
-                    ))}
+                    {branchOptions.map((branch) => {
+                      const code = branch.branch_code != null ? String(branch.branch_code) : branch.branch_name
+                      const label = branch.branch_name || `Branch ${code}`
+                      return (
+                        <option key={code || branch.branch_name} value={code}>
+                          {label}
+                        </option>
+                      )
+                    })}
                   </select>
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <FiChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <FiChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
                 </div>
+                {branchesError && (
+                  <p className="mt-1 text-sm text-amber-600 dark:text-amber-400 flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1 shrink-0" />
+                    {branchesError}. Showing branches from user list.
+                  </p>
+                )}
                 {fieldErrors.branch && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                  <p className="mt-1 text-sm text-[var(--error)] flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.branch}
                   </p>
@@ -454,7 +533,7 @@ export default function UserManagementPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Role</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <FiShield className="h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -462,7 +541,7 @@ export default function UserManagementPage() {
                   <select
                     value={formData.role}
                     onChange={e => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                    className="w-full pl-10 pr-4 py-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none"
                   >
                     <option value="employee">Employee</option>
                     <option value="manager">Branch Manager</option>
@@ -472,12 +551,25 @@ export default function UserManagementPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Monthly target (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Optional"
+                  value={formData.monthly_target}
+                  onChange={e => setFormData(prev => ({ ...prev, monthly_target: e.target.value }))}
+                  className="w-full px-4 py-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Password {editingUser && '(leave blank to keep current)'}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiKey className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <FiKey className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
                   <input
                     type="password"
@@ -494,14 +586,14 @@ export default function UserManagementPage() {
                     }}
                     className={`w-full pl-10 pr-4 py-3 border ${
                       fieldErrors.password 
-                        ? 'border-red-500 dark:border-red-500' 
-                        : 'border-gray-300 dark:border-gray-600'
-                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200`}
+                        ? 'border-[var(--error)]' 
+                        : 'border-[var(--stroke)]'
+                    } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                     required={!editingUser}
                   />
                 </div>
                 {fieldErrors.password && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+                  <p className="mt-1 text-sm text-[var(--error)] flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.password}
                   </p>
@@ -522,7 +614,7 @@ export default function UserManagementPage() {
                     setEditingUser(null)
                     resetForm()
                   }}
-                  className="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-3 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors duration-200"
+                  className="flex-1 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] py-3 rounded-lg hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] transition-colors duration-200"
                 >
                   Cancel
                 </button>
@@ -534,50 +626,58 @@ export default function UserManagementPage() {
 
       {/* Users Table */}
       {!loading && !error && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
           {/* Mobile Card View */}
           <div className="block sm:hidden">
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <div className="divide-y divide-[var(--stroke)]/70">
               {filteredUsers.map((user) => (
                 <div key={user.id} className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                        <div className="w-8 h-8 bg-red-500/10 rounded-full flex items-center justify-center">
                           <FiUser className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </div>
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        <h4 className="text-sm font-medium text-[var(--text-primary)] truncate">
                           {user.name}
                         </h4>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
                           user.role === 'admin' 
-                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' 
+                            ? 'bg-[var(--error-muted)] text-[var(--error)] border-[var(--error)]/60' 
                             : user.role === 'manager'
-                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
-                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                            ? 'bg-[var(--warn-muted)] text-[var(--warn)] border-[var(--warn)]/60'
+                            : 'bg-[var(--accent-muted)] text-[var(--accent)] border-[var(--accent)]/60'
                         }`}>
                           {user.role === 'admin' && <FiShield className="w-3 h-3 mr-1" />}
                           {user.role === 'manager' ? 'Branch Manager' : user.role}
                         </span>
                       </div>
-                      <div className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                      <div className="space-y-1 text-xs text-[var(--text-secondary)]">
                         <div><span className="font-medium">Code:</span> {user.emp_code}</div>
                         <div><span className="font-medium">Email:</span> {user.email}</div>
-                        <div><span className="font-medium">Branch:</span> {user.branch}</div>
+                        <div><span className="font-medium">Branch:</span> {getUserBranchDisplay(user.branch)}</div>
+                        <div><span className="font-medium">Monthly target:</span> {user.monthly_target != null ? `₹${Number(user.monthly_target).toLocaleString('en-IN')}` : '—'}</div>
                         <div><span className="font-medium">Created:</span> {formatDate(user.created_at)}</div>
                       </div>
                     </div>
                     <div className="flex flex-col space-y-2 ml-4">
                       <button
                         onClick={() => startEdit(user)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                        className="inline-flex items-center px-3 py-2 border border-[var(--accent)]/50 text-xs font-medium rounded-md text-[var(--accent)] bg-[var(--accent-muted)] hover:bg-[var(--accent-muted)]/80"
                       >
                         <FiEdit className="w-4 h-4 mr-1.5" />
                         Edit
                       </button>
                       <button
+                        onClick={() => handleDeleteUserRelatedData(user.id)}
+                        className="inline-flex items-center px-3 py-2 border border-[var(--warn)]/60 text-xs font-medium rounded-md text-[var(--warn)] bg-[var(--warn-muted)] hover:bg-[var(--warn-muted)]/80"
+                      >
+                        <FiDatabase className="w-4 h-4 mr-1.5" />
+                        Clean Data
+                      </button>
+                      <button
                         onClick={() => handleDeleteUser(user.id)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
+                        className="inline-flex items-center px-3 py-2 border border-[var(--error)]/60 text-xs font-medium rounded-md text-[var(--error)] bg-[var(--error-muted)] hover:bg-[var(--error-muted)]/80"
                       >
                         <FiTrash2 className="w-4 h-4 mr-1.5" />
                         Delete
@@ -592,59 +692,63 @@ export default function UserManagementPage() {
           {/* Desktop Table View */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Employee Code</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Branch</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Employee Code</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Name</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Email</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Branch</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Role</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Monthly target</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Created</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                 {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <tr key={user.id} className="hover:bg-[var(--card-bg-opaque)]">
                     <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <div className="flex items-center">
-                        <div className="w-6 h-6 lg:w-8 lg:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-2 lg:mr-3">
+                        <div className="w-6 h-6 lg:w-8 lg:h-8 bg-red-500/10 rounded-full flex items-center justify-center mr-2 lg:mr-3">
                           <FiUser className="w-3 h-3 lg:w-4 lg:h-4 text-red-600 dark:text-red-400" />
                         </div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <div className="text-sm font-medium text-[var(--text-primary)]">
                           {user.emp_code}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-900 dark:text-gray-100 truncate">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-primary)] truncate">
                       {user.name}
                     </td>
-                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400 truncate">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)] truncate">
                       {user.email}
                     </td>
-                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {user.branch}
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)] truncate">
+                      {getUserBranchDisplay(user.branch)}
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
                         user.role === 'admin' 
-                          ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' 
+                          ? 'bg-[var(--error-muted)] text-[var(--error)] border-[var(--error)]/60' 
                           : user.role === 'manager'
-                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
-                          : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                          ? 'bg-[var(--warn-muted)] text-[var(--warn)] border-[var(--warn)]/60'
+                          : 'bg-[var(--accent-muted)] text-[var(--accent)] border-[var(--accent)]/60'
                       }`}>
                         {user.role === 'admin' && <FiShield className="w-3 h-3 mr-1" />}
                         {user.role === 'manager' ? 'Branch Manager' : user.role}
                       </span>
                     </td>
-                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)]">
+                      {user.monthly_target != null ? `₹${Number(user.monthly_target).toLocaleString('en-IN')}` : '—'}
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)]">
                       {formatDate(user.created_at)}
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm">
                       <div className="flex flex-col lg:flex-row gap-1 lg:gap-2">
                         <button
                           onClick={() => startEdit(user)}
-                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--accent)]/50 text-xs font-medium rounded-md text-[var(--accent)] bg-[var(--accent-muted)] hover:bg-[var(--accent-muted)]/80"
                         >
                           <FiEdit className="w-3 h-3 mr-1" />
                           <span className="hidden lg:inline">Edit</span>
@@ -656,14 +760,21 @@ export default function UserManagementPage() {
                               handleChangePassword(user.id, newPassword)
                             }
                           }}
-                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50"
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--success)]/60 text-xs font-medium rounded-md text-[var(--success)] bg-[var(--success-muted)] hover:bg-[var(--success-muted)]/80"
                         >
                           <FiKey className="w-3 h-3 mr-1" />
                           <span className="hidden lg:inline">Password</span>
                         </button>
                         <button
+                          onClick={() => handleDeleteUserRelatedData(user.id)}
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--warn)]/60 text-xs font-medium rounded-md text-[var(--warn)] bg-[var(--warn-muted)] hover:bg-[var(--warn-muted)]/80"
+                        >
+                          <FiDatabase className="w-3 h-3 mr-1" />
+                          <span className="hidden lg:inline">Clean Data</span>
+                        </button>
+                        <button
                           onClick={() => handleDeleteUser(user.id)}
-                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-transparent text-xs font-medium rounded-md text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50"
+                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--error)]/60 text-xs font-medium rounded-md text-[var(--error)] bg-[var(--error-muted)] hover:bg-[var(--error-muted)]/80"
                         >
                           <FiTrash2 className="w-3 h-3 mr-1" />
                           <span className="hidden lg:inline">Delete</span>
@@ -677,15 +788,15 @@ export default function UserManagementPage() {
           </div>
           
           {filteredUsers.length === 0 && searchQuery && (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <FiUsers className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+            <div className="text-center py-12 text-[var(--text-muted)]">
+              <FiUsers className="w-12 h-12 mx-auto mb-3 text-[var(--stroke)]" />
               <p>No users found matching "{searchQuery}".</p>
             </div>
           )}
           
           {filteredUsers.length === 0 && !searchQuery && users.length === 0 && (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <FiUsers className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+            <div className="text-center py-12 text-[var(--text-muted)]">
+              <FiUsers className="w-12 h-12 mx-auto mb-3 text-[var(--stroke)]" />
               <p>No users found.</p>
             </div>
           )}

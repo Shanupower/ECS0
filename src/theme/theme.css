@@ -1,0 +1,378 @@
+/**
+ * ECS Receipts – Apple-inspired glassmorphism design tokens
+ * Use CSS variables for colors, typography, spacing, radius, shadows, blur.
+ * Safari: @supports fallback for backdrop-filter; opaque card bg when unsupported.
+ */
+
+:root {
+  /* Canvas & surfaces */
+  --canvas: #f5f5f7;
+  --card-bg: rgba(255, 255, 255, 0.72);
+  --card-bg-opaque: #ffffff;
+  --card-border: rgba(0, 0, 0, 0.06);
+  --card-hover: rgba(0, 0, 0, 0.02);
+  --stroke: rgba(0, 0, 0, 0.08);
+  --stroke-strong: rgba(0, 0, 0, 0.12);
+  --toggle-track: rgba(0, 0, 0, 0.18);
+  --toggle-thumb: #ffffff;
+
+  /* Text – light mode */
+  --text: #1d1d1f;
+  --text-primary: #1d1d1f;
+  --text-secondary: #424245;
+  --text-muted: #6e6e73;
+  --text-tertiary: #86868b;
+  --placeholder: #86868b;
+
+  /* Accent – Apple blue */
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --accent-muted: rgba(0, 113, 227, 0.12);
+  /* Link/nav hover – ensure visible on hover */
+  --link-hover: #0071e3;
+  --link-hover-bg: rgba(0, 113, 227, 0.1);
+
+  /* Semantic */
+  --success: #34c759;
+  --success-muted: rgba(52, 199, 89, 0.15);
+  --warn: #ff9500;
+  --warn-muted: rgba(255, 149, 0, 0.15);
+  --error: #ff3b30;
+  --error-muted: rgba(255, 59, 48, 0.12);
+
+  /* Focus ring */
+  --ring: rgba(0, 113, 227, 0.4);
+
+  /* Typography – SF Pro / system */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --text-headline: 1.75rem;   /* 28px */
+  --text-title: 1.25rem;      /* 20px */
+  --text-body: 0.9375rem;     /* 15px */
+  --text-caption: 0.8125rem;  /* 13px */
+  --text-small: 0.75rem;      /* 12px */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Border radius – Apple-like */
+  --radius-input: 10px;
+  --radius-card: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.1);
+  --shadow-glow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  /* Blur for glass */
+  --blur-glass: 20px;
+  --blur-glass-sm: 12px;
+  --blur-glass-lg: 24px;
+
+  /* Create Receipt / Dashboard (Stripe/Linear style) – light */
+  --dashboard-bg: #F6F8FB;
+  --dashboard-card: #FFFFFF;
+  --dashboard-border: #E5E7EB;
+  --dashboard-text: #0F172A;
+  --dashboard-muted: #6B7280;
+  --dashboard-primary: #2563EB;
+  --dashboard-primary-hover: #1d4ed8;
+  --dashboard-sidebar-bg: rgba(246, 248, 251, 0.95);
+  --dashboard-preview-bg: #FFFFFF;
+  --dashboard-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --dashboard-shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode */
+.dark {
+  --canvas: #000000;
+  --card-bg: rgba(29, 29, 31, 0.72);
+  --card-bg-opaque: #1d1d1f;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-hover: rgba(255, 255, 255, 0.06);
+  --stroke: rgba(255, 255, 255, 0.1);
+  --stroke-strong: rgba(255, 255, 255, 0.15);
+  --toggle-track: rgba(255, 255, 255, 0.15);
+  --toggle-thumb: rgba(255, 255, 255, 0.95);
+
+  /* Dark mode typography – premium contrast, no black text */
+  --text: rgba(255, 255, 255, 0.92);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.58);
+  --text-tertiary: rgba(255, 255, 255, 0.48);
+  --placeholder: rgba(255, 255, 255, 0.5);
+
+  --accent: #2997ff;
+  --accent-hover: #4dabf7;
+  --accent-muted: rgba(41, 151, 255, 0.2);
+  --link-hover: #2997ff;
+  --link-hover-bg: rgba(41, 151, 255, 0.15);
+
+  --success: #30d158;
+  --success-muted: rgba(48, 209, 88, 0.2);
+  --warn: #ff9f0a;
+  --warn-muted: rgba(255, 159, 10, 0.2);
+  --error: #ff453a;
+  --error-muted: rgba(255, 69, 58, 0.2);
+
+  --ring: rgba(41, 151, 255, 0.5);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 32px rgba(0, 0, 0, 0.35);
+  /* Create Receipt / Dashboard dark */
+  --dashboard-bg: #0B0F14;
+  --dashboard-card: #11161D;
+  --dashboard-border: #1E2630;
+  --dashboard-text: #E6EDF3;
+  --dashboard-muted: #8B949E;
+  --dashboard-primary: #4F8CFF;
+  --dashboard-primary-hover: #6b9dff;
+  --dashboard-sidebar-bg: rgba(17, 22, 29, 0.85);
+  --dashboard-preview-bg: #11161D;
+  --dashboard-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --dashboard-shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.25), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+}
+
+/* Dark mode: header bar always uses card colour (same as cards) */
+.dark header.sticky {
+  background-color: var(--card-bg) !important;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--stroke);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Base – ensure body uses tokens */
+body {
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: var(--leading-normal);
+}
+
+/* Typography scale – use these classes for hierarchy */
+.text-page-title {
+  font-size: var(--text-headline);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+.text-section-title {
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+}
+.text-card-title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+}
+.text-label {
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+.text-helper,
+.text-caption-muted {
+  font-size: var(--text-small);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+}
+.text-table-header {
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.text-table-cell {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  line-height: var(--leading-normal);
+}
+
+/* Placeholder color for inputs */
+::placeholder {
+  color: var(--placeholder);
+}
+
+/* Receipt step cards – flush to wizard, no box (premium flow) */
+.receipt-step-card {
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.receipt-step-card .receipt-step-title {
+  color: var(--dashboard-text);
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+.receipt-step-card .receipt-step-helper {
+  color: var(--dashboard-muted);
+  font-size: var(--text-small);
+  line-height: var(--leading-normal);
+}
+.receipt-step-card .receipt-step-primary-btn {
+  background: var(--dashboard-primary);
+  color: white;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+}
+.receipt-step-card .receipt-step-primary-btn:hover:not(:disabled) {
+  background: var(--dashboard-primary-hover);
+}
+.receipt-step-card .receipt-step-ghost-btn {
+  color: var(--dashboard-text);
+  background: transparent;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.75rem;
+}
+.receipt-step-card .receipt-step-ghost-btn:hover {
+  background: var(--dashboard-border);
+}
+
+/* Receipt Preview header – always dark bar + white text (visible in light and dark mode) */
+.receipt-preview-header {
+  background: linear-gradient(to right, #0066cc, #0077ed);
+}
+.receipt-preview-header__text {
+  color: #ffffff !important;
+}
+.receipt-preview-header__text--muted {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Safari / browsers without backdrop-filter: use opaque card background */
+@supports not (backdrop-filter: blur(1px)) and (not (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --card-bg: #ffffff;
+  }
+  .dark {
+    --card-bg: #1d1d1f;
+  }
+}
+
+/* Sun / Moon theme toggle (accessible, CodePen-inspired) */
+.visually-hidden:not(:focus):not(:active) {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+}
+
+#theme-toggle {
+  color: inherit;
+  font-size: 2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+#theme-toggle:hover {
+  opacity: 1;
+}
+
+#theme-toggle svg {
+  display: block;
+}
+
+#theme-toggle svg #appendages > g {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dark #theme-toggle svg #appendages > g {
+  transform: scale(0);
+}
+
+#theme-toggle svg #shadow,
+#theme-toggle svg #body {
+  transition: transform 0.5s ease;
+}
+
+.dark #theme-toggle svg #shadow,
+.dark #theme-toggle svg #body {
+  transform: scale(1);
+}
+
+/* Dashboard widget animations – subtle enter + hover */
+@keyframes dashboardWidgetEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-dashboard-widget {
+  animation: dashboardWidgetEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.dashboard-widget-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.dashboard-widget-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Customize modal overlay and panel */
+.dashboard-customize-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: overlayFadeIn 0.2s ease forwards;
+}
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.dashboard-customize-panel {
+  animation: panelSlideIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes panelSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+

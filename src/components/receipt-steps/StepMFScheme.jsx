@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { api } from '../../api'
 import SearchableSelect from '../SearchableSelect.jsx'
+import { MF_AMC_CATEGORIES, formatMinInvestment } from '../../data/mf_amc_categories'
 
-export default function StepMFScheme({ onBack, onNext, token }) {
+export default function StepMFScheme({ onBack, onNext, token, initialAmcCategoryId = 'MF' }) {
+  const [selectedAmcCategory, setSelectedAmcCategory] = useState(() =>
+    MF_AMC_CATEGORIES.find(c => c.id === initialAmcCategoryId) || MF_AMC_CATEGORIES[0]
+  )
   const [amcs, setAmcs] = useState([])
   const [schemes, setSchemes] = useState([])
   const [selectedAmc, setSelectedAmc] = useState(null)
@@ -19,7 +23,7 @@ export default function StepMFScheme({ onBack, onNext, token }) {
     if (selectedAmc?.amc_code) {
       loadSchemes(selectedAmc.amc_code)
     }
-  }, [selectedAmc])
+  }, [selectedAmc, selectedAmcCategory?.id])
 
   const loadAMCs = async () => {
     if (!token) return
@@ -38,7 +42,7 @@ export default function StepMFScheme({ onBack, onNext, token }) {
     if (!token || !amc_code) return
     setLoading(true)
     try {
-      const result = await api.getSchemesByAMC(token, amc_code)
+      const result = await api.getSchemesByAMC(token, amc_code, selectedAmcCategory?.id || 'MF')
       setSchemes(Array.isArray(result) ? result : [])
     } catch (error) {
       console.error('Failed to load schemes:', error)
@@ -68,6 +72,7 @@ export default function StepMFScheme({ onBack, onNext, token }) {
     if (!selectedScheme || hasExistingFolio === null) return
     
     onNext({
+      selectedAmcCategory,
       selectedAmc,
       selectedScheme,
       hasExistingFolio,
@@ -78,9 +83,39 @@ export default function StepMFScheme({ onBack, onNext, token }) {
   return (
     <div>
       <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 4 — Select Mutual Fund Details</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose the AMC and Scheme, then indicate if you have an existing folio</p>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose the AMC category, then AMC and Scheme, and indicate if you have an existing folio</p>
       
       <div className="space-y-6">
+        {/* AMC Category selector (MF / SIF / PMS / AIF / GIFT CITY FUNDS) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            AMC Category <span className="text-red-500">*</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {MF_AMC_CATEGORIES.map((cat) => {
+              const isSelected = selectedAmcCategory?.id === cat.id
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedAmcCategory(cat)
+                    setSelectedAmc(null)
+                    setSelectedScheme(null)
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isSelected
+                      ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-gray-900'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {cat.label} – {formatMinInvestment(cat.minInvestment)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* AMC Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -127,6 +162,12 @@ export default function StepMFScheme({ onBack, onNext, token }) {
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3 text-sm">
+                  {(selectedAmcCategory?.id && selectedAmcCategory.id !== 'MF') && (
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">AMC Category:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedAmcCategory.label} ({formatMinInvestment(selectedAmcCategory.minInvestment)} min)</span>
+                    </div>
+                  )}
                   <div>
                     <span className="font-medium text-gray-700 dark:text-gray-300">Category:</span>
                     <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.category}</span>

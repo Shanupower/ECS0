@@ -179,7 +179,7 @@ export default function TasksPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
           <FiCheckSquare className="w-7 h-7 text-red-600 dark:text-red-400" />
           Tasks
         </h1>
@@ -194,7 +194,7 @@ export default function TasksPage() {
           <button
             onClick={loadTasks}
             disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]"
           >
             <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -209,21 +209,21 @@ export default function TasksPage() {
       )}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 space-y-3">
-          <h3 className="font-semibold text-gray-900 dark:text-white">New task</h3>
+        <form onSubmit={handleCreate} className="mb-6 p-4 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] space-y-3">
+          <h3 className="font-semibold text-[var(--text-primary)]">New task</h3>
           <input
             type="text"
             required
             placeholder="Title"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
           />
           <textarea
             placeholder="Description (optional)"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
             rows={2}
           />
           <div className="flex flex-wrap gap-3 items-center">
@@ -231,12 +231,12 @@ export default function TasksPage() {
               type="date"
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
             />
             <select
               value={formData.priority}
               onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
             >
               {priorityOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -245,7 +245,7 @@ export default function TasksPage() {
             <select
               value={formData.assignee_id}
               onChange={(e) => setFormData({ ...formData, assignee_id: e.target.value })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
             >
               <option value="">Assign to...</option>
               {assignableUsers.map((u) => (
@@ -257,7 +257,7 @@ export default function TasksPage() {
             <button type="submit" disabled={saving} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
               {saving ? 'Saving...' : 'Create'}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300">
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]">
               Cancel
             </button>
           </div>
@@ -268,7 +268,7 @@ export default function TasksPage() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+          className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
         >
           {statusOptions.map((o) => (
             <option key={o.value || 'all'} value={o.value}>{o.label}</option>
@@ -278,7 +278,7 @@ export default function TasksPage() {
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+            className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
           >
             <option value="">All assignees</option>
             {assignableUsers.map((u) => (
@@ -289,7 +289,7 @@ export default function TasksPage() {
       </div>
 
       {loading ? (
-        <div className="text-gray-500 dark:text-gray-400 py-8">Loading tasks...</div>
+        <div className="text-[var(--text-muted)] py-8">Loading tasks...</div>
       ) : (
         <div className="space-y-6">
           {overdue.length > 0 && (
@@ -318,7 +318,7 @@ export default function TasksPage() {
           )}
           {upcoming.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upcoming</h2>
+              <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Upcoming</h2>
               <TaskList
                 tasks={upcoming}
                 onStatusChange={handleUpdateStatus}
@@ -330,7 +330,7 @@ export default function TasksPage() {
           )}
           {done.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">Done</h2>
+              <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">Done</h2>
               <TaskList
                 tasks={done}
                 onStatusChange={handleUpdateStatus}
@@ -341,28 +341,28 @@ export default function TasksPage() {
             </section>
           )}
           {tasks.length === 0 && (
-            <p className="text-gray-500 dark:text-gray-400 py-8">No tasks yet. Add one above.</p>
+          <p className="text-[var(--text-muted)] py-8">No tasks yet. Add one above.</p>
           )}
         </div>
       )}
 
       {editingId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form onSubmit={handleUpdate} className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 space-y-3">
-            <h3 className="font-semibold text-gray-900 dark:text-white">Edit task</h3>
+          <form onSubmit={handleUpdate} className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-xl shadow-xl max-w-md w-full p-6 space-y-3">
+            <h3 className="font-semibold text-[var(--text-primary)]">Edit task</h3>
             <input
               type="text"
               required
               placeholder="Title"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
             />
             <textarea
               placeholder="Description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
               rows={2}
             />
             <div className="flex gap-2">
@@ -370,12 +370,12 @@ export default function TasksPage() {
                 type="date"
                 value={formData.due_date}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="flex-1 px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
               />
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
               >
                 {priorityOptions.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -386,7 +386,7 @@ export default function TasksPage() {
               <button type="submit" disabled={saving} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
                 Save
               </button>
-              <button type="button" onClick={() => setEditingId(null)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300">
+              <button type="button" onClick={() => setEditingId(null)} className="px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]">
                 Cancel
               </button>
             </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { normalizeBranchForDB, normalizeBranchForEmployee, normalizeBranchForAPI, getAllValidBranches } from '../utils/branchMapping'
+import { getAllValidBranches } from '../utils/branchMapping'
 import SearchableSelect from '../components/SearchableSelect'
 import MultiSelect from '../components/MultiSelect'
 import { validateCustomerForm, getPattern, getTitle } from '../utils/validators'
@@ -68,8 +68,22 @@ export default function ClientManagementPage() {
   const [showPincodeDropdown, setShowPincodeDropdown] = useState(false)
   const [mediaFiles, setMediaFiles] = useState([])
   const [availableBranches, setAvailableBranches] = useState([]) // Branches fetched from API
+  const [deletingMediaId, setDeletingMediaId] = useState(null)
 
   const pageSize = 50 // Increased from 10 to show more customers per page
+
+  // Branch display: prefer customer.branches mapped to labels; fallback to relationship_manager
+  const getBranchDisplay = (customer) => {
+    if (customer.branches && Array.isArray(customer.branches) && customer.branches.length > 0) {
+      const labels = customer.branches.map(k => {
+        const opt = availableBranches.find(b => b.value === String(k))
+        return opt ? opt.label : k
+      }).filter(Boolean)
+      return labels.join(', ') || 'N/A'
+    }
+    if (Array.isArray(customer.relationship_manager)) return customer.relationship_manager.join(', ')
+    return customer.relationship_manager || customer.relationship_manager_display || 'N/A'
+  }
 
   // Fetch branches from API on component mount
   useEffect(() => {
@@ -77,10 +91,10 @@ export default function ClientManagementPage() {
       try {
         if (token) {
           const branches = await api.listBranches(token)
-          // Map branches to options format, using branch_name as both label and value
+          // Use branch id (_key) as value for canonical keys; label = branch_name
           const branchOptions = branches.map(branch => ({
             label: branch.branch_name,
-            value: branch.branch_name
+            value: String(branch.id ?? branch.branch_code ?? branch.branch_name)
           }))
           setAvailableBranches(branchOptions)
         }
@@ -95,18 +109,29 @@ export default function ClientManagementPage() {
     }
   }, [token])
 
-  // Auto-populate branch from user context
+  const getUserBranchDisplay = () => {
+    const raw = user?.branch_name || user?.branch || user?.branch_code
+    if (!raw) return 'Unknown'
+    const match = availableBranches.find(
+      b => b.value === String(raw) || b.label === String(raw)
+    )
+    return match?.label || String(raw)
+  }
+
+  // Auto-populate branch from user context (match by value or label)
   useEffect(() => {
-    if (user && formData.branches.length === 0) {
+    if (user && formData.branches.length === 0 && availableBranches.length > 0) {
       const userBranch = user.branch || user.branch_name || ''
       if (userBranch) {
-        setFormData(prev => ({
-          ...prev,
-          branches: [userBranch]
-        }))
+        const match = availableBranches.find(b => b.value === userBranch || b.label === userBranch)
+        if (match) {
+          setFormData(prev => ({ ...prev, branches: [match.value] }))
+        } else {
+          setFormData(prev => ({ ...prev, branches: [userBranch] }))
+        }
       }
     }
-  }, [user])
+  }, [user, availableBranches])
 
   // Pincode lookup function
   const lookupPincode = async (pincode) => {
@@ -299,54 +324,44 @@ export default function ClientManagementPage() {
     try {
       const token = localStorage.getItem('ecs_token')
       
-      // Create FormData to handle file uploads
-      const formDataToSend = new FormData()
-      
-      // Add all form fields
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== null && formData[key] !== undefined) {
-          formDataToSend.append(key, formData[key])
-        }
-      })
-      
-      // Add attachment files (backend expects field name 'files' for uploadMultiple)
-      mediaFiles.forEach((file) => {
-        formDataToSend.append('files', file)
-      })
-      
-      // Add branches array - normalize each branch
-      const branches = formData.branches && formData.branches.length > 0 
-        ? formData.branches.map(b => normalizeBranchForDB(b))
-        : [normalizeBranchForDB(user?.branch || user?.branch_name || 'UNASSIGNED')]
-      
-      // Send branches array - FormData with bracket notation for arrays (Express/multer will parse as array)
-      branches.forEach((branch) => {
-        formDataToSend.append('branches[]', branch)
-      })
-      
-      // Add minors array if present
-      if (formData.minors && formData.minors.length > 0) {
-        formDataToSend.append('minors', JSON.stringify(formData.minors))
-      }
-      
-      formDataToSend.append('created_by', user?.emp_code || user?.username)
-      
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/customers`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formDataToSend
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create customer')
-      }
-      
-      const result = await response.json()
+      // Build JSON payload for customer
+      const branches = formData.branches && formData.branches.length > 0
+        ? formData.branches
+        : (() => {
+            const ub = user?.branch || user?.branch_name || ''
+            const m = availableBranches.find(b => b.value === ub || b.label === ub)
+            return m ? [m.value] : (ub ? [ub] : [])
+          })()
 
-      setSuccess(`Client created successfully! ${result.media_files > 0 ? `(${result.media_files} files uploaded)` : ''}`)
+      const payload = {
+        ...formData,
+        branches,
+        created_by: user?.emp_code || user?.username,
+      }
+
+      const created = await api.createCustomer(token, payload)
+
+      // If supporting documents were selected, upload them after customer exists and verify
+      if (mediaFiles && mediaFiles.length > 0 && created?.investor_id) {
+        try {
+          const uploadResult = await api.uploadCustomerMedia(token, created.investor_id, mediaFiles)
+          const savedDocs = (uploadResult && typeof uploadResult.added === 'number') ? uploadResult.added : mediaFiles.length
+
+          if (savedDocs < mediaFiles.length) {
+            console.warn('Not all customer documents were saved', {
+              investor_id: created.investor_id,
+              attempted: mediaFiles.length,
+              saved: savedDocs
+            })
+            setError(`Client created, but some documents may not have been saved (saved ${savedDocs} of ${mediaFiles.length}).`)
+          }
+        } catch (uploadErr) {
+          console.error('Failed to upload client documents:', uploadErr)
+          setError('Client created, but failed to upload supporting documents: ' + uploadErr.message)
+        }
+      }
+
+      setSuccess('Client created successfully!')
       setShowAddModal(false)
       resetForm()
       fetchCustomers(currentPage, searchTerm)
@@ -372,13 +387,30 @@ export default function ClientManagementPage() {
     try {
       const token = localStorage.getItem('ecs_token')
       
-      // Prepare update data with normalized branches
+      // Prepare update data - send branches as canonical keys (no normalization)
       const updateData = { ...formData }
-      if (updateData.branches && updateData.branches.length > 0) {
-        updateData.branches = updateData.branches.map(b => normalizeBranchForAPI(b))
-      }
       
       await api.updateCustomer(token, selectedCustomer.investor_id, updateData)
+
+      // If new supporting documents are selected, upload them via media endpoint and verify
+      if (mediaFiles && mediaFiles.length > 0) {
+        try {
+          const uploadResult = await api.uploadCustomerMedia(token, selectedCustomer.investor_id, mediaFiles)
+          const savedDocs = (uploadResult && typeof uploadResult.added === 'number') ? uploadResult.added : mediaFiles.length
+
+          if (savedDocs < mediaFiles.length) {
+            console.warn('Not all client documents were saved on update', {
+              investor_id: selectedCustomer.investor_id,
+              attempted: mediaFiles.length,
+              saved: savedDocs
+            })
+            setError(`Client updated, but some documents may not have been saved (saved ${savedDocs} of ${mediaFiles.length}).`)
+          }
+        } catch (uploadErr) {
+          console.error('Failed to upload client documents:', uploadErr)
+          setError('Client updated, but failed to upload supporting documents: ' + uploadErr.message)
+        }
+      }
 
       setSuccess('Client updated successfully!')
       setShowEditModal(false)
@@ -435,17 +467,27 @@ export default function ClientManagementPage() {
     setMediaFiles([])
   }
 
-  // Open edit modal
-  const openEditModal = (customer) => {
-    setSelectedCustomer(customer)
-    // Convert DB format (relationship_manager) to employee format for dropdown
-    // Handle both single branch (string) and multiple branches (array)
-    const dbBranch = customer.relationship_manager || ''
-    const branchesArray = Array.isArray(dbBranch) 
-      ? dbBranch.map(b => normalizeBranchForEmployee(b))
-      : dbBranch 
-        ? [normalizeBranchForEmployee(dbBranch)] 
-        : []
+  // Open edit modal – fetch full customer so media_documents and minors are available
+  const openEditModal = async (customer) => {
+    try {
+      const fresh = await api.getCustomer(token, customer.investor_id)
+      setSelectedCustomer(fresh)
+      customer = fresh
+    } catch (err) {
+      console.error('Failed to load client for edit:', err)
+      setSelectedCustomer(customer)
+    }
+    const branchesArray = (customer.branches && Array.isArray(customer.branches) && customer.branches.length > 0)
+      ? customer.branches
+      : (() => {
+          const dbBranch = customer.relationship_manager
+          if (!dbBranch) return []
+          const arr = Array.isArray(dbBranch) ? dbBranch : [dbBranch]
+          return arr.map(b => {
+            const opt = availableBranches.find(o => o.value === b || o.label === b)
+            return opt ? opt.value : b
+          }).filter(Boolean)
+        })()
     
     // Extract DOB - handle null, undefined, or alternative field names
     const dob = customer.date_of_birth || customer.dob || customer.dateOfBirth || ''
@@ -482,7 +524,26 @@ export default function ClientManagementPage() {
     setShowEditModal(false)
     setShowViewModal(false)
     setSelectedCustomer(null)
+    setDeletingMediaId(null)
     resetForm()
+  }
+
+  // Delete existing supporting document (edit mode)
+  const handleDeleteExistingMedia = async (mediaId) => {
+    if (!selectedCustomer?.investor_id || !token) return
+    setDeletingMediaId(mediaId)
+    setError('')
+    try {
+      await api.deleteCustomerMedia(token, selectedCustomer.investor_id, mediaId)
+      setSelectedCustomer(prev => ({
+        ...prev,
+        media_documents: (prev?.media_documents || []).filter(d => String(d.id) !== String(mediaId))
+      }))
+    } catch (err) {
+      setError(err.message || 'Failed to delete document')
+    } finally {
+      setDeletingMediaId(null)
+    }
   }
 
   // Clear messages
@@ -559,19 +620,19 @@ export default function ClientManagementPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+          <h1 className="text-xl sm:text-2xl font-bold text-[var(--dashboard-text)] flex items-center">
             <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-red-600 dark:text-red-400" />
             <span className="hidden sm:inline">Client Management</span>
             <span className="sm:hidden">Customers</span>
           </h1>
-          <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-dark-300">
-            Branch: {user?.branch || 'Unknown Branch'}
+          <p className="mt-1 text-xs sm:text-sm text-[var(--dashboard-muted)]">
+            Branch: {getUserBranchDisplay()}
           </p>
         </div>
         <div className="mt-3 sm:mt-0 flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setShowExportModal(true); setMasterKey(''); setError('') }}
-            className="inline-flex items-center px-3 py-2 sm:px-4 bg-gray-600 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
+            className="inline-flex items-center px-3 py-2 sm:px-4 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
             title="Export customers to CSV (admin + master key required)"
           >
             <FiDownload className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -579,13 +640,13 @@ export default function ClientManagementPage() {
           </button>
           <button
             onClick={() => { setShowImportModal(true); setMasterKey(''); setImportFile(null); setImportResult(null); setError('') }}
-            className="inline-flex items-center px-3 py-2 sm:px-4 bg-gray-600 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
+            className="inline-flex items-center px-3 py-2 sm:px-4 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
             title="Import customers from CSV (admin + master key required)"
           >
             <FiUpload className="w-4 h-4 mr-2 flex-shrink-0" />
             Import
           </button>
-          <span className="hidden sm:inline text-gray-400 dark:text-dark-500 text-sm">|</span>
+          <span className="hidden sm:inline text-[var(--dashboard-muted)] text-sm">|</span>
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex items-center px-3 py-2 sm:px-4 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors duration-200"
@@ -625,21 +686,21 @@ export default function ClientManagementPage() {
       {/* Export Customers Modal (admin + master key) */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={() => setShowExportModal(false)}>
-          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-xl max-w-sm w-full p-6 border border-gray-200 dark:border-dark-700" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Export Customers</h3>
-            <p className="text-sm text-gray-600 dark:text-dark-300 mb-4">Enter master key to download customer details as CSV.</p>
+          <div className="bg-[var(--dashboard-card)] rounded-xl shadow-xl max-w-sm w-full p-6 border border-[var(--dashboard-border)]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-[var(--dashboard-text)] mb-2">Export Customers</h3>
+            <p className="text-sm text-[var(--dashboard-muted)] mb-4">Enter master key to download customer details as CSV.</p>
             <input
               type="password"
               value={masterKey}
               onChange={e => setMasterKey(e.target.value)}
               placeholder="Master key"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white mb-4"
+              className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] mb-4"
             />
             <div className="flex gap-2">
               <button onClick={handleExportCustomers} disabled={exportImportLoading} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium">
                 {exportImportLoading ? 'Exporting…' : 'Export'}
               </button>
-              <button onClick={() => { setShowExportModal(false); setMasterKey('') }} className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-gray-700 dark:text-dark-300 hover:bg-gray-50 dark:hover:bg-dark-700 text-sm font-medium">
+              <button onClick={() => { setShowExportModal(false); setMasterKey('') }} className="px-4 py-2 border border-[var(--dashboard-border)] rounded-lg text-[var(--dashboard-muted)] hover:bg-[var(--dashboard-border)]/50 text-sm font-medium">
                 Cancel
               </button>
             </div>
@@ -650,21 +711,21 @@ export default function ClientManagementPage() {
       {/* Import Customers Modal (admin + master key) */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={() => setShowImportModal(false)}>
-          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-xl max-w-sm w-full p-6 border border-gray-200 dark:border-dark-700" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Import Customers</h3>
-            <p className="text-sm text-gray-600 dark:text-dark-300 mb-4">Upload a CSV with columns: Name, PAN, and optionally Investor ID, Email, Mobile, Address1, City, State, Pin, Branch(es).</p>
+          <div className="bg-[var(--dashboard-card)] rounded-xl shadow-xl max-w-sm w-full p-6 border border-[var(--dashboard-border)]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-[var(--dashboard-text)] mb-2">Import Customers</h3>
+            <p className="text-sm text-[var(--dashboard-muted)] mb-4">Upload a CSV with columns: Name, PAN, and optionally Investor ID, Email, Mobile, Address1, City, State, Pin, Branch(es).</p>
             <input
               type="password"
               value={masterKey}
               onChange={e => setMasterKey(e.target.value)}
               placeholder="Master key"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white mb-3"
+              className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] mb-3"
             />
             <input
               type="file"
               accept=".csv"
               onChange={e => setImportFile(e.target.files?.[0] || null)}
-              className="w-full text-sm text-gray-600 dark:text-dark-300 mb-4 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-600 file:text-white file:text-sm file:font-medium file:cursor-pointer"
+              className="w-full text-sm text-[var(--dashboard-muted)] mb-4 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-600 file:text-white file:text-sm file:font-medium file:cursor-pointer"
             />
             {importResult && (
               <p className="text-sm text-green-600 dark:text-green-400 mb-2">Imported: {importResult.imported} of {importResult.total_rows}. {importResult.errors?.length ? `Errors: ${importResult.errors.length}` : ''}</p>
@@ -673,7 +734,7 @@ export default function ClientManagementPage() {
               <button onClick={handleImportCustomers} disabled={exportImportLoading || !importFile} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium">
                 {exportImportLoading ? 'Importing…' : 'Import'}
               </button>
-              <button onClick={() => { setShowImportModal(false); setMasterKey(''); setImportFile(null); setImportResult(null) }} className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-gray-700 dark:text-dark-300 hover:bg-gray-50 dark:hover:bg-dark-700 text-sm font-medium">
+              <button onClick={() => { setShowImportModal(false); setMasterKey(''); setImportFile(null); setImportResult(null) }} className="px-4 py-2 border border-[var(--dashboard-border)] rounded-lg text-[var(--dashboard-muted)] hover:bg-[var(--dashboard-border)]/50 text-sm font-medium">
                 Cancel
               </button>
             </div>
@@ -682,24 +743,24 @@ export default function ClientManagementPage() {
       )}
 
       {/* Search and Filters */}
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700 p-4 sm:p-6">
+      <div className="bg-[var(--card-bg)] rounded-lg shadow-sm border border-[var(--stroke)] p-4 sm:p-6">
         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-dark-400 w-4 h-4" />
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--dashboard-muted)] w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search by name, PAN, email, mobile..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-dark-400 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full pl-10 pr-4 py-2 text-sm border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
               />
             </div>
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 sm:px-6 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center justify-center"
+            className="px-4 py-2 sm:px-6 bg-red-600 hover:bg-red-700 disabled:bg-[var(--dashboard-muted)] text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center justify-center"
           >
             {loading ? (
               <FiRefreshCw className="w-4 h-4 animate-spin" />
@@ -715,57 +776,57 @@ export default function ClientManagementPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700 p-4 sm:p-6">
+        <div className="bg-[var(--card-bg)] rounded-lg shadow-sm border border-[var(--stroke)] p-4 sm:p-6">
           <div className="flex items-center">
             <div className="p-2 sm:p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
               <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400" />
             </div>
             <div className="ml-3 sm:ml-4">
-              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-dark-300">Total Customers</p>
-              <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{totalCustomers.toLocaleString()}</p>
+              <p className="text-xs sm:text-sm font-medium text-[var(--text-muted)]">Total Customers</p>
+              <p className="text-lg sm:text-2xl font-bold text-[var(--text-primary)]">{totalCustomers.toLocaleString()}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700 p-4 sm:p-6">
+        <div className="bg-[var(--card-bg)] rounded-lg shadow-sm border border-[var(--stroke)] p-4 sm:p-6">
           <div className="flex items-center">
-            <div className="p-2 sm:p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <FiFilter className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+            <div className="p-2 sm:p-3 bg-[var(--dashboard-primary)]/10 rounded-lg">
+              <FiFilter className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--dashboard-primary)]" />
             </div>
             <div className="ml-3 sm:ml-4">
-              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-dark-300">Showing</p>
-              <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{customers.length}</p>
+              <p className="text-xs sm:text-sm font-medium text-[var(--text-muted)]">Showing</p>
+              <p className="text-lg sm:text-2xl font-bold text-[var(--text-primary)]">{customers.length}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700 p-4 sm:p-6 sm:col-span-2 lg:col-span-1">
+        <div className="bg-[var(--card-bg)] rounded-lg shadow-sm border border-[var(--stroke)] p-4 sm:p-6 sm:col-span-2 lg:col-span-1">
           <div className="flex items-center">
             <div className="p-2 sm:p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
               <FiDownload className="w-5 h-5 sm:w-6 sm:h-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="ml-3 sm:ml-4">
-              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-dark-300">Branch</p>
-              <p className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white truncate">{user?.branch || 'Unknown'}</p>
+              <p className="text-xs sm:text-sm font-medium text-[var(--text-muted)]">Branch</p>
+              <p className="text-sm sm:text-lg font-bold text-[var(--text-primary)] truncate">{getUserBranchDisplay()}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Customers Table */}
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-dark-700">
-          <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white">Customers</h3>
+      <div className="bg-[var(--card-bg)] rounded-lg shadow-sm border border-[var(--stroke)]">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--stroke)]">
+          <h3 className="text-base sm:text-lg font-medium text-[var(--text-primary)]">Customers</h3>
         </div>
         
         {loading ? (
           <div className="flex items-center justify-center py-8 sm:py-12">
             <FiRefreshCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-red-600 dark:text-red-400" />
-            <span className="ml-2 text-sm text-gray-600 dark:text-dark-300">Loading customers...</span>
+            <span className="ml-2 text-sm text-[var(--text-muted)]">Loading customers...</span>
           </div>
         ) : customers.length === 0 ? (
           <div className="text-center py-8 sm:py-12">
-            <FiUsers className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-dark-400 mx-auto mb-4" />
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-2">No customers found</h3>
-            <p className="text-sm text-gray-600 dark:text-dark-300">
+            <FiUsers className="w-10 h-10 sm:w-12 sm:h-12 text-[var(--text-muted)] mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-[var(--text-primary)] mb-2">No customers found</h3>
+            <p className="text-sm text-[var(--text-muted)]">
               {searchTerm ? 'Try adjusting your search terms.' : 'Start by adding your first customer.'}
             </p>
           </div>
@@ -773,46 +834,42 @@ export default function ClientManagementPage() {
           <>
             {/* Mobile Card View */}
             <div className="block sm:hidden">
-              <div className="divide-y divide-gray-200 dark:divide-dark-700">
+              <div className="divide-y divide-[var(--stroke)]">
                 {customers.map((customer) => (
                   <div key={customer.investor_id} className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2">
-                          <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          <h4 className="text-sm font-medium text-[var(--text-primary)] truncate">
                             {customer.name || 'N/A'}
                           </h4>
                         </div>
-                        <div className="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                        <div className="mt-1 text-xs text-[var(--text-muted)]">
                           ID: {customer.investor_id}
                         </div>
                         <div className="mt-2 space-y-1">
-                          <div className="text-xs text-gray-600 dark:text-dark-300">
+                          <div className="text-xs text-[var(--text-muted)]">
                             <span className="font-medium">Mobile:</span> {customer.mobile || 'N/A'}
                           </div>
-                          <div className="text-xs text-gray-600 dark:text-dark-300">
+                          <div className="text-xs text-[var(--text-muted)]">
                             <span className="font-medium">PAN:</span> {customer.pan || 'N/A'}
                           </div>
-                          <div className="text-xs text-gray-600 dark:text-dark-300">
-                            <span className="font-medium">Branch(es):</span> {
-                              Array.isArray(customer.relationship_manager)
-                                ? customer.relationship_manager.join(', ')
-                                : customer.relationship_manager || 'N/A'
-                            }
+                          <div className="text-xs text-[var(--text-muted)]">
+                            <span className="font-medium">Branch(es):</span> {getBranchDisplay(customer)}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 ml-4">
                         <button
                           onClick={() => openViewModal(customer)}
-                          className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="p-2 text-[var(--dashboard-primary)] hover:opacity-90"
                           title="View Details"
                         >
                           <FiEye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => openEditModal(customer)}
-                          className="p-2 text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          className="p-2 text-[var(--dashboard-primary)] hover:opacity-90"
                           title="Edit Customer"
                         >
                           <FiEdit className="w-4 h-4" />
@@ -835,69 +892,67 @@ export default function ClientManagementPage() {
 
             {/* Desktop Table View */}
             <div className="hidden sm:block overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
-                <thead className="bg-gray-50 dark:bg-dark-700">
+              <table className="min-w-full divide-y divide-[var(--stroke)]">
+                <thead className="bg-[var(--card-hover)]">
                   <tr>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-300 uppercase tracking-wider">
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
                       Customer
                     </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-300 uppercase tracking-wider">
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
                       Contact
                     </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-300 uppercase tracking-wider">
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
                       PAN
                     </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-300 uppercase tracking-wider">
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
                       Branch
                     </th>
-                    <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-dark-300 uppercase tracking-wider">
+                    <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-dark-700">
+                <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]">
                   {customers.map((customer) => (
-                    <tr key={customer.investor_id} className="hover:bg-gray-50 dark:hover:bg-dark-700">
+                    <tr key={customer.investor_id} className="hover:bg-[var(--card-hover)]">
                       <td className="px-4 lg:px-6 py-3 lg:py-4">
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                             {customer.name || 'N/A'}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-dark-400">
+                          <div className="text-xs text-[var(--text-muted)]">
                             ID: {customer.investor_id}
                           </div>
                         </div>
                       </td>
                       <td className="px-4 lg:px-6 py-3 lg:py-4">
                         <div>
-                          <div className="text-sm text-gray-900 dark:text-white">
+                          <div className="text-sm text-[var(--text-primary)]">
                             {customer.mobile || 'N/A'}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-dark-400 truncate">
+                          <div className="text-xs text-[var(--text-muted)] truncate">
                             {customer.email || 'No email'}
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-900 dark:text-white">
+                      <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-primary)]">
                         {customer.pan || 'N/A'}
                       </td>
-                      <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-gray-900 dark:text-white truncate">
-                        {Array.isArray(customer.relationship_manager)
-                          ? customer.relationship_manager.join(', ')
-                          : customer.relationship_manager || 'N/A'}
+                      <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-primary)] truncate">
+                        {getBranchDisplay(customer)}
                       </td>
                       <td className="px-4 lg:px-6 py-3 lg:py-4 text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-1 lg:space-x-2">
                           <button
                             onClick={() => openViewModal(customer)}
-                            className="p-1 lg:p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                            className="p-1 lg:p-2 text-[var(--dashboard-primary)] hover:opacity-90"
                             title="View Details"
                           >
                             <FiEye className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => openEditModal(customer)}
-                            className="p-1 lg:p-2 text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            className="p-1 lg:p-2 text-[var(--dashboard-primary)] hover:opacity-90"
                             title="Edit Customer"
                           >
                             <FiEdit className="w-4 h-4" />
@@ -921,23 +976,23 @@ export default function ClientManagementPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-dark-700">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[var(--stroke)]">
                 <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
-                  <div className="text-xs sm:text-sm text-gray-700 dark:text-dark-300">
+                  <div className="text-xs sm:text-sm text-[var(--text-primary)]">
                     Page {currentPage} of {totalPages}
                   </div>
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1 || loading}
-                      className="px-3 py-1 text-xs sm:text-sm border border-gray-300 dark:border-dark-600 rounded-md hover:bg-gray-50 dark:hover:bg-dark-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-xs sm:text-sm border border-[var(--stroke)] rounded-md hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Previous
                     </button>
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages || loading}
-                      className="px-3 py-1 text-xs sm:text-sm border border-gray-300 dark:border-dark-600 rounded-md hover:bg-gray-50 dark:hover:bg-dark-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-xs sm:text-sm border border-[var(--stroke)] rounded-md hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next
                     </button>
@@ -990,6 +1045,9 @@ export default function ClientManagementPage() {
           removeMediaFile={removeMediaFile}
           getFileIcon={getFileIcon}
           availableBranches={availableBranches}
+          existingMedia={selectedCustomer?.media_documents}
+          onDeleteExistingMedia={handleDeleteExistingMedia}
+          deletingMediaId={deletingMediaId}
         />
       )}
 
@@ -998,6 +1056,7 @@ export default function ClientManagementPage() {
         <ViewCustomerModal
           customer={selectedCustomer}
           onClose={closeModals}
+          getBranchDisplay={getBranchDisplay}
         />
       )}
     </div>
@@ -1021,7 +1080,10 @@ function CustomerModal({
   handleMediaUpload,
   removeMediaFile,
   getFileIcon,
-  availableBranches = []
+  availableBranches = [],
+  existingMedia = [],
+  onDeleteExistingMedia,
+  deletingMediaId
 }) {
   const { user } = useAuth()
   const pincodeDropdownRef = useRef(null)
@@ -1050,22 +1112,22 @@ function CustomerModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-dark-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">{title}</h3>
+      <div className="bg-[var(--dashboard-card)] rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-[var(--dashboard-border)]">
+          <h3 className="text-lg font-medium text-[var(--dashboard-text)]">{title}</h3>
         </div>
         
         <form onSubmit={onSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Title
               </label>
               <select
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               >
                 <option value="">Select Title</option>
                 <option value="Mr.">Mr.</option>
@@ -1077,7 +1139,7 @@ function CustomerModal({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Name *
               </label>
               <input
@@ -1086,12 +1148,12 @@ function CustomerModal({
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 PAN Number *
               </label>
               <input
@@ -1104,12 +1166,12 @@ function CustomerModal({
                 title={getTitle('pan')}
                 placeholder="ABCDE1234F"
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Email *
               </label>
               <input
@@ -1119,12 +1181,12 @@ function CustomerModal({
                 onChange={handleChange}
                 placeholder="user@example.com"
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Mobile *
               </label>
               <input
@@ -1137,12 +1199,12 @@ function CustomerModal({
                 title={getTitle('mobile')}
                 placeholder="9876543210"
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                         Date of Birth *
                       </label>
                       <input
@@ -1151,12 +1213,12 @@ function CustomerModal({
                         value={formData.date_of_birth}
                         onChange={handleChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
                       />
                     </div>
                     
                     <div className="relative md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                         PIN Code * (Enter to auto-fill location)
                       </label>
                       <input
@@ -1166,7 +1228,7 @@ function CustomerModal({
                         onChange={(e) => handlePincodeChange(e.target.value)}
                         required
                         placeholder="Enter PIN code to auto-fill location"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
                       />
                       
                       {/* Loading indicator */}
@@ -1178,24 +1240,24 @@ function CustomerModal({
                       
                       {/* Pincode suggestions dropdown */}
                       {showPincodeDropdown && pincodeSuggestions.length > 0 && (
-                        <div ref={pincodeDropdownRef} className="absolute z-10 w-full mt-1 bg-white dark:bg-dark-700 border border-gray-300 dark:border-dark-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <div ref={pincodeDropdownRef} className="absolute z-10 w-full mt-1 bg-[var(--dashboard-card)] border border-[var(--dashboard-border)] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                           {pincodeSuggestions.map((suggestion, index) => (
                             <button
                               key={index}
                               type="button"
                               onClick={() => selectPincodeSuggestion(suggestion)}
-                              className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-600 focus:bg-gray-100 dark:focus:bg-dark-600 focus:outline-none"
+                              className="w-full px-3 py-2 text-left hover:bg-[var(--dashboard-border)]/50 focus:bg-[var(--dashboard-border)]/50 focus:outline-none"
                             >
                               <div className="flex justify-between items-center">
                                 <div>
-                                  <div className="font-medium text-gray-900 dark:text-white">
+                                  <div className="font-medium text-[var(--dashboard-text)]">
                                     {suggestion.pincode}
                                   </div>
-                                  <div className="text-sm text-gray-500 dark:text-dark-400">
+                                  <div className="text-sm text-[var(--dashboard-muted)]">
                                     {suggestion.city}, {suggestion.state}
                                   </div>
                                 </div>
-                                <div className="text-xs text-gray-400 dark:text-dark-500">
+                                <div className="text-xs text-[var(--dashboard-muted)]">
                                   {suggestion.country}
                                 </div>
                               </div>
@@ -1206,7 +1268,7 @@ function CustomerModal({
                     </div>
                     
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                         Address Line 1 *
                       </label>
                       <input
@@ -1215,12 +1277,12 @@ function CustomerModal({
                         value={formData.address1}
                         onChange={handleChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
                       />
                     </div>
             
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Address Line 2
               </label>
               <input
@@ -1228,12 +1290,12 @@ function CustomerModal({
                 name="address2"
                 value={formData.address2}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Address Line 3
               </label>
               <input
@@ -1241,12 +1303,12 @@ function CustomerModal({
                 name="address3"
                 value={formData.address3}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 City *
               </label>
               <input
@@ -1255,12 +1317,12 @@ function CustomerModal({
                 value={formData.city}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 State *
               </label>
               <input
@@ -1269,12 +1331,12 @@ function CustomerModal({
                 value={formData.state}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Country *
               </label>
               <input
@@ -1283,13 +1345,13 @@ function CustomerModal({
                 value={formData.country || 'India'}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
               />
             </div>
             
             {user?.role === 'admin' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                 Branch(es) *
               </label>
               <MultiSelect
@@ -1306,16 +1368,16 @@ function CustomerModal({
           </div>
 
           {/* Minors Section */}
-          <div className="space-y-6 pt-8 border-t-2 border-gray-200 dark:border-dark-600 mt-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 p-5 rounded-xl border-2 border-blue-200 dark:border-blue-800 shadow-sm">
+          <div className="space-y-6 pt-8 border-t-2 border-[var(--dashboard-border)] mt-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-[var(--dashboard-card)] p-5 rounded-xl border border-[var(--dashboard-border)] shadow-sm">
               <div className="flex-1">
-                <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center mb-2">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg mr-3">
-                    <FiUsers className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <h4 className="text-lg font-bold text-[var(--dashboard-text)] flex items-center mb-2">
+                  <div className="p-2 bg-[var(--dashboard-primary)]/12 rounded-lg mr-3">
+                    <FiUsers className="w-5 h-5 text-[var(--dashboard-primary)]" />
                   </div>
                   Minors (Children/Wards)
                 </h4>
-                <p className="text-sm text-gray-600 dark:text-gray-300 ml-12">
+                <p className="text-sm text-[var(--dashboard-muted)] ml-12">
                   Add minors attached to this customer. Each minor will have their own unique investor ID.
                 </p>
               </div>
@@ -1345,7 +1407,7 @@ function CustomerModal({
                     }]
                   }))
                 }}
-                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold text-white bg-[var(--dashboard-primary)] hover:bg-[var(--dashboard-primary-hover)] rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
               >
                 <FiPlus className="w-4 h-4 mr-2" />
                 Add Minor
@@ -1355,13 +1417,13 @@ function CustomerModal({
             {formData.minors && formData.minors.length > 0 ? (
               <div className="space-y-5">
                 {formData.minors.map((minor, index) => (
-                  <div key={index} className="border-2 border-gray-200 dark:border-dark-600 rounded-xl p-5 bg-white dark:bg-dark-800 shadow-md hover:shadow-lg transition-shadow duration-200">
-                    <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-200 dark:border-dark-700">
+                  <div key={index} className="border-2 border-[var(--dashboard-border)] rounded-xl p-5 bg-[var(--dashboard-card)] shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <div className="flex items-center justify-between mb-5 pb-4 border-b border-[var(--dashboard-border)]">
                       <div className="flex items-center space-x-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--dashboard-primary)]/12 text-[var(--dashboard-primary)] font-bold text-sm">
                           {index + 1}
                         </div>
-                        <h5 className="text-base font-semibold text-gray-900 dark:text-white">
+                        <h5 className="text-base font-semibold text-[var(--dashboard-text)]">
                           Minor {index + 1} Details
                         </h5>
                         {minor.relationship_type && (
@@ -1389,7 +1451,7 @@ function CustomerModal({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                        <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Full Name <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -1402,12 +1464,12 @@ function CustomerModal({
                           }}
                           required
                           placeholder="Enter minor's full name"
-                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                        <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Date of Birth <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -1420,12 +1482,12 @@ function CustomerModal({
                           }}
                           required
                           max={new Date().toISOString().split('T')[0]}
-                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                        <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           PAN Number <span className="text-gray-400 text-xs">(Optional)</span>
                         </label>
                         <input
@@ -1438,12 +1500,12 @@ function CustomerModal({
                           }}
                           maxLength="10"
                           placeholder="ABCDE1234F"
-                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                        <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Relationship Type <span className="text-red-500">*</span>
                         </label>
                         <select
@@ -1454,7 +1516,7 @@ function CustomerModal({
                             setFormData(prev => ({ ...prev, minors: newMinors }))
                           }}
                           required
-                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         >
                           <option value="child">Parent-Child</option>
                           <option value="ward">Guardian-Ward</option>
@@ -1481,13 +1543,13 @@ function CustomerModal({
                                 }
                                 setFormData(prev => ({ ...prev, minors: newMinors }))
                               }}
-                              className="w-5 h-5 rounded border-2 border-gray-300 dark:border-dark-600 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
+                              className="w-5 h-5 rounded border-2 border-[var(--dashboard-border)] text-[var(--dashboard-primary)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:ring-offset-2 cursor-pointer"
                             />
                             <div>
-                              <span className="text-sm font-semibold text-gray-900 dark:text-white block">
+                              <span className="text-sm font-semibold text-[var(--dashboard-text)] block">
                                 Use same address as major customer
                               </span>
-                              <span className="text-xs text-gray-600 dark:text-gray-400">
+                              <span className="text-xs text-[var(--dashboard-muted)]">
                                 Address will be automatically copied from parent
                               </span>
                             </div>
@@ -1496,14 +1558,14 @@ function CustomerModal({
                       </div>
 
                       {minor.use_same_address === false && (
-                        <div className="md:col-span-2 space-y-4 pt-2 border-t border-gray-200 dark:border-dark-700">
+                        <div className="md:col-span-2 space-y-4 pt-2 border-t border-[var(--dashboard-border)]">
                           <div className="flex items-center mb-3">
-                            <div className="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-                            <span className="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Different Address</span>
-                            <div className="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+                            <div className="h-px flex-1 bg-[var(--dashboard-border)]"></div>
+                            <span className="px-3 text-xs font-semibold text-[var(--dashboard-muted)] uppercase tracking-wide">Different Address</span>
+                            <div className="h-px flex-1 bg-[var(--dashboard-border)]"></div>
                           </div>
                           <div className="md:col-span-2">
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                            <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                               Address Line 1
                             </label>
                             <input
@@ -1515,12 +1577,12 @@ function CustomerModal({
                                 setFormData(prev => ({ ...prev, minors: newMinors }))
                               }}
                               placeholder="Enter address line 1"
-                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             />
                           </div>
 
                           <div className="md:col-span-2">
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                            <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                               Address Line 2
                             </label>
                             <input
@@ -1532,12 +1594,12 @@ function CustomerModal({
                                 setFormData(prev => ({ ...prev, minors: newMinors }))
                               }}
                               placeholder="Enter address line 2"
-                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                            <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                               City
                             </label>
                             <input
@@ -1549,12 +1611,12 @@ function CustomerModal({
                                 setFormData(prev => ({ ...prev, minors: newMinors }))
                               }}
                               placeholder="Enter city"
-                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                            <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                               State
                             </label>
                             <input
@@ -1566,12 +1628,12 @@ function CustomerModal({
                                 setFormData(prev => ({ ...prev, minors: newMinors }))
                               }}
                               placeholder="Enter state"
-                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                            <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                               PIN Code
                             </label>
                             <input
@@ -1584,14 +1646,14 @@ function CustomerModal({
                               }}
                               maxLength="6"
                               placeholder="6 digits"
-                              className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                              className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                             />
                           </div>
                         </div>
                       )}
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                        <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Father's Name <span className="text-gray-400 text-xs">(Optional)</span>
                         </label>
                         <input
@@ -1603,12 +1665,12 @@ function CustomerModal({
                             setFormData(prev => ({ ...prev, minors: newMinors }))
                           }}
                           placeholder="Enter father's name"
-                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-dark-300 mb-2">
+                        <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Mother's Name <span className="text-gray-400 text-xs">(Optional)</span>
                         </label>
                         <input
@@ -1620,7 +1682,7 @@ function CustomerModal({
                             setFormData(prev => ({ ...prev, minors: newMinors }))
                           }}
                           placeholder="Enter mother's name"
-                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         />
                       </div>
                     </div>
@@ -1628,12 +1690,12 @@ function CustomerModal({
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 px-4 bg-gray-50 dark:bg-dark-700 rounded-lg border-2 border-dashed border-gray-300 dark:border-dark-600">
-                <FiUsers className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+              <div className="text-center py-8 px-4 bg-[var(--dashboard-bg)] rounded-lg border-2 border-dashed border-[var(--dashboard-border)]">
+                <FiUsers className="w-12 h-12 text-[var(--dashboard-muted)] mx-auto mb-3" />
+                <p className="text-sm font-medium text-[var(--dashboard-muted)] mb-1">
                   No minors added yet
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-500">
+                <p className="text-xs text-[var(--dashboard-muted)]">
                   Click "Add Minor" above to add a child or ward to this customer
                 </p>
               </div>
@@ -1643,10 +1705,59 @@ function CustomerModal({
           {/* Media Upload Section */}
           <div className="space-y-4 pt-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
                 Supporting Documents
               </label>
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+              {existingMedia && existingMedia.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  <h4 className="text-sm font-medium text-[var(--dashboard-text)]">
+                    Existing documents ({existingMedia.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {existingMedia.map((doc, idx) => {
+                      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+                      const href = doc.filename ? `${baseUrl}/uploads/${doc.filename}` : null
+                      const isDeleting = deletingMediaId !== null && String(doc.id) === String(deletingMediaId)
+                      return (
+                        <div key={doc.id ?? idx} className="flex items-center justify-between p-2 bg-[var(--dashboard-bg)] rounded-lg border border-[var(--dashboard-border)]">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-lg">{getFileIcon({ name: doc.original_name || doc.filename, type: doc.mime_type })}</span>
+                            <div>
+                              {href ? (
+                                <a href={href} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[var(--dashboard-primary)] hover:underline truncate max-w-48 block">
+                                  {doc.original_name || doc.filename || 'Document'}
+                                </a>
+                              ) : (
+                                <p className="text-sm font-medium text-[var(--dashboard-text)] truncate max-w-48">{doc.original_name || doc.filename || 'Document'}</p>
+                              )}
+                              {doc.uploaded_at && (
+                                <p className="text-xs text-[var(--dashboard-muted)]">Uploaded {new Date(doc.uploaded_at).toLocaleString()}</p>
+                              )}
+                            </div>
+                          </div>
+                          {onDeleteExistingMedia && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteExistingMedia(doc.id)}
+                              disabled={isDeleting}
+                              className="p-1.5 rounded-lg text-[var(--error)] hover:bg-[var(--error-muted)] disabled:opacity-50"
+                              title="Delete document"
+                              aria-label="Delete document"
+                            >
+                              {isDeleting ? (
+                                <FiRefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <FiTrash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="border-2 border-dashed border-[var(--dashboard-border)] rounded-lg p-6 text-center hover:border-[var(--dashboard-primary)] transition-colors">
                 <input
                   type="file"
                   multiple
@@ -1657,11 +1768,11 @@ function CustomerModal({
                 />
                 <label
                   htmlFor="media-upload"
-                  className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-blue-600 text-sm font-semibold rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
+                  className="inline-flex items-center px-4 py-2 border border-[var(--dashboard-primary)] text-sm font-semibold rounded-lg text-[var(--dashboard-primary)] bg-[var(--dashboard-primary)]/10 hover:bg-[var(--dashboard-primary)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:ring-offset-1 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
                 >
                   📎 Upload Documents
                 </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                <p className="text-xs text-[var(--dashboard-muted)] mt-2">
                   Supported formats: JPEG, PNG, GIF, WebP, PDF (Max 10MB each)
                 </p>
               </div>
@@ -1670,19 +1781,19 @@ function CustomerModal({
             {/* Display uploaded files */}
             {mediaFiles.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-700 dark:text-dark-300">
+                <h4 className="text-sm font-medium text-[var(--dashboard-text)]">
                   Uploaded Files ({mediaFiles.length})
                 </h4>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {mediaFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div key={index} className="flex items-center justify-between p-2 bg-[var(--dashboard-bg)] rounded-lg border border-[var(--dashboard-border)]">
                       <div className="flex items-center space-x-2">
                         <span className="text-lg">{getFileIcon(file)}</span>
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-48">
+                          <p className="text-sm font-medium text-[var(--dashboard-text)] truncate max-w-48">
                             {file.name}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-[var(--dashboard-muted)]">
                             {(file.size / 1024 / 1024).toFixed(2)} MB
                           </p>
                         </div>
@@ -1705,14 +1816,14 @@ function CustomerModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-dark-300 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-lg transition-colors duration-200"
+            className="px-4 py-2 text-sm font-medium text-[var(--dashboard-text)] bg-[var(--dashboard-border)]/40 hover:bg-[var(--dashboard-border)]/70 rounded-lg transition-colors duration-200"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 rounded-lg transition-colors duration-200"
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-[var(--dashboard-muted)] rounded-lg transition-colors duration-200"
             >
               {loading ? 'Saving...' : 'Save'}
             </button>
@@ -1724,12 +1835,14 @@ function CustomerModal({
 }
 
 // View Client Modal Component
-function ViewCustomerModal({ customer, onClose }) {
+function ViewCustomerModal({ customer, onClose, getBranchDisplay }) {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-dark-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Customer Details</h3>
+      <div className="bg-[var(--dashboard-card)] rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-[var(--dashboard-border)]">
+          <h3 className="text-lg font-medium text-[var(--dashboard-text)]">Customer Details</h3>
         </div>
         
         <div className="p-6 space-y-6">
@@ -1738,20 +1851,20 @@ function ViewCustomerModal({ customer, onClose }) {
               <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-2">Basic Information</h4>
               <div className="space-y-2">
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Name:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.name || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Name:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.name || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Investor ID:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.investor_id}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Investor ID:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.investor_id}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">PAN:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.pan || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">PAN:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.pan || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Aadhar:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.aadhar_number || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Aadhar:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.aadhar_number || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -1760,19 +1873,17 @@ function ViewCustomerModal({ customer, onClose }) {
               <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-2">Contact Information</h4>
               <div className="space-y-2">
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Mobile:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.mobile || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Mobile:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.mobile || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Email:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.email || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Email:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.email || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Branch(es):</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">
-                    {Array.isArray(customer.relationship_manager)
-                      ? customer.relationship_manager.join(', ')
-                      : customer.relationship_manager || 'N/A'}
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Branch(es):</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">
+                    {getBranchDisplay(customer)}
                   </span>
                 </div>
               </div>
@@ -1782,24 +1893,24 @@ function ViewCustomerModal({ customer, onClose }) {
               <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-2">Personal Information</h4>
               <div className="space-y-2">
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Date of Birth:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.date_of_birth || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Date of Birth:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.date_of_birth || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Father's Name:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.father_name || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Father's Name:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.father_name || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Mother's Name:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.mother_name || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Mother's Name:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.mother_name || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Occupation:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.occupation || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Occupation:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.occupation || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Annual Income:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Annual Income:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">
                     {customer.annual_income ? `₹${customer.annual_income.toLocaleString()}` : 'N/A'}
                   </span>
                 </div>
@@ -1810,37 +1921,86 @@ function ViewCustomerModal({ customer, onClose }) {
               <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-2">Address</h4>
               <div className="space-y-2">
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Address 1:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.address1 || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Address 1:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.address1 || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Address 2:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.address2 || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Address 2:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.address2 || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">Address 3:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.address3 || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">Address 3:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.address3 || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">City:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.city || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">City:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.city || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">State:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.state || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">State:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.state || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-dark-300">PIN:</span>
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{customer.pin || 'N/A'}</span>
+                  <span className="text-sm font-medium text-[var(--dashboard-text)]">PIN:</span>
+                  <span className="ml-2 text-sm text-[var(--dashboard-text)]">{customer.pin || 'N/A'}</span>
                 </div>
               </div>
             </div>
+
+            {/* Documents Section */}
+            {customer.media_documents && customer.media_documents.length > 0 && (
+              <div className="md:col-span-2 pt-4 border-t border-[var(--dashboard-border)]">
+                <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-3">
+                  Documents ({customer.media_documents.length})
+                </h4>
+                <div className="space-y-3">
+                  {customer.media_documents.map((doc) => {
+                    const href = `${baseUrl}/uploads/${doc.filename}`
+                    const sizeKB = doc.file_size ? Math.round(doc.file_size / 1024) : null
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between border border-gray-200 dark:border-dark-600 rounded-lg px-3 py-2 bg-[var(--dashboard-bg)]"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-[var(--dashboard-text)]">
+                            {doc.original_name || doc.filename}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-dark-300">
+                            {doc.mime_type || 'File'}
+                            {sizeKB !== null && ` • ${sizeKB} KB`}
+                            {doc.uploaded_at && ` • Uploaded ${new Date(doc.uploaded_at).toLocaleString()}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 text-xs font-medium text-[var(--dashboard-primary)] border border-blue-200 dark:border-blue-500 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/40"
+                          >
+                            View
+                          </a>
+                          <a
+                            href={href}
+                            download={doc.original_name || doc.filename}
+                            className="px-3 py-1.5 text-xs font-medium text-[var(--dashboard-primary)] border border-dashed border-blue-200 dark:border-blue-500 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/40"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex justify-end pt-4">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-dark-300 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-lg transition-colors duration-200"
+          className="px-4 py-2 text-sm font-medium text-[var(--dashboard-text)] bg-[var(--dashboard-border)]/40 hover:bg-[var(--dashboard-border)]/70 rounded-lg transition-colors duration-200"
             >
               Close
             </button>

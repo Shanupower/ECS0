@@ -295,9 +295,11 @@ export default function IssuesPage() {
 
   if (!isAdmin) {
     return (
-      <div className="text-center py-12">
-        <FiAlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600 dark:text-gray-400">Access denied. Admin only.</p>
+      <div className="flex justify-center py-12">
+        <div className="inline-flex items-center px-4 py-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--error)]">
+          <FiAlertTriangle className="w-5 h-5 mr-2" />
+          <p>Access denied. Admin only.</p>
+        </div>
       </div>
     )
   }
@@ -307,8 +309,8 @@ export default function IssuesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Issues Management</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Monitor and resolve all reported issues</p>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)]">Issues Management</h1>
+          <p className="text-[var(--text-secondary)] mt-1">Monitor and resolve all reported issues</p>
         </div>
         <button
           onClick={() => {
@@ -316,7 +318,7 @@ export default function IssuesPage() {
             loadAllIssuesForStats()
           }}
           disabled={loading}
-          className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 transition-colors disabled:opacity-50 shadow-sm"
+          className="flex items-center justify-center space-x-2 px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors disabled:opacity-50 shadow-sm"
         >
           <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span>Refresh</span>
@@ -327,62 +329,62 @@ export default function IssuesPage() {
       {!statsLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total Issues */}
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="p-4 sm:p-5 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-100 text-sm font-medium">Total Issues</p>
-                <p className="text-3xl font-bold mt-2">{stats.total}</p>
+                <p className="text-xs font-medium text-[var(--text-secondary)]">Total Issues</p>
+                <p className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mt-1">{stats.total}</p>
               </div>
-              <div className="bg-blue-400/20 rounded-full p-3">
-                <FiActivity className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--info-muted)] flex items-center justify-center">
+                <FiActivity className="w-5 h-5 text-[var(--info)]" />
               </div>
             </div>
           </div>
-
+          
           {/* Pending Issues */}
-          <div className="bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl p-6 text-white shadow-lg">
+          <div className="p-4 sm:p-5 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-yellow-100 text-sm font-medium">Pending</p>
-                <p className="text-3xl font-bold mt-2">{stats.pending}</p>
-                <p className="text-yellow-100 text-xs mt-1">
+                <p className="text-xs font-medium text-[var(--text-secondary)]">Pending</p>
+                <p className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mt-1">{stats.pending}</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">
                   {stats.open} Open • {stats.inProgress} In Progress
                 </p>
               </div>
-              <div className="bg-yellow-400/20 rounded-full p-3">
-                <FiClock className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--warn-muted)] flex items-center justify-center">
+                <FiClock className="w-5 h-5 text-[var(--warn)]" />
               </div>
             </div>
           </div>
-
+          
           {/* High Priority */}
-          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="p-4 sm:p-5 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-red-100 text-sm font-medium">High Priority</p>
-                <p className="text-3xl font-bold mt-2">{stats.urgent + stats.high}</p>
-                <p className="text-red-100 text-xs mt-1">
+                <p className="text-xs font-medium text-[var(--text-secondary)]">High Priority</p>
+                <p className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mt-1">{stats.urgent + stats.high}</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">
                   {stats.urgent} Urgent • {stats.high} High
                 </p>
               </div>
-              <div className="bg-red-400/20 rounded-full p-3">
-                <FiAlertTriangle className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--error-muted)] flex items-center justify-center">
+                <FiAlertTriangle className="w-5 h-5 text-[var(--error)]" />
               </div>
             </div>
           </div>
-
+          
           {/* Resolved */}
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="p-4 sm:p-5 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-green-100 text-sm font-medium">Resolved</p>
-                <p className="text-3xl font-bold mt-2">{stats.resolved + stats.closed}</p>
-                <p className="text-green-100 text-xs mt-1">
+                <p className="text-xs font-medium text-[var(--text-secondary)]">Resolved</p>
+                <p className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mt-1">{stats.resolved + stats.closed}</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">
                   {stats.resolved} Resolved • {stats.closed} Closed
                 </p>
               </div>
-              <div className="bg-green-400/20 rounded-full p-3">
-                <FiCheckCircle className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--success-muted)] flex items-center justify-center">
+                <FiCheckCircle className="w-5 h-5 text-[var(--success)]" />
               </div>
             </div>
           </div>
@@ -390,9 +392,9 @@ export default function IssuesPage() {
       )}
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center space-x-2">
-          <FiAlertCircle className="text-red-500" size={20} />
-          <span className="text-red-700 dark:text-red-300">{error}</span>
+        <div className="border border-[var(--error)]/70 bg-[var(--error-muted)] rounded-lg p-4 flex items-center space-x-2 text-[var(--error)]">
+          <FiAlertCircle size={20} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -401,14 +403,14 @@ export default function IssuesPage() {
         <div className="lg:col-span-2 space-y-4">
           {/* View Mode Toggle */}
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">All Issues</h2>
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">All Issues</h2>
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   viewMode === 'grid'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 Grid
@@ -417,8 +419,8 @@ export default function IssuesPage() {
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 List
@@ -426,28 +428,28 @@ export default function IssuesPage() {
             </div>
           </div>
           {/* Filters */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-4 space-y-4">
+          <div className="rounded-lg shadow p-4 space-y-4 border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex flex-wrap gap-4">
               <div className="flex-1 min-w-[200px]">
                 <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] w-4 h-4" />
                   <input
                     type="text"
                     placeholder="Search issues..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-dark-700 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
                   />
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <FiFilter className="text-gray-400" />
+                <FiFilter className="text-[var(--text-muted)]" />
                 <input
                   type="text"
                   placeholder="Filter by submitter..."
                   value={submitterFilter}
                   onChange={(e) => setSubmitterFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                  className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] text-sm"
                 />
                 <select
                   value={statusFilter}
@@ -455,7 +457,7 @@ export default function IssuesPage() {
                     setStatusFilter(e.target.value)
                     setPage(1)
                   }}
-                  className="px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 >
                   <option value="all">All Status</option>
                   <option value="open">Open</option>
@@ -469,7 +471,7 @@ export default function IssuesPage() {
                     setPriorityFilter(e.target.value)
                     setPage(1)
                   }}
-                  className="px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 >
                   <option value="all">All Priority</option>
                   <option value="low">Low</option>
@@ -483,24 +485,24 @@ export default function IssuesPage() {
 
           {/* Issues Display */}
           {loading ? (
-            <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-8 text-center">
-              <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-600 dark:text-gray-400">Loading issues...</p>
+            <div className="rounded-lg shadow p-8 text-center border border-[var(--stroke)] bg-[var(--card-bg)]">
+              <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto mb-2" />
+              <p className="text-[var(--text-muted)]">Loading issues...</p>
             </div>
           ) : filteredIssues.length === 0 ? (
-            <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-8 text-center">
-              <FiAlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-600 dark:text-gray-400">No issues found</p>
+            <div className="rounded-lg shadow p-8 text-center border border-[var(--stroke)] bg-[var(--card-bg)]">
+              <FiAlertTriangle className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-2" />
+              <p className="text-[var(--text-muted)]">No issues found</p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredIssues.map((issue) => (
                 <div
                   key={issue.id}
-                  className={`bg-white dark:bg-dark-800 rounded-lg shadow hover:shadow-lg transition-all duration-200 border-2 cursor-pointer ${
+                  className={`rounded-lg shadow hover:shadow-lg transition-all duration-200 border-2 cursor-pointer bg-[var(--card-bg)] ${
                     selectedIssue?.id === issue.id 
-                      ? 'border-red-500 dark:border-red-600' 
-                      : 'border-transparent hover:border-gray-200 dark:hover:border-dark-700'
+                      ? 'border-[var(--accent)]' 
+                      : 'border-transparent hover:border-[var(--stroke)]'
                   }`}
                   onClick={() => viewIssue(issue)}
                 >
@@ -508,7 +510,7 @@ export default function IssuesPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">#{issue.id}</span>
+                          <span className="text-sm font-semibold text-[var(--text-secondary)]">#{issue.id}</span>
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityColors[issue.priority] || priorityColors.medium}`}>
                             {issue.priority || 'medium'}
                           </span>
@@ -517,36 +519,36 @@ export default function IssuesPage() {
                             <span className="ml-1 capitalize">{issue.status?.replace('_', ' ')}</span>
                           </span>
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 line-clamp-1">
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2 line-clamp-1">
                           {issue.title}
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">
+                        <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mb-4">
                           {issue.description}
                         </p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-dark-700">
+                    <div className="flex items-center justify-between pt-4 border-t border-[var(--stroke)]">
                       <div className="flex items-center space-x-2">
                         {issue.created_by_user ? (
                           <>
-                            <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                              <FiUser className="w-4 h-4 text-red-600 dark:text-red-400" />
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-[var(--accent-muted)]">
+                              <FiUser className="w-4 h-4 text-[var(--accent)]" />
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              <p className="text-sm font-medium text-[var(--text-primary)]">
                                 {issue.created_by_user.name || 'Unknown'}
                               </p>
                               {issue.created_by_user.branch && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{issue.created_by_user.branch}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">{issue.created_by_user.branch}</p>
                               )}
                             </div>
                           </>
                         ) : (
-                          <span className="text-xs text-gray-400">Unknown User</span>
+                          <span className="text-xs text-[var(--text-muted)]">Unknown User</span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-[var(--text-secondary)]">
                         {formatDate(issue.created_at)}
                       </span>
                     </div>
@@ -559,14 +561,14 @@ export default function IssuesPage() {
               {filteredIssues.map((issue) => (
                 <div
                   key={issue.id}
-                  className={`bg-white dark:bg-dark-800 rounded-lg shadow hover:shadow-md transition-all duration-200 border-l-4 cursor-pointer ${
+                  className={`rounded-lg shadow hover:shadow-md transition-all duration-200 border-l-4 cursor-pointer bg-[var(--card-bg)] ${
                     selectedIssue?.id === issue.id 
-                      ? 'border-l-red-500 dark:border-l-red-600 bg-red-50 dark:bg-red-900/10' 
+                      ? 'border-l-[var(--accent)] bg-[var(--accent-muted)]/40' 
                       : issue.priority === 'urgent' 
-                        ? 'border-l-red-500' 
+                        ? 'border-l-[var(--error)]' 
                         : issue.priority === 'high'
-                          ? 'border-l-orange-500'
-                          : 'border-l-gray-300 dark:border-l-dark-700 hover:border-l-red-400'
+                          ? 'border-l-[var(--warn)]'
+                          : 'border-l-[var(--stroke)] hover:border-l-[var(--accent)]'
                   }`}
                   onClick={() => viewIssue(issue)}
                 >
@@ -574,8 +576,8 @@ export default function IssuesPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <span className="text-sm font-bold text-gray-700 dark:text-gray-300">#{issue.id}</span>
-                          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex-1">
+                          <span className="text-sm font-bold text-[var(--text-secondary)]">#{issue.id}</span>
+                          <h3 className="text-base font-semibold text-[var(--text-primary)] flex-1">
                             {issue.title}
                           </h3>
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityColors[issue.priority] || priorityColors.medium}`}>
@@ -586,10 +588,10 @@ export default function IssuesPage() {
                             <span className="ml-1 capitalize">{issue.status?.replace('_', ' ')}</span>
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-1">
+                        <p className="text-sm text-[var(--text-secondary)] mb-3 line-clamp-1">
                           {issue.description}
                         </p>
-                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center space-x-4 text-xs text-[var(--text-secondary)]">
                           {issue.created_by_user && (
                             <div className="flex items-center space-x-1">
                               <FiUser className="w-3 h-3" />
@@ -614,22 +616,22 @@ export default function IssuesPage() {
 
           {/* Pagination */}
           {!loading && filteredIssues.length > 0 && total > pageSize && (
-            <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-4 flex items-center justify-between">
-              <div className="text-sm text-gray-700 dark:text-gray-300">
+            <div className="rounded-lg shadow p-4 flex items-center justify-between border border-[var(--stroke)] bg-[var(--card-bg-opaque)]">
+              <div className="text-sm text-[var(--text-secondary)]">
                 Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} issues
               </div>
               <div className="flex space-x-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 dark:border-dark-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                  className="px-4 py-2 border border-[var(--stroke)] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors text-[var(--text-primary)]"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setPage(p => p + 1)}
                   disabled={page * pageSize >= total}
-                  className="px-4 py-2 border border-gray-300 dark:border-dark-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                  className="px-4 py-2 border border-[var(--stroke)] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors text-[var(--text-primary)]"
                 >
                   Next
                 </button>
@@ -641,32 +643,32 @@ export default function IssuesPage() {
         {/* Issue Details Sidebar */}
         {selectedIssue && (
           <div className="lg:col-span-1">
-            <div className="bg-white dark:bg-dark-800 rounded-lg shadow p-6 space-y-4 sticky top-4">
+            <div className="rounded-lg shadow p-6 space-y-4 sticky top-4 border border-[var(--stroke)] bg-[var(--card-bg)]">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Issue #{selectedIssue.id}</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Issue #{selectedIssue.id}</h2>
                 <button
                   onClick={() => setSelectedIssue(null)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                 >
                   <FiX className="w-5 h-5" />
                 </button>
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</h3>
-                <p className="text-gray-900 dark:text-gray-100">{selectedIssue.title}</p>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Title</h3>
+                <p className="text-[var(--text-primary)]">{selectedIssue.title}</p>
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</h3>
-                <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{selectedIssue.description}</p>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Description</h3>
+                <p className="text-[var(--text-primary)] whitespace-pre-wrap">{selectedIssue.description}</p>
               </div>
 
               {selectedIssue.receipt_draft_id && (
                 <div>
                   <button
                     onClick={() => navigate(`/receipts?draftId=${selectedIssue.receipt_draft_id}`)}
-                    className="w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:bg-[var(--accent)]/90 transition-colors"
                   >
                     Recreate Receipt from Draft
                   </button>
@@ -674,44 +676,44 @@ export default function IssuesPage() {
               )}
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Submitted By</h3>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Submitted By</h3>
                 {selectedIssue.created_by_user ? (
                   <div className="space-y-1">
-                    <div className="flex items-center text-gray-900 dark:text-gray-100">
+                    <div className="flex items-center text-[var(--text-primary)]">
                       <FiUser className="w-4 h-4 mr-2" />
                       <span className="font-medium">{selectedIssue.created_by_user.name || 'Unknown'}</span>
                     </div>
                     {selectedIssue.created_by_user.emp_code && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 ml-6">
+                      <div className="text-sm text-[var(--text-secondary)] ml-6">
                         Employee Code: {selectedIssue.created_by_user.emp_code}
                       </div>
                     )}
                     {selectedIssue.created_by_user.email && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 ml-6 flex items-center">
+                      <div className="text-sm text-[var(--text-secondary)] ml-6 flex items-center">
                         <FiMail className="w-3 h-3 mr-1" />
                         {selectedIssue.created_by_user.email}
                       </div>
                     )}
                     {selectedIssue.created_by_user.branch && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 ml-6 flex items-center">
+                      <div className="text-sm text-[var(--text-secondary)] ml-6 flex items-center">
                         <FiMapPin className="w-3 h-3 mr-1" />
                         {selectedIssue.created_by_user.branch}
                       </div>
                     )}
                     {selectedIssue.created_by_user.role && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 ml-6">
+                      <div className="text-sm text-[var(--text-secondary)] ml-6">
                         Role: <span className="capitalize">{selectedIssue.created_by_user.role}</span>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">User information not available</p>
+                  <p className="text-sm text-[var(--text-secondary)]">User information not available</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Priority</h3>
                   <select
                     value={selectedIssue.priority || 'medium'}
                     onChange={(e) => handlePriorityChange(selectedIssue.id, e.target.value)}
@@ -724,7 +726,7 @@ export default function IssuesPage() {
                   </select>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Status</h3>
                   <select
                     value={selectedIssue.status || 'open'}
                     onChange={(e) => handleStatusChange(selectedIssue.id, e.target.value)}
@@ -739,17 +741,17 @@ export default function IssuesPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Created</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{formatDate(selectedIssue.created_at)}</p>
+                <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Created</h3>
+                <p className="text-sm text-[var(--text-secondary)]">{formatDate(selectedIssue.created_at)}</p>
               </div>
 
               {selectedIssue.updated_by_user && selectedIssue.updated_at && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Updated</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-1">Last Updated</h3>
+                  <p className="text-sm text-[var(--text-secondary)] mb-1">
                     {formatDate(selectedIssue.updated_at)}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-[var(--text-secondary)]">
                     By: {selectedIssue.updated_by_user.name || 'Unknown'}
                   </p>
                 </div>
@@ -757,7 +759,7 @@ export default function IssuesPage() {
 
               {selectedIssue.photo && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Photo</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Photo</h3>
                   {(() => {
                     // Get filename from photo object, or extract from file_path if needed
                     let filename = selectedIssue.photo.filename
@@ -768,21 +770,21 @@ export default function IssuesPage() {
                     }
                     
                     if (filename) {
-                      return (
-                        <AuthenticatedImage
-                          issueId={selectedIssue.id}
-                          filename={filename}
-                          alt="Issue photo"
-                          className="w-full rounded-lg border border-gray-200 dark:border-dark-700"
-                          token={token}
-                        />
-                      )
+                        return (
+                          <AuthenticatedImage
+                            issueId={selectedIssue.id}
+                            filename={filename}
+                            alt="Issue photo"
+                            className="w-full rounded-lg border border-[var(--stroke)]"
+                            token={token}
+                          />
+                        )
                     } else {
-                      return (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 p-2 bg-gray-50 dark:bg-dark-700 rounded">
-                          Photo filename not available
-                        </div>
-                      )
+                        return (
+                          <div className="text-sm text-[var(--text-secondary)] p-2 bg-[var(--card-bg-opaque)] rounded">
+                            Photo filename not available
+                          </div>
+                        )
                     }
                   })()}
                 </div>
@@ -790,10 +792,10 @@ export default function IssuesPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Fixes/Responses</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)]">Fixes/Responses</h3>
                   <button
                     onClick={() => setShowFixModal(true)}
-                    className="flex items-center space-x-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    className="flex items-center space-x-1 text-sm text-[var(--accent)] hover:text-[var(--accent)]/90"
                   >
                     <FiMessageSquare className="w-4 h-4" />
                     <span>Add Fix</span>
@@ -802,24 +804,24 @@ export default function IssuesPage() {
                 <div className="space-y-3 max-h-64 overflow-y-auto">
                   {selectedIssue.fixes && selectedIssue.fixes.length > 0 ? (
                     selectedIssue.fixes.map((fix, idx) => (
-                      <div key={idx} className="bg-gray-50 dark:bg-dark-700 rounded-lg p-3">
+                      <div key={idx} className="rounded-lg p-3 bg-[var(--card-bg-opaque)]">
                         <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center text-xs text-[var(--text-secondary)]">
                             <FiUser className="w-3 h-3 mr-1" />
                             {fix.created_by_user?.name || 'Unknown User'}
                             {fix.created_by_user?.emp_code && (
                               <span className="ml-2">({fix.created_by_user.emp_code})</span>
                             )}
                           </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-[var(--text-secondary)]">
                             {formatDate(fix.created_at)}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{fix.text}</p>
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{fix.text}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No fixes/responses yet</p>
+                    <p className="text-sm text-[var(--text-secondary)]">No fixes/responses yet</p>
                   )}
                 </div>
               </div>

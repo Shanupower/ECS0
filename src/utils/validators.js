@@ -150,21 +150,24 @@ function normalizeValue(value) {
 }
 
 /**
- * Normalize branch data for comparison (handles relationship_manager field)
+ * Normalize branch data for comparison (handles branches[] and relationship_manager)
+ * Form branches are canonical keys; original may have customer.branches or customer.relationship_manager
  */
-function normalizeBranchForComparison(branches, originalRelationshipManager) {
-  // Normalize form branches (array)
-  const formBranches = Array.isArray(branches) 
+function normalizeBranchForComparison(branches, originalCustomer) {
+  const formBranches = Array.isArray(branches)
     ? branches.map(b => normalizeValue(b)).filter(b => b !== '').sort()
     : []
-  
-  // Normalize original relationship_manager (could be string or array)
-  const originalBranches = originalRelationshipManager
-    ? (Array.isArray(originalRelationshipManager)
-        ? originalRelationshipManager.map(b => normalizeValue(b)).filter(b => b !== '').sort()
-        : [normalizeValue(originalRelationshipManager)].filter(b => b !== ''))
-    : []
-  
+
+  let originalBranches = []
+  if (originalCustomer && Array.isArray(originalCustomer.branches) && originalCustomer.branches.length > 0) {
+    originalBranches = originalCustomer.branches.map(b => normalizeValue(b)).filter(b => b !== '').sort()
+  } else if (originalCustomer && originalCustomer.relationship_manager != null) {
+    const rm = originalCustomer.relationship_manager
+    originalBranches = Array.isArray(rm)
+      ? rm.map(b => normalizeValue(b)).filter(b => b !== '').sort()
+      : [normalizeValue(rm)].filter(b => b !== '')
+  }
+
   return {
     form: formBranches.join(','),
     original: originalBranches.join(',')

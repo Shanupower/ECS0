@@ -163,9 +163,9 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
       case 'medium':
         return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'
       case 'low':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+        return 'bg-[var(--dashboard-primary)]/15 text-[var(--dashboard-primary)] border-[var(--dashboard-primary)]/30'
       default:
-        return 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+        return 'bg-[var(--dashboard-border)]/50 text-[var(--dashboard-text)] border-[var(--dashboard-border)]'
     }
   }
 
@@ -173,16 +173,16 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-gray-700">
+      <div className="bg-[var(--dashboard-card)] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-[var(--dashboard-border)]">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-750">
+        <div className="flex items-center justify-between p-6 border-b border-[var(--dashboard-border)] bg-[var(--dashboard-bg)]">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Report an Issue</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Help us improve by reporting problems</p>
+            <h2 className="text-2xl font-bold text-[var(--dashboard-text)]">Report an Issue</h2>
+            <p className="text-sm text-[var(--dashboard-muted)] mt-1">Help us improve by reporting problems</p>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            className="text-[var(--dashboard-muted)] hover:text-[var(--dashboard-text)] transition-colors p-2 hover:bg-[var(--dashboard-border)]/50 rounded-lg"
             disabled={isSubmitting}
           >
             <X size={24} />
@@ -208,7 +208,7 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
 
           {/* Issue Title */}
           <div>
-            <label htmlFor="title" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="title" className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
               Issue Title <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
@@ -217,7 +217,7 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
               name="title"
               value={formData.title}
               onChange={handleInputChange}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 border border-[var(--dashboard-border)] rounded-xl bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent transition-all"
               placeholder="Brief description of the issue"
               required
               disabled={isSubmitting}
@@ -226,7 +226,7 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
 
           {/* Description */}
           <div>
-            <label htmlFor="description" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="description" className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
               Description <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <textarea
@@ -235,7 +235,7 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
               value={formData.description}
               onChange={handleInputChange}
               rows={5}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent resize-none transition-all"
+              className="w-full px-4 py-3 border border-[var(--dashboard-border)] rounded-xl bg-[var(--dashboard-card)] text-[var(--dashboard-text)] placeholder-[var(--dashboard-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent resize-none transition-all"
               placeholder="Please provide detailed information about the issue..."
               required
               disabled={isSubmitting}
@@ -244,7 +244,7 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
 
           {/* Priority */}
           <div>
-            <label htmlFor="priority" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="priority" className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
               Priority Level
             </label>
             <select
@@ -252,7 +252,7 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
               name="priority"
               value={formData.priority}
               onChange={handleInputChange}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all appearance-none cursor-pointer"
+              className="w-full px-4 py-3 border border-[var(--dashboard-border)] rounded-xl bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:outline-none focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent transition-all appearance-none cursor-pointer"
               disabled={isSubmitting}
             >
               <option value="low">Low - Minor issue</option>
@@ -269,18 +269,18 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
 
           {/* Photo Upload */}
           <div>
-            <label htmlFor="photo" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="photo" className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
               Screenshot (Optional)
             </label>
             {photoPreview ? (
-              <div className="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 bg-gray-50 dark:bg-gray-700/50">
+              <div className="relative border-2 border-dashed border-[var(--dashboard-border)] rounded-xl p-4 bg-[var(--dashboard-bg)]">
                 <img 
                   src={photoPreview} 
                   alt="Preview" 
                   className="w-full h-48 object-contain rounded-lg mb-3"
                 />
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center space-x-2 text-sm text-[var(--dashboard-muted)]">
                     <ImageIcon size={16} />
                     <span className="truncate max-w-xs">{photo.name}</span>
                     <span className="text-xs">({(photo.size / 1024 / 1024).toFixed(2)} MB)</span>
@@ -298,14 +298,14 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
             ) : (
               <label
                 htmlFor="photo"
-                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-all group"
+                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[var(--dashboard-border)] rounded-xl bg-[var(--dashboard-bg)] hover:border-[var(--dashboard-primary)]/50 hover:bg-[var(--dashboard-primary)]/5 cursor-pointer transition-all group"
               >
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Upload className="w-8 h-8 mb-2 text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
-                  <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-                    <span className="font-semibold">Click to upload</span> or drag and drop
+                  <Upload className="w-8 h-8 mb-2 text-[var(--dashboard-muted)] group-hover:text-[var(--dashboard-primary)] transition-colors" />
+                  <p className="mb-2 text-sm text-[var(--dashboard-muted)]">
+                    <span className="font-semibold text-[var(--dashboard-text)]">Click to upload</span> or drag and drop
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, GIF up to 10MB</p>
+                  <p className="text-xs text-[var(--dashboard-muted)]">PNG, JPG, GIF up to 10MB</p>
                 </div>
                 <input
                   type="file"
@@ -320,18 +320,18 @@ const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex space-x-3 pt-4 border-t border-[var(--dashboard-border)]">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 border border-[var(--dashboard-border)] rounded-xl text-[var(--dashboard-text)] bg-[var(--dashboard-card)] hover:bg-[var(--dashboard-border)]/50 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="flex-1 px-4 py-3 bg-[var(--dashboard-primary)] hover:bg-[var(--dashboard-primary-hover)] text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               disabled={isSubmitting}
             >
               {isSubmitting ? (

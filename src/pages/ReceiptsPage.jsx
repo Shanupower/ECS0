@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MultiStepReceipt from '../components/MultiStepReceipt.jsx'
-import { FiFileText } from 'react-icons/fi'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { Button } from '../components/ui'
 
 export default function ReceiptsPage(){
   const { token } = useAuth()
@@ -109,49 +109,35 @@ export default function ReceiptsPage(){
   }, [token, localDraftPayload, savingLocalDraft])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center">
-        <FiFileText className="w-6 h-6 text-red-600 mr-3" />
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Create Receipt</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Generate a new financial receipt</p>
-        </div>
-      </div>
+    <div className="space-y-4 -ml-4 lg:-ml-6">
       {!draftId && cachedDraftId && (
-        <div className="rounded-lg border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm text-yellow-800 dark:text-yellow-200 flex items-center justify-between">
-          <span>We found a failed receipt draft. Resume where you left off?</span>
-          <button
-            className="px-3 py-1.5 rounded-md bg-yellow-600 text-white text-sm font-semibold"
-            onClick={() => navigate(`/receipts?draftId=${cachedDraftId}`)}
-          >
-            Resume
-          </button>
+        <div className="rounded-card border border-[var(--warn)]/40 bg-[var(--warn-muted)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-body text-[var(--text-primary)]">We found a failed receipt draft. Resume where you left off?</span>
+          <Button variant="primary" onClick={() => navigate(`/receipts?draftId=${cachedDraftId}`)}>Resume</Button>
         </div>
       )}
       {!draftId && !cachedDraftId && localDraftPayload && (
-        <div className="rounded-lg border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm text-yellow-800 dark:text-yellow-200 flex items-center justify-between">
-          <span>We found a locally saved draft. Save it to the server and resume?</span>
-          <button
-            className="px-3 py-1.5 rounded-md bg-yellow-600 text-white text-sm font-semibold disabled:opacity-50"
-            onClick={handleResumeLocalDraft}
-            disabled={savingLocalDraft}
-          >
-            {savingLocalDraft ? 'Saving...' : 'Save & Resume'}
-          </button>
+        <div className="rounded-card border border-[var(--warn)]/40 bg-[var(--warn-muted)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-body text-[var(--text-primary)]">We found a locally saved draft. Save it to the server and resume?</span>
+          <Button variant="primary" onClick={handleResumeLocalDraft} disabled={savingLocalDraft}>
+            {savingLocalDraft ? 'Saving…' : 'Save & resume'}
+          </Button>
         </div>
       )}
       {localDraftError && (
-        <div className="rounded-lg border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300">
+        <div className="rounded-card border border-[var(--error)]/40 bg-[var(--error-muted)] px-4 py-3 text-body text-[var(--error)]">
           {localDraftError}
         </div>
       )}
       {draftError && (
-        <div className="rounded-lg border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300">
+        <div className="rounded-card border border-[var(--error)]/40 bg-[var(--error-muted)] px-4 py-3 text-body text-[var(--error)]">
           {draftError}
         </div>
       )}
       {draftLoading ? (
-        <div className="text-sm text-gray-600 dark:text-gray-400">Loading draft...</div>
+        <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-bg)] p-8 text-center">
+          <p className="text-body text-[var(--text-muted)]">Loading draft…</p>
+        </div>
       ) : (
         <MultiStepReceipt draftData={draftData} draftId={draftId} />
       )}

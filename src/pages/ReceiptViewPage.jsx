@@ -419,6 +419,20 @@ export default function ReceiptViewPage() {
     insurance_maturity_date: receipt.insurance_maturity_date,
   }
 
+  // For MF Switch Over: show "FROM → TO" scheme; otherwise scheme name as-is
+  const getDisplaySchemeName = (r) => {
+    if (!r) return ''
+    if (r.product_category !== 'MF') return r.schemeName || r.scheme_name || ''
+    const txnType = (r.txn_type || '').toLowerCase()
+    const isSwitchOver = txnType.includes('switch') || !!r.switch_to_scheme_name
+    if (!isSwitchOver) return r.schemeName || r.scheme_name || ''
+    const fromName = r.switch_from_scheme_name || r.scheme_name || r.schemeName
+    const toName = r.switch_to_scheme_name || r.scheme_name || r.schemeName
+    if (fromName && toName && fromName !== toName) return `${fromName} → ${toName}`
+    return toName || fromName || r.schemeName || r.scheme_name || ''
+  }
+  const displaySchemeName = getDisplaySchemeName(transformedReceipt)
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-800">
       {/* Header */}
@@ -623,10 +637,12 @@ export default function ReceiptViewPage() {
                     </div>
                   )}
 
-                  {transformedReceipt.schemeName && (
+                  {(displaySchemeName || transformedReceipt.schemeName) && (
                     <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Scheme Name</div>
-                      <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.schemeName}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {transformedReceipt.switch_to_scheme_name ? 'Switch Over (From → To)' : 'Scheme Name'}
+                      </div>
+                      <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{displaySchemeName || transformedReceipt.schemeName}</div>
                       {transformedReceipt.scheme_option && (
                         <div className="mt-2">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${

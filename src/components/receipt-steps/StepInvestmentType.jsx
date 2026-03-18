@@ -6,7 +6,7 @@ export default function StepInvestmentType({ onBack, onNext, productType, hasExi
   const allInvestmentTypes = [
     { 
       value: 'Lumpsum', 
-      label: 'Lumpsum', 
+      label: 'Lump Sum', 
       icon: '💰',
       description: 'One-time investment with immediate allocation',
       available: true
@@ -47,16 +47,16 @@ export default function StepInvestmentType({ onBack, onNext, productType, hasExi
     : allInvestmentTypes
 
   return (
-    <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 5 — Select Investment Type</h3>
-      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <p className="text-sm text-blue-800 dark:text-blue-200">
+    <div className="receipt-step-card py-2">
+      <h3 className="receipt-step-title mt-0 mb-1">Step 5 — Select Investment Type</h3>
+      <div className="mb-4 p-3 rounded-xl border border-[var(--dashboard-primary)]/30 bg-[var(--dashboard-primary)]/10">
+        <p className="text-[var(--text-body)] text-[var(--dashboard-text)]">
           <strong>Product Type:</strong> {productType === 'MF' ? 'Mutual Funds' : productType === 'INS' ? 'Insurance' : productType === 'FD' ? 'Fixed Deposit' : 'Bonds'}
         </p>
       </div>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose how you want to invest in this product</p>
+      <p className="receipt-step-helper mb-6">Choose how you want to invest in this product</p>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {investmentTypes.map(type => {
           if (!type.available) return null
           return (
@@ -64,31 +64,25 @@ export default function StepInvestmentType({ onBack, onNext, productType, hasExi
               key={type.value}
               type="button"
               onClick={() => setInvestmentType(type.value)}
-              className={`p-4 rounded-2xl border-2 transition-all duration-200 hover:shadow-lg ${
+              className={`p-4 rounded-xl border-2 transition-all duration-200 hover:shadow-lg ${
                 investmentType === type.value 
-                  ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20 shadow-md' 
-                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                  ? 'border-[var(--dashboard-primary)] bg-[var(--dashboard-primary)]/10 shadow-md' 
+                  : 'border-[var(--dashboard-border)] bg-[var(--dashboard-card)] hover:border-[var(--dashboard-muted)]'
               }`}
             >
               <div className="text-center">
                 <div className="text-3xl mb-2">{type.icon}</div>
-                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">{type.label}</h4>
-                <p className="text-xs text-gray-600 dark:text-gray-400 leading-tight">{type.description}</p>
+                <h4 className="font-semibold text-[var(--dashboard-text)] mb-1">{type.label}</h4>
+                <p className="receipt-step-helper leading-tight">{type.description}</p>
               </div>
             </button>
           )
         })}
       </div>
 
-      <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">
-          Back
-        </button>
-        <button
-          onClick={() => onNext(investmentType)}
-          disabled={!investmentType}
-          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-        >
+      <div className="flex flex-wrap gap-3 justify-center mt-6">
+        <button type="button" className="receipt-step-ghost-btn px-4 py-2.5 text-sm font-medium" onClick={onBack}>Back</button>
+        <button type="button" className="receipt-step-primary-btn px-4 py-2.5 text-sm" onClick={() => onNext(investmentType)} disabled={!investmentType}>
           Continue
         </button>
       </div>

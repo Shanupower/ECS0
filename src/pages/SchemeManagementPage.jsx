@@ -14,6 +14,7 @@ import {
   FiUpload
 } from 'react-icons/fi'
 import bondCategories from '../data/bond_categories.json'
+import { MF_AMC_CATEGORIES, formatMinInvestment } from '../data/mf_amc_categories'
 
 /** Life insurance subcategory options for scheme management */
 const LIFE_SUBCATEGORIES = [
@@ -102,7 +103,9 @@ export default function SchemeManagementPage() {
   }
   const [amcFormData, setAmcFormData] = useState({
     amc_name: '',
-    amc_code: ''
+    amc_code: '',
+    amc_category: 'MF',
+    min_investment: ''
   })
   const [schemeFormData, setSchemeFormData] = useState({
     base_name: '',
@@ -126,6 +129,9 @@ export default function SchemeManagementPage() {
   const [updateIfExists, setUpdateIfExists] = useState(false)
   const [bulkCC, setBulkCC] = useState('')
   const [bulkSI, setBulkSI] = useState('')
+
+  // Bulk selection state for FD schemes
+  const [selectedFdSchemeIds, setSelectedFdSchemeIds] = useState([])
 
   // FD Form Data States
   const [fdIssuerFormData, setFdIssuerFormData] = useState({
@@ -153,6 +159,7 @@ export default function SchemeManagementPage() {
   })
   
   const [ncdBondSchemeFormData, setNcdBondSchemeFormData] = useState({
+    instrument_type: 'BOND',
     scheme_id: '',
     scheme_name: '',
     isin: '',
@@ -227,6 +234,8 @@ export default function SchemeManagementPage() {
     si_fresh: 0,
     cc_renewal: 0,
     si_renewal: 0,
+    /** PPT-based CC/SI slabs (Premium Payment Term): e.g. Single Premium, PPT 5, PPT 10, 12Yrs+. Used for Life when set; else product-level cc/si. */
+    ppt_slabs: [],
     is_active: true,
     launch_date: '',
     withdrawal_date: null
@@ -641,6 +650,7 @@ useEffect(() => {
         base_name: schemeFormData.base_name,
         category: schemeFormData.category,
         sub_category: schemeFormData.sub_category,
+        amc_category: selectedAmc.amc_category || 'MF',
         type: schemeFormData.type,
         is_nfo: schemeFormData.is_nfo,
         plans: schemeFormData.plans,
@@ -692,6 +702,7 @@ useEffect(() => {
         base_name: schemeFormData.base_name,
         category: schemeFormData.category,
         sub_category: schemeFormData.sub_category,
+        amc_category: selectedAmc.amc_category || 'MF',
         type: schemeFormData.type,
         is_nfo: schemeFormData.is_nfo,
         nfo_validity: schemeFormData.nfo_validity,
@@ -743,6 +754,7 @@ useEffect(() => {
     try {
       const trimmedData = trimFormData({
         ...schemeFormData,
+        amc_category: selectedAmc?.amc_category || 'MF',
         cc: schemeFormData.cc !== undefined ? schemeFormData.cc : null,
         si: schemeFormData.si !== undefined ? schemeFormData.si : null
       })
@@ -767,7 +779,7 @@ useEffect(() => {
   }
 
   const resetAMCForm = () => {
-    setAmcFormData({ amc_name: '', amc_code: '' })
+    setAmcFormData({ amc_name: '', amc_code: '', amc_category: 'MF', min_investment: '' })
   }
 
   const resetSchemeForm = () => {
@@ -794,7 +806,9 @@ useEffect(() => {
     setEditingAMC(amc)
     setAmcFormData({
       amc_name: amc.amc_name,
-      amc_code: amc.amc_code
+      amc_code: amc.amc_code,
+      amc_category: amc.amc_category || 'MF',
+      min_investment: amc.min_investment != null ? amc.min_investment : ''
     })
   }
 
@@ -1000,7 +1014,7 @@ useEffect(() => {
   }
   
   const resetFDSlabForm = () => {
-    // Auto-set payout frequency to "On Maturity" for cumulative schemes
+    // Auto-set payout frequency to "On Maturity" for cumulative schemes; default CC/SI from scheme
     const defaultPayoutFrequency = selectedFdScheme?.is_cumulative ? 'On Maturity' : 'Monthly'
     setFdSlabFormData({
       slab_id: '',
@@ -1011,7 +1025,9 @@ useEffect(() => {
       compounding_frequency: null,
       effective_yield_pa: null,
       notes_public_display: '',
-      is_active: true
+      is_active: true,
+      cc: selectedFdScheme?.cc ?? 0,
+      si: selectedFdScheme?.si ?? 0
     })
   }
 
@@ -1222,7 +1238,9 @@ useEffect(() => {
       compounding_frequency: slab.compounding_frequency || null,
       effective_yield_pa: slab.effective_yield_pa || null,
       notes_public_display: slab.notes_public_display || '',
-      is_active: slab.is_active !== undefined ? slab.is_active : true
+      is_active: slab.is_active !== undefined ? slab.is_active : true,
+      cc: slab.cc !== undefined && slab.cc !== null ? slab.cc : (selectedFdScheme?.cc ?? 0),
+      si: slab.si !== undefined && slab.si !== null ? slab.si : (selectedFdScheme?.si ?? 0)
     })
   }
   
@@ -1242,6 +1260,7 @@ useEffect(() => {
   const openNcdBondSchemeEdit = (scheme) => {
     setEditingNcdBondScheme(scheme)
     setNcdBondSchemeFormData({
+      instrument_type: scheme.instrument_type || 'BOND',
       scheme_id: scheme.scheme_id || '',
       scheme_name: scheme.scheme_name || '',
       isin: scheme.isin || '',
@@ -1283,6 +1302,7 @@ useEffect(() => {
   
   const resetNcdBondSchemeForm = () => {
     setNcdBondSchemeFormData({
+      instrument_type: 'BOND',
       scheme_id: '',
       scheme_name: '',
       isin: '',
@@ -1361,6 +1381,7 @@ useEffect(() => {
       si_fresh: 0,
       cc_renewal: 0,
       si_renewal: 0,
+      ppt_slabs: [],
       is_active: true,
       launch_date: '',
       withdrawal_date: null
@@ -1433,6 +1454,7 @@ useEffect(() => {
       si_fresh: product.si_fresh ?? product.si ?? 0,
       cc_renewal: product.cc_renewal ?? product.cc ?? 0,
       si_renewal: product.si_renewal ?? product.si ?? 0,
+      ppt_slabs: Array.isArray(product.ppt_slabs) ? product.ppt_slabs.map(s => ({ ...s })) : [],
       is_active: product.is_active !== undefined ? product.is_active : true,
       launch_date: product.launch_date || '',
       withdrawal_date: product.withdrawal_date || null
@@ -1525,6 +1547,26 @@ useEffect(() => {
     } catch (err) {
       alert('Failed to update insurance product: ' + err.message)
     }
+  }
+
+  const addInsurancePptSlab = () => {
+    const slabs = insuranceProductFormData.ppt_slabs || []
+    setInsuranceProductFormData({
+      ...insuranceProductFormData,
+      ppt_slabs: [...slabs, { ppt_type: 'PPT', ppt_years_min: 5, ppt_years_max: 5, cc: 0, si: 0 }]
+    })
+  }
+
+  const updateInsurancePptSlab = (index, field, value) => {
+    const slabs = [...(insuranceProductFormData.ppt_slabs || [])]
+    if (!slabs[index]) return
+    slabs[index] = { ...slabs[index], [field]: value }
+    setInsuranceProductFormData({ ...insuranceProductFormData, ppt_slabs: slabs })
+  }
+
+  const removeInsurancePptSlab = (index) => {
+    const slabs = (insuranceProductFormData.ppt_slabs || []).filter((_, i) => i !== index)
+    setInsuranceProductFormData({ ...insuranceProductFormData, ppt_slabs: slabs })
   }
 
   const handleDeleteInsuranceProduct = async (product_id) => {
@@ -1727,6 +1769,65 @@ useEffect(() => {
 
   const filteredFdIssuers = fdIssuers // Can add search later
   const filteredFdSchemes = fdSchemes // Can add search later
+
+  const allFdSelected = filteredFdSchemes.length > 0 && selectedFdSchemeIds.length === filteredFdSchemes.length
+
+  const toggleSelectAllFd = () => {
+    if (allFdSelected) {
+      setSelectedFdSchemeIds([])
+    } else {
+      setSelectedFdSchemeIds(filteredFdSchemes.map(s => s.scheme_id))
+    }
+  }
+
+  const toggleSelectFd = (schemeId) => {
+    setSelectedFdSchemeIds(prev =>
+      prev.includes(schemeId) ? prev.filter(id => id !== schemeId) : [...prev, schemeId]
+    )
+  }
+
+  const handleBulkDeleteFDSchemes = async () => {
+    if (!token || selectedFdSchemeIds.length === 0) return
+    if (!confirm(`Delete ${selectedFdSchemeIds.length} FD scheme(s)? This cannot be undone.`)) return
+
+    try {
+      setLoading(true)
+      const issuerKey = selectedFdIssuer?._key || selectedFdIssuer?.issuer_key
+      for (const id of selectedFdSchemeIds) {
+        await api.deleteFDScheme(token, issuerKey, id)
+      }
+      await loadFDSchemes(issuerKey)
+      setSelectedFdSchemeIds([])
+      alert('Selected FD schemes deleted successfully.')
+    } catch (err) {
+      console.error('Failed to bulk delete FD schemes:', err)
+      alert(err.message || 'Failed to delete selected FD schemes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBulkUpdateFdStatus = async (isActive) => {
+    if (!token || selectedFdSchemeIds.length === 0) return
+    const label = isActive ? 'activate' : 'deactivate'
+    if (!confirm(`Do you want to ${label} ${selectedFdSchemeIds.length} FD scheme(s)?`)) return
+
+    try {
+      setLoading(true)
+      const issuerKey = selectedFdIssuer?._key || selectedFdIssuer?.issuer_key
+      for (const id of selectedFdSchemeIds) {
+        await api.updateFDScheme(token, issuerKey, id, { is_active: isActive })
+      }
+      await loadFDSchemes(issuerKey)
+      setSelectedFdSchemeIds([])
+      alert(`Selected FD schemes ${isActive ? 'activated' : 'deactivated'} successfully.`)
+    } catch (err) {
+      console.error('Failed to bulk update FD schemes:', err)
+      alert(err.message || 'Failed to update selected FD schemes')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // NCD/Bond Management Functions
   const loadNcdBondIssuers = async () => {
@@ -1972,79 +2073,79 @@ useEffect(() => {
         </div>
 
         {/* NCD/Bond Schemes Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                         Scheme Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                         Category
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                         Sub Category
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                         ISIN
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                         Coupon Rate
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                         Maturity Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">
                         Actions
                       </th>
                     </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : filteredNcdBondSchemes.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="8" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No NCD/Bond schemes available.
                     </td>
                   </tr>
                 ) : (
                   filteredNcdBondSchemes.map((scheme) => (
-                    <tr key={scheme.scheme_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <tr key={scheme.scheme_id} className="hover:bg-[var(--card-bg-opaque)]">
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{scheme.scheme_name}</div>
+                        <div className="text-sm font-medium text-[var(--text-primary)]">{scheme.scheme_name}</div>
                         {scheme.description && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{scheme.description}</div>
+                          <div className="text-xs text-[var(--text-secondary)]">{scheme.description}</div>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {scheme.category || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {scheme.sub_category || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {scheme.isin || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {scheme.coupon_rate !== undefined ? `${scheme.coupon_rate}%` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {scheme.maturity_date ? new Date(scheme.maturity_date).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           scheme.is_active !== false
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                            ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                            : 'bg-[var(--error-muted)] text-[var(--error)]'
                         }`}>
                           {scheme.is_active !== false ? 'Active' : 'Inactive'}
                         </span>
@@ -2095,15 +2196,15 @@ useEffect(() => {
         {/* NCD/Bond Scheme Form Modal - Inside Schemes View */}
         {showNcdBondSchemeForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                   {editingNcdBondScheme ? 'Edit NCD/Bond Scheme' : 'Add New NCD/Bond Scheme'}
                 </h2>
                 <form onSubmit={editingNcdBondScheme ? handleUpdateNcdBondScheme : handleCreateNcdBondScheme} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                         Scheme ID <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -2111,12 +2212,12 @@ useEffect(() => {
                         required
                         value={ncdBondSchemeFormData.scheme_id}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_id: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                         placeholder="e.g., ADANI_NCD_SERIES_A"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                         Scheme Name <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -2124,14 +2225,14 @@ useEffect(() => {
                         required
                         value={ncdBondSchemeFormData.scheme_name}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                         placeholder="e.g., Adani Enterprises NCD Series A"
                       />
                     </div>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       ISIN <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -2140,7 +2241,7 @@ useEffect(() => {
                       maxLength={12}
                       value={ncdBondSchemeFormData.isin}
                       onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, isin: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       placeholder="e.g., INE01XX07026"
                     />
                   </div>
@@ -2520,52 +2621,52 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Tenure Range</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Payout Frequency</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Base Rate</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Effective Yield</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Tenure Range</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Payout Frequency</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Base Rate</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Effective Yield</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : fdRateSlabs.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No rate slabs available. Add one to get started.
                     </td>
                   </tr>
                 ) : (
                   fdRateSlabs.map((slab) => (
-                    <tr key={slab._key} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <tr key={slab._key} className="hover:bg-[var(--card-bg-opaque)]">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[var(--text-primary)]">
                         {slab.tenure_min_months} - {slab.tenure_max_months} months
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {slab.payout_frequency_type}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--success)] font-semibold">
                         {slab.base_interest_rate_pa}% p.a.
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--success)]">
                         {slab.effective_yield_pa ? `${slab.effective_yield_pa}% p.a.` : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           slab.is_active 
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                            ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                            : 'bg-[var(--error-muted)] text-[var(--error)]'
                         }`}>
                           {slab.is_active ? 'Active' : 'Inactive'}
                         </span>
@@ -2608,14 +2709,14 @@ useEffect(() => {
         {/* FD Rate Slab Form Modal - Embedded in Rate Slabs View */}
         {showFDSlabForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                   {editingFDSlab ? 'Edit Rate Slab' : 'Add New Rate Slab'}
                 </h2>
                 <form onSubmit={editingFDSlab ? handleUpdateFDSlab : handleCreateFDSlab} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Slab ID <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -2623,7 +2724,7 @@ useEffect(() => {
                       required
                       value={fdSlabFormData.slab_id}
                       onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, slab_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       placeholder="e.g., 12to24_months_monthly"
                     />
                   </div>
@@ -2686,7 +2787,7 @@ useEffect(() => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Base Interest Rate (% p.a.) <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -2749,7 +2850,7 @@ useEffect(() => {
                         step="0.0001"
                         value={fdSlabFormData.cc}
                         onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, cc: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                         placeholder="e.g., 1.25"
                       />
                     </div>
@@ -2771,7 +2872,7 @@ useEffect(() => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Public Display Notes
                     </label>
                     <input
@@ -2861,52 +2962,52 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Rider Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sum Assured Range</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Premium</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Rider Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Sum Assured Range</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Premium</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : insuranceRiders.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No riders available for this product.
                     </td>
                   </tr>
                 ) : (
                   insuranceRiders.map((rider) => (
-                    <tr key={rider.rider_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <tr key={rider.rider_id} className="hover:bg-[var(--card-bg-opaque)]">
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{rider.rider_name}</div>
+                        <div className="text-sm font-medium text-[var(--text-primary)]">{rider.rider_name}</div>
                         {rider.description && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{rider.description}</div>
+                          <div className="text-xs text-[var(--text-secondary)] mt-1">{rider.description}</div>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {rider.rider_type || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {rider.min_sum_assured && rider.max_sum_assured 
                           ? `₹${rider.min_sum_assured.toLocaleString()} - ₹${rider.max_sum_assured.toLocaleString()}`
                           : rider.min_sum_assured 
                             ? `₹${rider.min_sum_assured.toLocaleString()}+`
                             : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {rider.rider_premium_percentage 
                           ? `${rider.rider_premium_percentage}%`
                           : rider.rider_premium_fixed 
@@ -2916,8 +3017,8 @@ useEffect(() => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           rider.is_active !== false
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                            ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                            : 'bg-[var(--error-muted)] text-[var(--error)]'
                         }`}>
                           {rider.is_active !== false ? 'Active' : 'Inactive'}
                         </span>
@@ -2952,17 +3053,17 @@ useEffect(() => {
         </div>
 
         {/* Insurance Rider Form Modal - Embedded in Riders View */}
-        {showInsuranceRiderForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+      {showInsuranceRiderForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                   {editingInsuranceRider ? 'Edit Insurance Rider' : 'Add New Insurance Rider'}
                 </h2>
                 <form onSubmit={editingInsuranceRider ? handleUpdateInsuranceRider : handleCreateInsuranceRider} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                         Rider ID <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -2970,7 +3071,7 @@ useEffect(() => {
                         required
                         value={insuranceRiderFormData.rider_id}
                         onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
                     <div>
@@ -2982,7 +3083,7 @@ useEffect(() => {
                         required
                         value={insuranceRiderFormData.rider_name}
                         onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
                   </div>
@@ -3001,14 +3102,14 @@ useEffect(() => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                         Rider Type
                       </label>
                       <input
                         type="text"
                         value={insuranceRiderFormData.rider_type}
                         onChange={(e) => setInsuranceRiderFormData({ ...insuranceRiderFormData, rider_type: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                         placeholder="e.g., Accidental Death, Critical Illness"
                       />
                     </div>
@@ -3174,61 +3275,61 @@ useEffect(() => {
         </div>
 
         {/* Insurance Products Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Product Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Sub Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="5" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : filteredInsuranceProducts.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No insurance products available.
                     </td>
                   </tr>
                 ) : (
                   filteredInsuranceProducts.map((product) => (
-                    <tr key={product.product_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <tr key={product.product_id} className="hover:bg-[var(--card-bg-opaque)]">
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{product.product_name}</div>
+                        <div className="text-sm font-medium text-[var(--text-primary)]">{product.product_name}</div>
                         {product.description && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{product.description}</div>
+                          <div className="text-xs text-[var(--text-secondary)] mt-1">{product.description}</div>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {product.category || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {product.sub_category || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           product.is_active !== false
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                            ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                            : 'bg-[var(--error-muted)] text-[var(--error)]'
                         }`}>
                           {product.is_active !== false ? 'Active' : 'Inactive'}
                         </span>
@@ -3272,17 +3373,17 @@ useEffect(() => {
         </div>
 
         {/* Insurance Product Form Modal - Embedded in Products View */}
-        {showInsuranceProductForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+      {showInsuranceProductForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                   {editingInsuranceProduct ? 'Edit Insurance Product' : 'Add New Insurance Product'}
                 </h2>
                 <form onSubmit={editingInsuranceProduct ? handleUpdateInsuranceProduct : handleCreateInsuranceProduct} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                         Product ID <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -3290,11 +3391,11 @@ useEffect(() => {
                         required
                         value={insuranceProductFormData.product_id}
                         onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, product_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                         Product Name <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -3302,7 +3403,7 @@ useEffect(() => {
                         required
                         value={insuranceProductFormData.product_name}
                         onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, product_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       />
                     </div>
                   </div>
@@ -3359,13 +3460,13 @@ useEffect(() => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Description
                     </label>
                     <textarea
                       value={insuranceProductFormData.description}
                       onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, description: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       rows="3"
                     />
                   </div>
@@ -3420,6 +3521,102 @@ useEffect(() => {
                             onChange={(e) => setInsuranceProductFormData({ ...insuranceProductFormData, si_renewal: parseFloat(e.target.value) || 0 })}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
+                        </div>
+                        {/* CC & SI by Premium Payment Term (PPT) - matches PDF structure (Single Premium, PPT 5/10/12+, etc.) */}
+                        <div className="col-span-2 mt-2">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            CC & SI by Premium Payment Term (PPT)
+                          </label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Add rows per PPT band (e.g. Single Premium, Limited Pay, PPT 5/10/15). Receipt CC/SI will use the matching slab; if none matches, product-level CC/SI above are used.
+                          </p>
+                          <div className="overflow-x-auto border border-gray-200 dark:border-gray-600 rounded-lg">
+                            <table className="min-w-full text-sm">
+                              <thead className="bg-gray-100 dark:bg-gray-700">
+                                <tr>
+                                  <th className="px-2 py-1.5 text-left font-medium text-gray-700 dark:text-gray-300">PPT Type</th>
+                                  <th className="px-2 py-1.5 text-left font-medium text-gray-700 dark:text-gray-300">Years (min)</th>
+                                  <th className="px-2 py-1.5 text-left font-medium text-gray-700 dark:text-gray-300">Years (max)</th>
+                                  <th className="px-2 py-1.5 text-left font-medium text-gray-700 dark:text-gray-300">CC %</th>
+                                  <th className="px-2 py-1.5 text-left font-medium text-gray-700 dark:text-gray-300">SI %</th>
+                                  <th className="px-2 py-1.5 w-16" />
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+                                {(insuranceProductFormData.ppt_slabs || []).map((slab, idx) => (
+                                  <tr key={idx} className="bg-white dark:bg-gray-800">
+                                    <td className="px-2 py-1">
+                                      <select
+                                        value={slab.ppt_type || 'PPT'}
+                                        onChange={(e) => updateInsurancePptSlab(idx, 'ppt_type', e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                      >
+                                        <option value="Single Premium">Single Premium</option>
+                                        <option value="Limited Pay">Limited Pay</option>
+                                        <option value="PPT">PPT (years)</option>
+                                      </select>
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        placeholder="—"
+                                        value={slab.ppt_type === 'PPT' ? (slab.ppt_years_min ?? '') : ''}
+                                        onChange={(e) => updateInsurancePptSlab(idx, 'ppt_years_min', e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                        disabled={slab.ppt_type !== 'PPT'}
+                                        className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm disabled:opacity-50"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        placeholder="+"
+                                        value={slab.ppt_type === 'PPT' ? (slab.ppt_years_max ?? '') : ''}
+                                        onChange={(e) => updateInsurancePptSlab(idx, 'ppt_years_max', e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                        disabled={slab.ppt_type !== 'PPT'}
+                                        className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm disabled:opacity-50"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={slab.cc ?? ''}
+                                        onChange={(e) => updateInsurancePptSlab(idx, 'cc', parseFloat(e.target.value) || 0)}
+                                        className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={slab.si ?? ''}
+                                        onChange={(e) => updateInsurancePptSlab(idx, 'si', parseFloat(e.target.value) || 0)}
+                                        className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => removeInsurancePptSlab(idx)}
+                                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
+                                      >
+                                        Remove
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addInsurancePptSlab}
+                            className="mt-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            + Add PPT slab
+                          </button>
                         </div>
                       </>
                     ) : (
@@ -3543,63 +3740,114 @@ useEffect(() => {
         </div>
 
         {/* FD Schemes Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
+          {filteredFdSchemes.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--stroke)] bg-[var(--card-hover)]">
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-red-600 border-[var(--stroke)] rounded focus:ring-[var(--ring)] focus:outline-none"
+                    checked={allFdSelected}
+                    onChange={toggleSelectAllFd}
+                  />
+                  <span>Select all ({selectedFdSchemeIds.length}/{filteredFdSchemes.length})</span>
+                </label>
+              </div>
+              {selectedFdSchemeIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleBulkUpdateFdStatus(true)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full bg-[var(--success-muted)] text-[var(--success)] hover:bg-[var(--success-muted)]/80"
+                  >
+                    Mark Active
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkUpdateFdStatus(false)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full bg-[var(--warn-muted)] text-[var(--warn)] hover:bg-[var(--warn-muted)]/80"
+                  >
+                    Mark Inactive
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDeleteFDSchemes}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full bg-[var(--error-muted)] text-[var(--error)] hover:bg-[var(--error-muted)]/80"
+                  >
+                    Delete Selected
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
+                    Select
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Scheme Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Tenure
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    <td colSpan="6" className="px-6 py-8 text-center">
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : filteredFdSchemes.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No FD schemes available.
                     </td>
                   </tr>
                 ) : (
                   filteredFdSchemes.map((scheme) => (
-                    <tr key={scheme.scheme_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <tr key={scheme.scheme_id} className="hover:bg-[var(--card-bg-opaque)]">
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-red-600 border-[var(--stroke)] rounded focus:ring-[var(--ring)] focus:outline-none"
+                          checked={selectedFdSchemeIds.includes(scheme.scheme_id)}
+                          onChange={() => toggleSelectFd(scheme.scheme_id)}
+                        />
+                      </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{scheme.scheme_name}</div>
+                        <div className="text-sm font-medium text-[var(--text-primary)]">{scheme.scheme_name}</div>
                         {scheme.description_short && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{scheme.description_short}</div>
+                          <div className="text-xs text-[var(--text-secondary)]">{scheme.description_short}</div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[var(--accent-muted)] text-[var(--accent)]">
                           {scheme.is_cumulative ? 'Cumulative' : 'Non-Cumulative'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {scheme.min_tenure_months} - {scheme.max_tenure_months} months
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           scheme.is_active 
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                            ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                            : 'bg-[var(--error-muted)] text-[var(--error)]'
                         }`}>
                           {scheme.is_active ? 'Active' : 'Inactive'}
                         </span>
@@ -3887,36 +4135,7 @@ useEffect(() => {
                     </label>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        CC (%) <span className="text-gray-500">(Commission Credit)</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        value={fdSchemeFormData.cc || 0}
-                        onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, cc: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        SI (%) <span className="text-gray-500">(Service Income)</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        value={fdSchemeFormData.si || 0}
-                        onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, si: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
+                  {/* CC/SI are set per rate slab, not at scheme level */}
                   
                   <div className="flex justify-end space-x-3 pt-4">
                     <button
@@ -3999,13 +4218,13 @@ useEffect(() => {
         {/* Search */}
         <div className="mb-6">
           <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
             <input
               type="text"
               placeholder="Search schemes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             />
           </div>
         </div>
@@ -4018,61 +4237,73 @@ useEffect(() => {
         )}
 
         {/* Schemes Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Scheme Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+                    AMC Category
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Plan
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Option
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     NFO
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                 {filteredSchemes.map((scheme, idx) => (
-                  <tr key={scheme.scheme_code || idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <tr key={scheme.scheme_code || idx} className="hover:bg-[var(--card-bg-opaque)]">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      <div className="text-sm font-medium text-[var(--text-primary)]">
                         {scheme.display_name || scheme.scheme_name}
                       </div>
-                      {scheme.display_name && scheme.display_name !== scheme.scheme_name && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {scheme.display_name && scheme.display_name !== scheme.scheme_name && (
+                        <div className="text-xs text-[var(--text-secondary)]">
                           Base: {scheme.base_name || scheme.scheme_name}
                         </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--accent-muted)] text-[var(--accent)]">
                         {scheme.category}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
+                      {selectedAmc?.amc_category || 'MF'}
+                      {(selectedAmc?.amc_category && selectedAmc.amc_category !== 'MF') && (() => {
+                        const minInv = selectedAmc?.min_investment != null ? selectedAmc.min_investment : MF_AMC_CATEGORIES.find(c => c.id === selectedAmc?.amc_category)?.minInvestment
+                        return minInv != null ? ` (${formatMinInvestment(minInv)})` : ''
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                       {scheme.plan || 'Regular'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {scheme.option ? (
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          scheme.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                          scheme.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
-                          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                          scheme.option === 'GROWTH'
+                            ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                            : scheme.option === 'IDCW_PAYOUT'
+                            ? 'bg-[var(--warn-muted)] text-[var(--warn)]'
+                            : 'bg-[var(--info-muted)] text-[var(--info)]'
                         }`}>
                           {scheme.option === 'GROWTH' ? 'Growth' : 
                            scheme.option === 'IDCW_PAYOUT' ? 'IDCW-P' : 
@@ -4083,12 +4314,12 @@ useEffect(() => {
                         <span className="text-sm text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                       {scheme.type}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {scheme.is_nfo ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--warn-muted)] text-[var(--warn)]">
                           <FiTag className="w-3 h-3 mr-1" />
                           NFO
                         </span>
@@ -4114,7 +4345,7 @@ useEffect(() => {
                 ))}
                 {filteredSchemes.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="8" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                       {searchQuery ? 'No schemes found matching your search.' : 'No schemes available. Add one to get started.'}
                     </td>
                   </tr>
@@ -4582,29 +4813,29 @@ useEffect(() => {
                       </button>
                     </div>
                     
-                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
+                    <div className="overflow-x-auto border border-[var(--stroke)] rounded-lg bg-[var(--card-bg)]">
+                      <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+                        <thead className="bg-[var(--card-hover)]">
                           <tr>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                               Select
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                               Display Name
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                               Plan
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                               Option
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
                               AMFI Code
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase min-w-[6rem]">
                               CC (%)
                             </th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] uppercase min-w-[6rem]">
                               SI (%)
                             </th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
@@ -4612,9 +4843,9 @@ useEffect(() => {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                           {variantPreviewData.map((variant, idx) => (
-                            <tr key={variant.id} className={variant.exists ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}>
+                            <tr key={variant.id} className={variant.exists ? 'bg-[var(--warn-muted)]/60' : ''}>
                               <td className="px-3 py-2">
                                 <input
                                   type="checkbox"
@@ -4624,16 +4855,16 @@ useEffect(() => {
                                     updated[idx].selected = e.target.checked
                                     setVariantPreviewData(updated)
                                   }}
-                                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                                  className="w-4 h-4 text-red-600 border-[var(--stroke)] rounded focus:ring-[var(--ring)] focus:outline-none"
                                 />
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                              <td className="px-3 py-2 text-sm text-[var(--text-primary)]">
                                 {variant.display_name}
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+                              <td className="px-3 py-2 text-sm text-[var(--text-secondary)]">
                                 {variant.plan}
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+                              <td className="px-3 py-2 text-sm text-[var(--text-secondary)]">
                                 {variant.option.replace('_', ' ')}
                               </td>
                               <td className="px-3 py-2">
@@ -4646,10 +4877,10 @@ useEffect(() => {
                                     setVariantPreviewData(updated)
                                   }}
                                   placeholder="Enter AMFI code"
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                  className="w-full min-w-[6rem] px-2 py-1 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:outline-none"
                                 />
                               </td>
-                              <td className="px-3 py-2">
+                              <td className="px-3 py-2 min-w-[6rem]">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -4662,10 +4893,10 @@ useEffect(() => {
                                     setVariantPreviewData(updated)
                                   }}
                                   placeholder="0"
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                  className="w-full min-w-[5rem] px-2 py-1.5 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:outline-none box-border"
                                 />
                               </td>
-                              <td className="px-3 py-2">
+                              <td className="px-3 py-2 min-w-[6rem]">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -4678,7 +4909,7 @@ useEffect(() => {
                                     setVariantPreviewData(updated)
                                   }}
                                   placeholder="0"
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                  className="w-full min-w-[5rem] px-2 py-1.5 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:outline-none box-border"
                                 />
                               </td>
                               <td className="px-3 py-2">
@@ -4822,14 +5053,14 @@ useEffect(() => {
       {/* AMC Form Modal */}
       {(showAMCForm || editingAMC) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                 {editingAMC ? 'Edit AMC' : 'Add New AMC'}
               </h2>
               <form onSubmit={editingAMC ? handleUpdateAMC : handleCreateAMC} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                     AMC Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -4837,11 +5068,11 @@ useEffect(() => {
                     required
                     value={amcFormData.amc_name}
                     onChange={(e) => setAmcFormData({ ...amcFormData, amc_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                     AMC Code <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -4849,8 +5080,46 @@ useEffect(() => {
                     required
                     value={amcFormData.amc_code}
                     onChange={(e) => setAmcFormData({ ...amcFormData, amc_code: e.target.value.toUpperCase().replace(/\s/g, '') })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                     readOnly={!!editingAMC}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                    Type (AMC Category)
+                  </label>
+                  <select
+                    value={amcFormData.amc_category || 'MF'}
+                    onChange={(e) => {
+                      const id = e.target.value
+                      const cat = MF_AMC_CATEGORIES.find(c => c.id === id)
+                      setAmcFormData({
+                        ...amcFormData,
+                        amc_category: id,
+                        min_investment: cat?.minInvestment != null ? cat.minInvestment : ''
+                      })
+                    }}
+                    className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+                  >
+                    {MF_AMC_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}{c.minInvestment != null ? ` – ${formatMinInvestment(c.minInvestment)}` : ' (default)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                    Min Investment (editable)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10000}
+                    value={amcFormData.min_investment}
+                    onChange={(e) => setAmcFormData({ ...amcFormData, min_investment: e.target.value })}
+                    placeholder="Default from type, or enter amount"
+                    className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                   />
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
@@ -4863,7 +5132,7 @@ useEffect(() => {
                         resetAMCForm()
                       }, 300)
                     }}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    className="px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)]"
                   >
                     Cancel
                   </button>
@@ -5061,35 +5330,35 @@ useEffect(() => {
 
       {/* Conditional Table */}
       {activeTab === 'MF' ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
+          <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+            <thead className="bg-[var(--card-hover)]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                   AMC Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                   AMC Code
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                   Schemes
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
               {loading ? (
                 <tr>
                   <td colSpan="4" className="px-6 py-8 text-center">
-                    <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                    <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                   </td>
                 </tr>
               ) : amcs.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                     No AMCs available. Add one to get started.
                   </td>
                 </tr>
@@ -5097,15 +5366,15 @@ useEffect(() => {
                 amcs.map((amc, idx) => (
                   <tr 
                     key={amc.amc_code || idx} 
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                    className="hover:bg-[var(--card-bg-opaque)] cursor-pointer"
                     onClick={() => setSelectedAmc(amc)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      <div className="text-sm font-medium text-[var(--text-primary)]">
                         {amc.amc_name}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                       {amc.amc_code}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -5114,7 +5383,7 @@ useEffect(() => {
                           e.stopPropagation()
                           setSelectedAmc(amc)
                         }}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
+                        className="text-sm font-medium text-[var(--accent)] hover:text-[var(--accent)]/90"
                       >
                         View Schemes
                       </button>
@@ -5125,7 +5394,7 @@ useEffect(() => {
                           e.stopPropagation()
                           openAMCEdit(amc)
                         }}
-                        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-4"
+                        className="text-[var(--accent)] hover:text-[var(--accent)]/90 mr-4"
                       >
                         <FiEdit className="w-5 h-5" />
                       </button>
@@ -5147,38 +5416,38 @@ useEffect(() => {
         </div>
       </div>
       ) : activeTab === 'FD' && !selectedFdIssuer ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Issuer Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Rating
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Min Deposit
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="5" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : filteredFdIssuers.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No FD issuers available.
                     </td>
                   </tr>
@@ -5186,21 +5455,21 @@ useEffect(() => {
                   filteredFdIssuers.map((issuer, idx) => (
                     <tr 
                       key={issuer.issuer_key || idx} 
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      className="hover:bg-[var(--card-bg-opaque)] cursor-pointer"
                       onClick={() => setSelectedFdIssuer(issuer)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="text-sm font-medium text-[var(--text-primary)]">
                           {issuer.short_name}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{issuer.legal_name}</div>
+                        <div className="text-xs text-[var(--text-secondary)]">{issuer.legal_name}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[var(--accent-muted)] text-[var(--accent)]">
                           {issuer.type}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {issuer.credit_rating ? `${issuer.credit_rating_agency} - ${issuer.credit_rating}` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -5212,7 +5481,7 @@ useEffect(() => {
                             e.stopPropagation()
                             setSelectedFdIssuer(issuer)
                           }}
-                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                          className="text-sm font-medium text-[var(--accent)] hover:text-[var(--accent)]/90 mr-3"
                         >
                           View Schemes
                         </button>
@@ -5244,35 +5513,35 @@ useEffect(() => {
           </div>
         </div>
       ) : activeTab === 'NCDBond' && !selectedNcdBondIssuer ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Issuer Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Rating
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="4" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : filteredNcdBondIssuers.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No NCD/Bond issuers available.
                     </td>
                   </tr>
@@ -5280,21 +5549,21 @@ useEffect(() => {
                   filteredNcdBondIssuers.map((issuer, idx) => (
                     <tr 
                       key={issuer._key || idx} 
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      className="hover:bg-[var(--card-bg-opaque)] cursor-pointer"
                       onClick={() => setSelectedNcdBondIssuer(issuer)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="text-sm font-medium text-[var(--text-primary)]">
                           {issuer.short_name}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{issuer.legal_name}</div>
+                        <div className="text-xs text-[var(--text-secondary)]">{issuer.legal_name}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[var(--info-muted)] text-[var(--info)]">
                           {issuer.type}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {issuer.credit_rating ? `${issuer.credit_rating_agency} - ${issuer.credit_rating}` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -5303,7 +5572,7 @@ useEffect(() => {
                             e.stopPropagation()
                             setSelectedNcdBondIssuer(issuer)
                           }}
-                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                          className="text-sm font-medium text-[var(--accent)] hover:text-[var(--accent)]/90 mr-3"
                         >
                           View Schemes
                         </button>
@@ -5335,35 +5604,35 @@ useEffect(() => {
           </div>
         </div>
       ) : activeTab === 'Insurance' && !selectedInsuranceIssuer ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+            <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+              <thead className="bg-[var(--card-hover)]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Issuer Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Products
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                 {loading ? (
                   <tr>
                     <td colSpan="4" className="px-6 py-8 text-center">
-                      <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                      <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                     </td>
                   </tr>
                 ) : filteredInsuranceIssuers.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                       No insurance issuers available.
                     </td>
                   </tr>
@@ -5371,21 +5640,21 @@ useEffect(() => {
                   filteredInsuranceIssuers.map((issuer, idx) => (
                     <tr 
                       key={issuer._key || idx} 
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      className="hover:bg-[var(--card-bg-opaque)] cursor-pointer"
                       onClick={() => setSelectedInsuranceIssuer(issuer)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="text-sm font-medium text-[var(--text-primary)]">
                           {issuer.short_name}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{issuer.legal_name}</div>
+                        <div className="text-xs text-[var(--text-secondary)]">{issuer.legal_name}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[var(--accent-muted)] text-[var(--accent)]">
                           {issuer.type}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {issuer.products?.length || 0} products
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -5394,7 +5663,7 @@ useEffect(() => {
                             e.stopPropagation()
                             setSelectedInsuranceIssuer(issuer)
                           }}
-                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+                          className="text-sm font-medium text-[var(--accent)] hover:text-[var(--accent)]/90 mr-3"
                         >
                           View Products
                         </button>
@@ -5430,15 +5699,15 @@ useEffect(() => {
       {/* FD Issuer Form Modal */}
       {showFDIssuerForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                 {editingFDIssuer ? 'Edit FD Issuer' : 'Add New FD Issuer'}
               </h2>
               <form onSubmit={editingFDIssuer ? handleUpdateFDIssuer : handleCreateFDIssuer} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Legal Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -5446,11 +5715,11 @@ useEffect(() => {
                       required
                       value={fdIssuerFormData.legal_name}
                       onChange={(e) => setFdIssuerFormData({ ...fdIssuerFormData, legal_name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Short Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -5458,21 +5727,21 @@ useEffect(() => {
                       required
                       value={fdIssuerFormData.short_name}
                       onChange={(e) => setFdIssuerFormData({ ...fdIssuerFormData, short_name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Type <span className="text-red-500">*</span>
                     </label>
                     <select
                       required
                       value={fdIssuerFormData.type}
                       onChange={(e) => setFdIssuerFormData({ ...fdIssuerFormData, type: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                     >
                       <option value="NBFC">NBFC</option>
                       <option value="Bank">Bank</option>
@@ -5607,15 +5876,15 @@ useEffect(() => {
       {/* FD Scheme Form Modal */}
       {showFDSchemeForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">
                 {editingFDScheme ? 'Edit FD Scheme' : 'Add New FD Scheme'}
               </h2>
               <form onSubmit={editingFDScheme ? handleUpdateFDScheme : handleCreateFDScheme} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Scheme ID <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -5623,12 +5892,12 @@ useEffect(() => {
                       required
                       value={fdSchemeFormData.scheme_id}
                       onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, scheme_id: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       placeholder="e.g., SHRIRAM_REG_MONTHLY"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                       Scheme Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -5636,7 +5905,7 @@ useEffect(() => {
                       required
                       value={fdSchemeFormData.scheme_name}
                       onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, scheme_name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
                       placeholder="e.g., Regular FD - Monthly Payout"
                     />
                   </div>
@@ -5849,36 +6118,7 @@ useEffect(() => {
                   </label>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      CC (%) <span className="text-gray-500">(Commission Credit)</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={fdSchemeFormData.cc || 0}
-                      onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, cc: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      SI (%) <span className="text-gray-500">(Service Income)</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={fdSchemeFormData.si || 0}
-                      onChange={(e) => setFdSchemeFormData({ ...fdSchemeFormData, si: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
+                {/* CC/SI are set per rate slab, not at scheme level */}
                 
                 <div className="flex justify-end space-x-3 pt-4">
               <button
@@ -6201,6 +6441,56 @@ useEffect(() => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     placeholder="Brief description for display"
                   />
+                </div>
+
+                {/* Instrument family + hierarchy selectors */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Main Instrument
+                    </label>
+                    <select
+                      value={ncdBondSchemeFormData.instrument_type}
+                      onChange={(e) =>
+                        setNcdBondSchemeFormData({
+                          ...ncdBondSchemeFormData,
+                          instrument_type: e.target.value,
+                          // Clear hierarchy when family changes so categories are re-chosen intentionally
+                          category: '',
+                          sub_category: ''
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="BOND">Bond</option>
+                      <option value="NCD">NCD</option>
+                      <option value="GOVT">Government</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Category (Issuer / Security Type)
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondSchemeFormData.category}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., Government, Corporate (PSU), Bank"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Product Type (Sub-category)
+                    </label>
+                    <input
+                      type="text"
+                      value={ncdBondSchemeFormData.sub_category}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, sub_category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., Floating Rate Bonds, Zero Coupon, SGB"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -6588,7 +6878,7 @@ useEffect(() => {
 
       {/* Misc Services Tab Content */}
       {activeTab === 'MiscServices' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Misc Services Price Ranges</h2>
@@ -6607,36 +6897,36 @@ useEffect(() => {
 
             {loading && !miscServicesScheme ? (
               <div className="text-center py-8">
-                <FiRefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
+                <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
+                <table className="min-w-full divide-y divide-[var(--stroke)]/70">
+                  <thead className="bg-[var(--card-hover)]">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Price Range</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">CC (%)</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">SI (%)</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Price Range</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">CC (%)</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">SI (%)</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
                     {!miscServicesScheme?.price_ranges || miscServicesScheme.price_ranges.length === 0 ? (
                       <tr>
-                        <td colSpan="4" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
                           No price ranges configured. Click "Add Price Range" to get started.
                         </td>
                       </tr>
                     ) : (
                       miscServicesScheme.price_ranges.map((range, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                        <tr key={idx} className="hover:bg-[var(--card-bg-opaque)]">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[var(--text-primary)]">
                             ₹{range.min_price?.toLocaleString('en-IN') || 0} - ₹{range.max_price?.toLocaleString('en-IN') || 0}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--success)] font-semibold">
                             {range.cc || 0}%
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--success)] font-semibold">
                             {range.si || 0}%
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

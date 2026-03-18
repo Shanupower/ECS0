@@ -2,7 +2,7 @@ import React from 'react'
 import { Routes,Route,Navigate,useLocation } from 'react-router-dom'
 import { AuthProvider,useAuth } from './context/AuthContext'
 import { DarkModeProvider } from './context/DarkModeContext'
-import Layout from './components/Layout.jsx'
+import DashboardLayout from './components/DashboardLayout.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import BranchDashboard from './pages/BranchDashboard.jsx'
@@ -19,6 +19,7 @@ import TasksPage from './pages/TasksPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
 import PortfolioReviewPage from './pages/PortfolioReviewPage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
+import { ToastProvider } from './components/ui/Toast.jsx'
 
 // Page Transition Wrapper
 function PageTransition({ children }) {
@@ -61,7 +62,7 @@ function AppContent() {
     <>
       <Routes>
         <Route path="/login" element={<LoginPage/>}/>
-        <Route path="/" element={<PrivateRoute><Layout/></PrivateRoute>}>
+        <Route path="/" element={<PrivateRoute><DashboardLayout/></PrivateRoute>}>
           <Route 
             path="dashboard" 
             element={<PageTransition><DashboardPage/></PageTransition>}
@@ -128,7 +129,9 @@ function AppContent() {
 export default function App(){
   return <DarkModeProvider>
     <AuthProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </AuthProvider>
   </DarkModeProvider>
 }

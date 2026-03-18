@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { SegmentedControl } from '../components/ui'
 import { 
   FiTrendingUp, 
   FiFileText, 
@@ -59,13 +60,19 @@ export default function BranchDashboard() {
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
   const [includePending, setIncludePending] = useState(false)
   const [dateRange, setDateRange] = useState({
-    from: new Date().toISOString().slice(0, 7) + '-01', // First day of current month
-    to: new Date().toISOString().slice(0, 10) // Today
+    from: new Date().toISOString().slice(0, 7) + '-01',
+    to: new Date().toISOString().slice(0, 10)
   })
   const [selectedPeriod, setSelectedPeriod] = useState('month')
+  const [scope, setScope] = useState('my_branch') // 'my_branch' | 'all_branches' (admin only)
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
+  const showScopeToggle = isAdmin
+  const isMyBranchView = scope === 'my_branch' || isManager
+
+  const userBranchCode = user?.branch_code || (user?.branch && branches.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code) || null
+  const userBranchInfo = userBranchCode ? branches.find(b => b.branch_code === userBranchCode) : null
 
   const loadBranchData = async () => {
     if (!token) return
@@ -74,45 +81,58 @@ export default function BranchDashboard() {
     setError('')
     
     try {
-      // Load all branches
       const branchesData = await api.listBranches(token)
-      setBranches(branchesData)
+      setBranches(Array.isArray(branchesData) ? branchesData : [])
       
-      // Load global branch statistics
-      const globalStatsData = await api.getGlobalBranchStats(token, {
-        includePending: includePending ? '1' : '0',
-        from: dateRange.from,
-        to: dateRange.to
-      })
-      setGlobalStats(globalStatsData)
-      
-      // Load employee performance data
-      if (isAdmin || isManager) {
+      if (isMyBranchView) {
+        const branchCode = isManager ? (user?.branch_code || branchesData.find(b => String(b.branch_name).toLowerCase() === String(user?.branch).toLowerCase())?.branch_code) : user?.branch_code || (user?.branch && branchesData.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code)
+        if (!branchCode && isAdmin) {
+          setGlobalStats(null)
+          setBranchStats(null)
+          setEmployeePerformance([])
+          setBranchRecentReceipts([])
+          setSelectedBranch(null)
+        } else if (branchCode) {
+          const branchObj = branchesData.find(b => b.branch_code === branchCode)
+          setSelectedBranch(branchObj || { branch_code: branchCode, branch_name: branchCode })
+          const [stats, empPerf, receiptsRes] = await Promise.all([
+            api.getBranchStats(token, branchCode, { includePending: includePending ? '1' : '0', from: dateRange.from, to: dateRange.to }),
+            api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, branch_code: branchCode, includePending: includePending ? '1' : '0' }).catch(() => []),
+            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, size: '10', sort: 'created_at:desc' }).catch(() => ({ items: [], data: [] }))
+          ])
+          setBranchStats(stats)
+          setGlobalStats(null)
+          setEmployeePerformance(Array.isArray(empPerf) ? empPerf : [])
+          const rec = receiptsRes?.items ?? receiptsRes?.data ?? []
+          setBranchRecentReceipts(Array.isArray(rec) ? rec.slice(0, 10) : [])
+        } else {
+          setBranchStats(null)
+          setGlobalStats(null)
+          setEmployeePerformance([])
+          setBranchRecentReceipts([])
+          setSelectedBranch(null)
+        }
+      } else {
+        const globalStatsData = await api.getGlobalBranchStats(token, {
+          includePending: includePending ? '1' : '0',
+          from: dateRange.from,
+          to: dateRange.to
+        })
+        setGlobalStats(globalStatsData)
+        setBranchStats(null)
+        setSelectedBranch(null)
         try {
           const empPerfData = await api.getEmployeePerformance(token, {
             from: dateRange.from,
             to: dateRange.to,
-            branch_code: isManager && user?.branch_code ? user.branch_code : undefined,
             includePending: includePending ? '1' : '0'
           })
           setEmployeePerformance(Array.isArray(empPerfData) ? empPerfData : [])
-        } catch (err) {
-          console.error('Failed to load employee performance:', err)
+        } catch {
           setEmployeePerformance([])
         }
+        setBranchRecentReceipts([])
       }
-      
-      // If user is manager, filter to their branch only
-      if (isManager && user?.branch) {
-        const userBranch = branchesData.find(b => 
-          b.branch_name.toLowerCase() === user.branch.toLowerCase()
-        )
-        if (userBranch) {
-          setSelectedBranch(userBranch)
-          await loadBranchStats(userBranch.branch_code)
-        }
-      }
-      
     } catch (err) {
       setError(err.message || 'Failed to load branch data')
     } finally {
@@ -213,7 +233,7 @@ export default function BranchDashboard() {
 
   useEffect(() => {
     loadBranchData()
-  }, [token, includePending, dateRange.from, dateRange.to])
+  }, [token, includePending, dateRange.from, dateRange.to, scope])
 
   const handlePeriodSelect = (period) => {
     setSelectedPeriod(period)
@@ -301,8 +321,8 @@ export default function BranchDashboard() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="inline-flex items-center px-4 py-2 text-gray-500 dark:text-dark-400">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 dark:border-red-400 mr-3"></div>
+        <div className="inline-flex items-center px-4 py-2 text-[var(--text-muted)]">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 mr-3"></div>
           Loading branch data...
         </div>
       </div>
@@ -311,7 +331,7 @@ export default function BranchDashboard() {
 
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
+      <div className="border border-[var(--error)]/60 bg-[var(--error-muted)] text-[var(--error)] px-4 py-3 rounded-lg flex items-center">
         <FiAlertCircle className="h-5 w-5 mr-2" />
         {error}
       </div>
@@ -323,15 +343,30 @@ export default function BranchDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+            {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || selectedBranch.branch_code || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
           </h1>
-          <p className="text-gray-600 dark:text-dark-300 mt-1">
-            {isAdmin ? 'Overview of all branch performance' : isManager ? 'Your branch team performance metrics' : `Performance overview for ${user?.branch || 'your branch'}`}
+          <p className="text-[var(--text-secondary)] mt-1">
+            {isMyBranchView ? (selectedBranch ? 'Your branch team performance metrics' : isAdmin ? 'No branch assigned. Switch to All branches or assign yourself a branch.' : 'Your branch team performance metrics') : 'Overview of all branch performance'}
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <label className="flex items-center space-x-3 cursor-pointer group">
+        <div className="flex flex-wrap items-center gap-4">
+          {showScopeToggle && (
+            <SegmentedControl
+              options={[{ value: 'my_branch', label: 'My branch' }, { value: 'all_branches', label: 'All branches' }]}
+              value={scope}
+              onChange={(v) => setScope(v)}
+            />
+          )}
+          <button
+            onClick={loadBranchData}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-[var(--stroke)] rounded-lg text-sm font-medium bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50 transition-colors duration-200"
+          >
+            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <label className="flex items-center space-x-3 cursor-pointer group pl-4 border-l border-[var(--stroke)] shrink-0">
             <div className="relative">
               <input
                 type="checkbox"
@@ -340,99 +375,148 @@ export default function BranchDashboard() {
                 className="sr-only"
               />
               <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
-                includePending 
-                  ? 'bg-red-600 dark:bg-red-500' 
-                  : 'bg-gray-300 dark:bg-gray-600'
+                includePending ? 'bg-[var(--accent)]' : 'bg-neutral-200 dark:bg-neutral-600'
               }`}>
-                <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                <div className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-blue-600 shadow transition-transform duration-200 ease-in-out ${
                   includePending ? 'translate-x-5' : 'translate-x-0'
-                }`}></div>
+                }`} />
               </div>
             </div>
-            <span className="text-sm font-medium text-gray-700 dark:text-dark-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+            <span className="text-sm font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
               Include Pending
             </span>
           </label>
-          <button
-            onClick={loadBranchData}
-            disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
-          >
-            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
         </div>
       </div>
 
-      {/* Global Statistics */}
-      {globalStats && (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${globalStats.total_service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+      {/* Empty state for admin with no branch in my_branch view */}
+      {isMyBranchView && isAdmin && !selectedBranch && !loading && (
+        <div className="p-8 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] text-center text-[var(--text-secondary)]">
+          <FiMapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p className="font-medium text-[var(--text-primary)]">No branch assigned</p>
+          <p className="mt-1">Switch to <button type="button" onClick={() => setScope('all_branches')} className="text-[var(--accent)] hover:underline">All branches</button> to see network performance, or assign yourself a branch in User Management.</p>
+        </div>
+      )}
+
+      {/* Single-branch stats (my_branch view) */}
+      {isMyBranchView && selectedBranch && branchStats && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6`}>
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Branches</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Receipts</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{branchStats.total_receipts ?? 0}</div>
+              </div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-lg flex items-center justify-center">
+                <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)]" />
+              </div>
+            </div>
+          </div>
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Investments</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(branchStats.total_investments || branchStats.total_collections)}</div>
+              </div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-lg flex items-center justify-center">
+                <FiTrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--success)]" />
+              </div>
+            </div>
+          </div>
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Collection Credit</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(branchStats.total_cc || branchStats.commissions)}</div>
+              </div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-lg flex items-center justify-center">
+                <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--warn)]" />
+              </div>
+            </div>
+          </div>
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Employees</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{employeePerformance.length}</div>
+              </div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
+                <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Statistics (all_branches view) */}
+      {globalStats && !isMyBranchView && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${globalStats.total_service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Branches</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                   {globalStats.total_branches || 0}
                 </div>
               </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
                   <FiMapPin className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
                 </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Investments</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Investments</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                   {formatCurrency(globalStats.total_investments || 0)}
                 </div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-lg flex items-center justify-center">
                 <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold">₹</span>
               </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Receipts</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                   {formatNumber(globalStats.total_receipts || 0)}
                 </div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
                 <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Collection/Credit</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Collection/Credit</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                   {formatCurrency(globalStats?.total_collection_credit || globalStats?.total_commissions || 0)}
                 </div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-lg flex items-center justify-center">
                 <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
           </div>
           
           {globalStats.total_service_income !== undefined && (
-            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
+            <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Service Income</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                  <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Service Income</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                     {formatCurrency(globalStats.total_service_income || 0)}
                   </div>
                 </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
                   <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
                 </div>
               </div>
@@ -441,96 +525,57 @@ export default function BranchDashboard() {
         </div>
       )}
 
-      {/* Manager Summary Cards */}
-      {isManager && branchStats && (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin && branchStats.service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Branch Investments</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(branchStats.total_investments || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold">₹</span>
-              </div>
+      {/* My-branch: employee performance and recent receipts */}
+      {isMyBranchView && selectedBranch && (employeePerformance.length > 0 || branchRecentReceipts.length > 0) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+          {employeePerformance.length > 0 && (
+            <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                <FiUsers className="w-5 h-5 text-[var(--accent)]" />
+                Team performance
+              </h3>
+              <ul className="space-y-2">
+                {employeePerformance.slice(0, 10).map((emp, i) => (
+                  <li key={emp.emp_code || i} className="flex justify-between items-center py-2 border-b border-[var(--stroke)] last:border-0">
+                    <span className="font-medium text-[var(--text-primary)]">#{i + 1} {emp.employee_name || emp.emp_code}</span>
+                    <span className="text-[var(--text-secondary)]">{formatCurrency(emp.total_investment)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-          
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Branch Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(branchStats.total_receipts || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Team Members</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(branchStats?.statistics?.total_employees || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Collection/Credit Earned</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(branchStats?.statistics?.collection_credit || branchStats?.statistics?.commissions || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </div>
-          
-          {isAdmin && branchStats.service_income !== undefined && (
-            <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow duration-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Service Income Earned</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrency(branchStats.service_income || 0)}
-                  </div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-                </div>
-              </div>
+          )}
+          {branchRecentReceipts.length > 0 && (
+            <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                <FiFileText className="w-5 h-5 text-[var(--accent)]" />
+                Recent receipts
+              </h3>
+              <ul className="space-y-2">
+                {branchRecentReceipts.slice(0, 8).map((r, i) => (
+                  <li key={r._key || r.id || i} className="flex justify-between text-sm py-1 border-b border-[var(--stroke)] last:border-0">
+                    <span className="text-[var(--text-primary)] truncate">{r.receipt_no || r.receipt_number || '—'}</span>
+                    <span className="text-[var(--text-secondary)]">{formatCurrency(r.transaction?.amount ?? r.investment_amount ?? 0)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
       )}
 
-      {/* Charts Section */}
-      {isAdmin && (
+      {/* Charts Section (all_branches only) */}
+      {isAdmin && !isMyBranchView && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
           {/* Branch Performance Chart */}
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
+                <div className="w-10 h-10 bg-[var(--accent-muted)] rounded-lg flex items-center justify-center mr-3">
                   <FiBarChart className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Branch Performance</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Total investments by branch</p>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)]">Branch Performance</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Total investments by branch</p>
                 </div>
               </div>
             </div>
@@ -596,15 +641,15 @@ export default function BranchDashboard() {
           </div>
 
           {/* Branch Distribution Pie Chart */}
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center mr-3">
+                <div className="w-10 h-10 bg-[var(--success-muted)] rounded-lg flex items-center justify-center mr-3">
                   <FiTarget className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Investment Distribution</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Share by branch</p>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)]">Investment Distribution</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Share by branch</p>
                 </div>
               </div>
             </div>
@@ -679,16 +724,16 @@ export default function BranchDashboard() {
       )}
 
       {/* Revenue Trend Chart */}
-      {isAdmin && globalStats && globalStats.branches && globalStats.branches.length > 0 && (
-        <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+      {isAdmin && !isMyBranchView && globalStats && globalStats.branches && globalStats.branches.length > 0 && (
+        <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center mr-3">
+              <div className="w-10 h-10 bg-[var(--success-muted)] rounded-lg flex items-center justify-center mr-3">
                 <FiTrendingUp className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue Trend</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Investment trends over time</p>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">Revenue Trend</h3>
+                <p className="text-xs text-[var(--text-secondary)]">Investment trends over time</p>
               </div>
             </div>
           </div>
@@ -746,11 +791,11 @@ export default function BranchDashboard() {
       )}
 
       {/* Category Breakdown Chart */}
-      {isAdmin && globalStats && (
-        <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+      {isAdmin && !isMyBranchView && globalStats && (
+        <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="flex items-center mb-6">
-            <FiBarChart className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Category Breakdown</h3>
+            <FiBarChart className="w-5 h-5 text-red-600 mr-2" />
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Category Breakdown</h3>
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={(() => {
@@ -795,38 +840,51 @@ export default function BranchDashboard() {
       )}
 
       {/* Top Performers */}
-      {isAdmin && getTopPerformers().length > 0 && (
-        <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+      {isAdmin && !isMyBranchView && getTopPerformers().length > 0 && (
+        <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="flex items-center mb-6">
-            <FiAward className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Performing Branches</h3>
+            <FiAward className="w-5 h-5 text-red-600 mr-2" />
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Top Performing Branches</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {getTopPerformers().map((branch, index) => (
-              <div key={branch.branch_code || branch.branch || index} className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+              <div
+                key={branch.branch_code || branch.branch || index}
+                className="bg-[var(--card-bg-opaque)] rounded-lg p-4 border border-[var(--stroke)]/60"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center">
-                    <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-3">
-                      <span className="text-sm font-bold text-red-600 dark:text-red-400">#{index + 1}</span>
+                    <div className="w-8 h-8 bg-[var(--error-muted)] rounded-full flex items-center justify-center mr-3">
+                      <span className="text-sm font-bold text-[var(--error)]">#{index + 1}</span>
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{branch.branch || branch.branch_name || 'Unknown Branch'}</div>
-                      <div className="text-xs text-gray-500 dark:text-dark-400">{branch.branch_code || ''}</div>
+                      <div className="text-sm font-medium text-[var(--text-primary)]">
+                        {branch.branch || branch.branch_name || 'Unknown Branch'}
+                      </div>
+                      <div className="text-xs text-[var(--text-secondary)]">
+                        {branch.branch_code || ''}
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500 dark:text-dark-400">Investments:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(branch.total_investments || 0)}</span>
+                    <span className="text-[var(--text-secondary)]">Investments:</span>
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {formatCurrency(branch.total_investments || 0)}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500 dark:text-dark-400">Receipts:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{formatNumber(branch.total_receipts || 0)}</span>
+                    <span className="text-[var(--text-secondary)]">Receipts:</span>
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {formatNumber(branch.total_receipts || 0)}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500 dark:text-dark-400">Collection/Credit:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(branch.commissions || 0)}</span>
+                    <span className="text-[var(--text-secondary)]">Collection/Credit:</span>
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {formatCurrency(branch.commissions || 0)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -837,10 +895,10 @@ export default function BranchDashboard() {
 
       {/* Individual Branch Details */}
       {isAdmin && (
-        <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+        <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="flex items-center mb-6">
-            <FiMapPin className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Branch Details</h3>
+            <FiMapPin className="w-5 h-5 text-red-600 mr-2" />
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Branch Details</h3>
           </div>
           <div className="space-y-4">
             {branches.map((branch) => {
@@ -864,35 +922,35 @@ export default function BranchDashboard() {
               })
               
               return (
-                <div key={branch.branch_code} className="border border-gray-200 dark:border-dark-600 rounded-lg">
+                <div key={branch.branch_code} className="border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)]">
                   <div 
-                    className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors duration-200"
+                    className="p-4 cursor-pointer hover:bg-[var(--card-hover)] transition-colors duration-200"
                     onClick={() => toggleBranchExpansion(branch.branch_code)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center mr-3">
-                          <FiMapPin className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <div className="w-10 h-10 bg-[var(--error-muted)] rounded-lg flex items-center justify-center mr-3">
+                          <FiMapPin className="w-5 h-5 text-[var(--error)]" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{branch.branch_name}</div>
-                          <div className="text-xs text-gray-500 dark:text-dark-400">
+                          <div className="text-sm font-medium text-[var(--text-primary)]">{branch.branch_name}</div>
+                          <div className="text-xs text-[var(--text-secondary)]">
                             {branch.branch_code} • {branch.branch_type || 'Operational'}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          <div className="text-sm font-medium text-[var(--text-primary)]">
                             {formatCurrency(branchData?.total_investments || 0)}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-dark-400">Investments</div>
+                          <div className="text-xs text-[var(--text-secondary)]">Investments</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          <div className="text-sm font-medium text-[var(--text-primary)]">
                             {formatNumber(branchData?.total_receipts || 0)}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-dark-400">Receipts</div>
+                          <div className="text-xs text-[var(--text-secondary)]">Receipts</div>
                         </div>
                         {isExpanded ? (
                           <FiChevronUp className="w-5 h-5 text-gray-400" />
@@ -904,20 +962,20 @@ export default function BranchDashboard() {
                   </div>
                   
                   {isExpanded && selectedBranchForDetails?.branch_code === branch.branch_code && (
-                    <div className="px-4 pb-6 border-t border-gray-200 dark:border-dark-600">
+                    <div className="px-4 pb-6 border-t border-[var(--stroke)]/70">
                       {loadingBranchDetails ? (
                         <div className="flex items-center justify-center py-12">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-                          <span className="ml-2 text-gray-600 dark:text-dark-400">Loading detailed stats...</span>
+                          <span className="ml-2 text-[var(--text-secondary)]">Loading detailed stats...</span>
                         </div>
                       ) : detailedBranchStats ? (
                         <div className="pt-6 space-y-6">
                           {/* Branch Information Header */}
-                          <div className="bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 p-6 rounded-xl border border-red-200 dark:border-red-800">
+                          <div className="p-6 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)]">
                             <div className="flex items-start justify-between mb-4">
                               <div>
-                                <h4 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{branch.branch_name}</h4>
-                                <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-dark-400">
+                                <h4 className="text-2xl font-bold text-[var(--text-primary)] mb-2">{branch.branch_name}</h4>
+                                <div className="flex flex-wrap gap-4 text-sm text-[var(--text-secondary)]">
                                   <div className="flex items-center">
                                     <FiMapPin className="w-4 h-4 mr-1" />
                                     <span>{branch.branch_code} • {branch.branch_type || 'Operational'}</span>
@@ -955,28 +1013,28 @@ export default function BranchDashboard() {
 
                           {/* Comprehensive Statistics Cards */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="bg-white dark:bg-dark-700 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-dark-600">
+                            <div className="p-5 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center justify-between mb-2">
-                                <div className="text-sm font-medium text-gray-500 dark:text-dark-400">Total Receipts</div>
-                                <FiFileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                <div className="text-sm font-medium text-[var(--text-secondary)]">Total Receipts</div>
+                                <FiFileText className="w-5 h-5 text-[var(--info)]" />
                               </div>
-                              <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                              <div className="text-3xl font-bold text-[var(--text-primary)]">
                                 {formatNumber(detailedBranchStats.statistics?.total_receipts || 0)}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
+                              <div className="text-xs text-[var(--text-secondary)] mt-1">
                                 {detailedBranchStats.statistics?.total_customers || 0} customers
                               </div>
                             </div>
 
-                            <div className="bg-white dark:bg-dark-700 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-dark-600">
+                            <div className="p-5 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center justify-between mb-2">
-                                <div className="text-sm font-medium text-gray-500 dark:text-dark-400">Total Investments</div>
-                                <FiDollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <div className="text-sm font-medium text-[var(--text-secondary)]">Total Investments</div>
+                                <FiDollarSign className="w-5 h-5 text-[var(--success)]" />
                               </div>
-                              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                              <div className="text-2xl font-bold text-[var(--text-primary)]">
                                 {formatCurrency(detailedBranchStats.statistics?.total_investments || 0)}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
+                              <div className="text-xs text-[var(--text-secondary)] mt-1">
                                 Avg: {formatCurrency(
                                   detailedBranchStats.statistics?.total_investments && detailedBranchStats.statistics?.total_receipts
                                     ? detailedBranchStats.statistics.total_investments / detailedBranchStats.statistics.total_receipts
@@ -985,30 +1043,30 @@ export default function BranchDashboard() {
                               </div>
                             </div>
 
-                            <div className="bg-white dark:bg-dark-700 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-dark-600">
+                            <div className="p-5 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center justify-between mb-2">
-                                <div className="text-sm font-medium text-gray-500 dark:text-dark-400">Collection/Credit</div>
-                                <FiAward className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                <div className="text-sm font-medium text-[var(--text-secondary)]">Collection/Credit</div>
+                                <FiAward className="w-5 h-5 text-[var(--warn)]" />
                               </div>
-                              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              <div className="text-2xl font-bold text-[var(--success)]">
                                 {formatCurrency(detailedBranchStats.statistics?.collection_credit || detailedBranchStats.statistics?.commissions || 0)}
                               </div>
                               {detailedBranchStats.statistics?.total_investments > 0 && (
-                                <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
+                                <div className="text-xs text-[var(--text-secondary)] mt-1">
                                   {((detailedBranchStats.statistics.collection_credit || 0) / detailedBranchStats.statistics.total_investments * 100).toFixed(2)}% of investments
                                 </div>
                               )}
                             </div>
 
-                            <div className="bg-white dark:bg-dark-700 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-dark-600">
+                            <div className="p-5 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center justify-between mb-2">
-                                <div className="text-sm font-medium text-gray-500 dark:text-dark-400">Employees</div>
-                                <FiUsers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                <div className="text-sm font-medium text-[var(--text-secondary)]">Employees</div>
+                                <FiUsers className="w-5 h-5 text-[var(--info)]" />
                               </div>
-                              <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                              <div className="text-3xl font-bold text-[var(--text-primary)]">
                                 {formatNumber(branchData?.total_employees || 0)}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-dark-400 mt-1">
+                              <div className="text-xs text-[var(--text-secondary)] mt-1">
                                 {branchEmployees.length > 0 ? `${branchEmployees.length} active` : 'No performance data'}
                               </div>
                             </div>
@@ -1016,10 +1074,10 @@ export default function BranchDashboard() {
 
                           {/* Category Breakdown Chart */}
                           {detailedBranchStats.statistics?.by_category && Object.keys(detailedBranchStats.statistics.by_category).length > 0 && (
-                            <div className="bg-white dark:bg-dark-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+                            <div className="p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center mb-6">
-                                <FiBarChart className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Investment by Category</h4>
+                                <FiBarChart className="w-5 h-5 text-red-600 mr-2" />
+                                <h4 className="text-lg font-semibold text-[var(--text-primary)]">Investment by Category</h4>
                               </div>
                               <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={Object.entries(detailedBranchStats.statistics.by_category).map(([category, data]) => ({
@@ -1059,10 +1117,10 @@ export default function BranchDashboard() {
 
                           {/* Daily Trend Chart */}
                           {detailedBranchStats.statistics?.by_day && detailedBranchStats.statistics.by_day.length > 0 && (
-                            <div className="bg-white dark:bg-dark-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+                            <div className="p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center mb-6">
-                                <FiTrendingUp className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Daily Investment Trend</h4>
+                                <FiTrendingUp className="w-5 h-5 text-red-600 mr-2" />
+                                <h4 className="text-lg font-semibold text-[var(--text-primary)]">Daily Investment Trend</h4>
                               </div>
                               <ResponsiveContainer width="100%" height={300}>
                                 <LineChart data={detailedBranchStats.statistics.by_day.map(day => ({
@@ -1111,41 +1169,46 @@ export default function BranchDashboard() {
 
                           {/* Employee Performance Table */}
                           {branchEmployees.length > 0 && (
-                            <div className="bg-white dark:bg-dark-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+                            <div className="p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center mb-6">
-                                <FiUsers className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Employee Performance</h4>
+                                <FiUsers className="w-5 h-5 text-red-600 mr-2" />
+                                <h4 className="text-lg font-semibold text-[var(--text-primary)]">Employee Performance</h4>
                               </div>
                               <div className="overflow-x-auto">
                                 <table className="w-full">
                                   <thead>
-                                    <tr className="border-b border-gray-200 dark:border-dark-700">
-                                      <th className="text-left py-3 px-4 font-medium text-gray-900 dark:text-white">Employee</th>
-                                      <th className="text-right py-3 px-4 font-medium text-gray-900 dark:text-white">Receipts</th>
-                                      <th className="text-right py-3 px-4 font-medium text-gray-900 dark:text-white">Investment</th>
-                                      <th className="text-right py-3 px-4 font-medium text-gray-900 dark:text-white">Avg/Receipt</th>
-                                      <th className="text-right py-3 px-4 font-medium text-gray-900 dark:text-white">Collection/Credit</th>
+                                    <tr className="border-b border-[var(--stroke)]/70">
+                                      <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Employee</th>
+                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Receipts</th>
+                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Investment</th>
+                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Avg/Receipt</th>
+                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Collection/Credit</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {branchEmployees.slice(0, 10).map((emp, index) => (
-                                      <tr key={emp.emp_code || index} className="border-b border-gray-100 dark:border-dark-700 hover:bg-gray-50 dark:hover:bg-dark-700">
+                                      <tr
+                                        key={emp.emp_code || index}
+                                        className="border-b border-[var(--stroke)]/60 hover:bg-[var(--card-bg-opaque)]"
+                                      >
                                         <td className="py-3 px-4">
                                           <div>
-                                            <div className="font-medium text-gray-900 dark:text-white">{emp.employee_name || 'Unknown'}</div>
-                                            <div className="text-xs text-gray-500 dark:text-dark-400">{emp.emp_code}</div>
+                                            <div className="font-medium text-[var(--text-primary)]">
+                                              {emp.employee_name || 'Unknown'}
+                                            </div>
+                                            <div className="text-xs text-[var(--text-secondary)]">{emp.emp_code}</div>
                                           </div>
                                         </td>
-                                        <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-white">
+                                        <td className="py-3 px-4 text-right font-medium text-[var(--text-primary)]">
                                           {formatNumber(emp.receipt_count || 0)}
                                         </td>
-                                        <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-white">
+                                        <td className="py-3 px-4 text-right font-medium text-[var(--text-primary)]">
                                           {formatCurrency(emp.total_investment || 0)}
                                         </td>
-                                        <td className="py-3 px-4 text-right text-gray-600 dark:text-dark-400">
+                                        <td className="py-3 px-4 text-right text-[var(--text-secondary)]">
                                           {formatCurrency(emp.avg_investment || 0)}
                                         </td>
-                                        <td className="py-3 px-4 text-right font-medium text-green-600 dark:text-green-400">
+                                        <td className="py-3 px-4 text-right font-medium text-[var(--success)]">
                                           {formatCurrency(emp.total_cc || 0)}
                                         </td>
                                       </tr>
@@ -1158,46 +1221,54 @@ export default function BranchDashboard() {
 
                           {/* Recent Receipts */}
                           {branchRecentReceipts.length > 0 && (
-                            <div className="bg-white dark:bg-dark-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+                            <div className="p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center">
-                                  <FiClock className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Receipts</h4>
+                                  <FiClock className="w-5 h-5 text-red-600 mr-2" />
+                                  <h4 className="text-lg font-semibold text-[var(--text-primary)]">Recent Receipts</h4>
                                 </div>
                                 <button
                                   onClick={() => {
                                     window.location.href = `/transactions?branch_code=${branch.branch_code}`
                                   }}
-                                  className="text-sm text-red-600 dark:text-red-400 hover:underline"
+                                  className="text-sm text-[var(--accent)] hover:underline"
                                 >
                                   View All
                                 </button>
                               </div>
                               <div className="space-y-2">
                                 {branchRecentReceipts.map((receipt) => (
-                                  <div key={receipt._key || receipt.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-dark-700 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-600 transition-colors">
+                                  <div
+                                    key={receipt._key || receipt.id}
+                                    className="flex items-center justify-between p-3 bg-[var(--card-bg-opaque)] rounded-lg hover:bg-[var(--card-hover)] transition-colors"
+                                  >
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2">
-                                        <span className="font-medium text-gray-900 dark:text-white">{receipt.receipt_no || receipt.receiptNo || 'N/A'}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                          receipt.status === 'Completed' 
-                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                            : receipt.status === 'Failed'
-                                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                        }`}>
+                                        <span className="font-medium text-[var(--text-primary)]">
+                                          {receipt.receipt_no || receipt.receiptNo || 'N/A'}
+                                        </span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                            receipt.status === 'Completed'
+                                              ? 'bg-[var(--success-muted)] text-[var(--success)]'
+                                              : receipt.status === 'Failed'
+                                              ? 'bg-[var(--error-muted)] text-[var(--error)]'
+                                              : 'bg-[var(--warn-muted)] text-[var(--warn)]'
+                                          }`}
+                                        >
                                           {receipt.status || 'Pending'}
                                         </span>
                                       </div>
-                                      <div className="text-sm text-gray-600 dark:text-dark-400 mt-1">
-                                        {receipt.investor_name || receipt.investorName || 'N/A'} • {new Date(receipt.date || receipt.created_at).toLocaleDateString('en-IN')}
+                                      <div className="text-sm text-[var(--text-secondary)] mt-1">
+                                        {receipt.investor_name || receipt.investorName || 'N/A'} •{' '}
+                                        {new Date(receipt.date || receipt.created_at).toLocaleDateString('en-IN')}
                                       </div>
                                     </div>
                                     <div className="text-right">
-                                      <div className="font-semibold text-gray-900 dark:text-white">
+                                      <div className="font-semibold text-[var(--text-primary)]">
                                         {formatCurrency(receipt.investment_amount || receipt.fd_deposit_amount || 0)}
                                       </div>
-                                      <div className="text-xs text-gray-500 dark:text-dark-400">
+                                      <div className="text-xs text-[var(--text-secondary)]">
                                         {receipt.product_category || 'N/A'}
                                       </div>
                                     </div>

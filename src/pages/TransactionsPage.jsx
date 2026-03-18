@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../components/ui/Toast.jsx'
 import { api } from '../api'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
 import { normalizeReceiptsArray } from '../utils/receiptNormalizer'
+import { Card, Button, EmptyState, Skeleton, SegmentedControl, Chip } from '../components/ui'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { 
   FiClock, 
@@ -29,31 +31,39 @@ import {
   FiXCircle,
   FiBarChart,
   FiFileText,
+  FiDollarSign,
   FiActivity,
   FiTrendingUp,
-  FiSave
+  FiSave,
+  FiUploadCloud
 } from 'react-icons/fi'
 
 export default function TransactionsPage() {
   const { token, user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const toast = useToast()
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filters, setFilters] = useState({
-    from: new Date().toISOString().slice(0, 7) + '-01', // First day of current month
-    to: new Date().toISOString().slice(0, 10), // Today
-    category: '',
-    status: '',
-    mode: '', // Mode filter for MF transactions (SIP, SWP, STP, Lump Sum, Switch Over)
+  const [filters, setFilters] = useState(() => {
+    const y = new Date().getFullYear()
+    const params = new URLSearchParams(window.location.search)
+    return {
+      from: `${y}-01-01`,
+      to: `${y}-12-31`,
+      category: params.get('category') || '',
+    status: params.get('status') || '',
+    mode: '',
     emp_code: '',
-    branch_code: '',
-    search: '', // Search by investor name/ID or receipt ID
+    branch_code: params.get('branch') || '',
+    search: '',
     amount_min: '',
     amount_max: '',
     size: 20,
     sort: 'created_at:desc'
-  })
+  };
+  });
   const [branches, setBranches] = useState([])
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [pagination, setPagination] = useState({
@@ -62,9 +72,7 @@ export default function TransactionsPage() {
     hasMore: false
   })
   const [successMessage, setSuccessMessage] = useState('')
-  const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [showErrorToast, setShowErrorToast] = useState(false)
   const [expandedRows, setExpandedRows] = useState(new Set())
   const [showBonusModal, setShowBonusModal] = useState(false)
   const [selectedReceipt, setSelectedReceipt] = useState(null)
@@ -77,6 +85,14 @@ export default function TransactionsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false)
   const [drafts, setDrafts] = useState([])
   const [loadingDrafts, setLoadingDrafts] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  // Apology + attach-documents modal state for legacy receipts missing media
+  const [showLegacyDocsModal, setShowLegacyDocsModal] = useState(false)
+  const [legacyReceipt, setLegacyReceipt] = useState(null)
+  const [legacyFiles, setLegacyFiles] = useState([])
+  const [legacyUploadError, setLegacyUploadError] = useState('')
+  const [legacyUploading, setLegacyUploading] = useState(false)
 
   const isAdmin = user?.role === 'admin'
 
@@ -88,6 +104,62 @@ export default function TransactionsPage() {
       newExpanded.add(receiptId)
     }
     setExpandedRows(newExpanded)
+  }
+
+  const handleLegacyFilesChange = (event) => {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'image/webp']
+    const maxSize = 10 * 1024 * 1024 // 10MB per file, matches backend
+
+    const valid = files.filter(file => {
+      if (file.size > maxSize) {
+        setLegacyUploadError(`File ${file.name} is too large. Maximum size is 10MB.`)
+        return false
+      }
+      if (!allowedTypes.includes(file.type)) {
+        setLegacyUploadError(`File ${file.name} has an unsupported format. Please upload images or PDF files.`)
+        return false
+      }
+      return true
+    })
+
+    if (valid.length) {
+      setLegacyUploadError('')
+      setLegacyFiles(prev => [...prev, ...valid])
+    }
+    event.target.value = ''
+  }
+
+  const handleLegacyUpload = async () => {
+    if (!legacyReceipt || !token || !legacyFiles.length) {
+      setLegacyUploadError('Please select at least one document to upload.')
+      return
+    }
+    setLegacyUploading(true)
+    setLegacyUploadError('')
+    try {
+      const receiptId = legacyReceipt._key || legacyReceipt.id
+      const uploadResult = await api.uploadReceiptMedia(token, receiptId, legacyFiles)
+      const uploadedCount = (uploadResult && Array.isArray(uploadResult.files)) ? uploadResult.files.length : legacyFiles.length
+
+      if (uploadedCount < legacyFiles.length) {
+        setLegacyUploadError(`Some documents may not have been saved (saved ${uploadedCount} of ${legacyFiles.length}).`)
+      } else {
+        toast.success('Documents uploaded successfully.')
+        setShowLegacyDocsModal(false)
+        setLegacyFiles([])
+        setLegacyReceipt(null)
+        // Refresh receipts so UI shows new media_files
+        loadReceipts(false)
+      }
+    } catch (err) {
+      console.error('Legacy document upload failed:', err)
+      setLegacyUploadError(err.message || 'Failed to upload documents.')
+    } finally {
+      setLegacyUploading(false)
+    }
   }
 
   const loadSummary = async () => {
@@ -121,7 +193,9 @@ export default function TransactionsPage() {
   const loadReceipts = async () => {
     if (!token) return
     
-    setLoading(true)
+    const isLoadMore = pagination.page > 1
+    if (isLoadMore) setLoadingMore(true)
+    else setLoading(true)
     setError('')
     
     try {
@@ -233,13 +307,14 @@ export default function TransactionsPage() {
         })
       }
       
-      setReceipts(normalizedReceipts)
+      setReceipts(prev => (isLoadMore ? [...prev, ...normalizedReceipts] : normalizedReceipts))
     } catch (err) {
       console.error('Error loading receipts:', err)
       setError(err.message || 'Failed to load receipts')
       setReceipts([])
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }
 
@@ -282,6 +357,12 @@ export default function TransactionsPage() {
     setPagination(prev => ({ ...prev, page: 1 }))
   }, [filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max])
 
+  // Clear URL search params once after reading (dashboard click-filter) so address bar stays clean
+  useEffect(() => {
+    if (searchParams.get('category') || searchParams.get('branch')) setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     loadReceipts()
     loadSummary()
@@ -311,17 +392,9 @@ export default function TransactionsPage() {
         // Show message if it's less than 5 seconds old
         if (currentTime - messageTime < 5000) {
           setSuccessMessage(successMsg)
-          setShowSuccessToast(true)
-          
-          // Clear the message from localStorage
+          toast.success(successMsg)
           localStorage.removeItem('receipt_success_message')
           localStorage.removeItem('receipt_success_timestamp')
-          
-          // Auto-hide toast after 5 seconds
-          setTimeout(() => {
-            setShowSuccessToast(false)
-            setSuccessMessage('')
-          }, 5000)
         } else {
           // Clean up old messages
           localStorage.removeItem('receipt_success_message')
@@ -340,22 +413,21 @@ export default function TransactionsPage() {
         // Show message if it's less than 5 seconds old
         if (currentTime - messageTime < 5000) {
           setErrorMessage(errorMsg)
-          setShowErrorToast(true)
-          
-          // Clear the message from localStorage
+          toast.error(errorMsg)
           localStorage.removeItem('receipt_error_message')
           localStorage.removeItem('receipt_error_timestamp')
-          
-          // Auto-hide toast after 5 seconds
-          setTimeout(() => {
-            setShowErrorToast(false)
-            setErrorMessage('')
-          }, 5000)
         } else {
           // Clean up old messages
           localStorage.removeItem('receipt_error_message')
           localStorage.removeItem('receipt_error_timestamp')
         }
+      }
+
+      // Check for receipt upload warning (documents may not have been saved)
+      const uploadErrorMsg = localStorage.getItem('receipt_upload_error')
+      if (uploadErrorMsg) {
+        toast.error(uploadErrorMsg)
+        localStorage.removeItem('receipt_upload_error')
       }
     }
     
@@ -379,14 +451,10 @@ export default function TransactionsPage() {
       setShowBonusModal(false)
       setSelectedReceipt(null)
       setBonusData({ additional_cc: 0, additional_si: 0 })
-      setSuccessMessage('Bonus updated successfully')
-      setShowSuccessToast(true)
-      setTimeout(() => setShowSuccessToast(false), 5000)
+      toast.success('Bonus updated successfully')
       loadReceipts()
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to update bonus')
-      setShowErrorToast(true)
-      setTimeout(() => setShowErrorToast(false), 5000)
+      toast.error(err.message || 'Failed to update bonus')
     }
   }
 
@@ -406,7 +474,7 @@ export default function TransactionsPage() {
       await api.deleteReceipt(token, receiptId, reason)
       await loadReceipts() // Reload the list
     } catch (err) {
-      alert('Failed to delete receipt: ' + err.message)
+      toast.error('Failed to delete receipt: ' + err.message)
     }
   }
 
@@ -415,7 +483,7 @@ export default function TransactionsPage() {
       await api.restoreReceipt(token, receiptId)
       await loadReceipts() // Reload the list
     } catch (err) {
-      alert('Failed to restore receipt: ' + err.message)
+      toast.error('Failed to restore receipt: ' + err.message)
     }
   }
 
@@ -426,7 +494,7 @@ export default function TransactionsPage() {
       await api.updateReceiptStatus(token, receiptId, newStatus)
       await loadReceipts() // Reload the list
     } catch (err) {
-      alert('Failed to update status: ' + err.message)
+      toast.error('Failed to update status: ' + err.message)
     }
   }
 
@@ -440,7 +508,7 @@ export default function TransactionsPage() {
     if (!selectedReceipt || !token) return
     
     if (!rejectRemark.trim()) {
-      alert('Please provide a reason for rejection')
+      toast.error('Please provide a reason for rejection')
       return
     }
     
@@ -459,13 +527,10 @@ export default function TransactionsPage() {
       setSelectedReceipt(null)
       setRejectRemark('')
       setSuccessMessage('Transaction rejected successfully')
-      setShowSuccessToast(true)
-      setTimeout(() => setShowSuccessToast(false), 5000)
+      toast.success('Transaction rejected successfully')
       loadReceipts()
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to reject transaction')
-      setShowErrorToast(true)
-      setTimeout(() => setShowErrorToast(false), 5000)
+      toast.error(err.message || 'Failed to reject transaction')
     }
   }
 
@@ -505,13 +570,10 @@ export default function TransactionsPage() {
       setSelectedReceipt(null)
       setEditData(null)
       setSuccessMessage('Receipt updated successfully')
-      setShowSuccessToast(true)
-      setTimeout(() => setShowSuccessToast(false), 5000)
+      toast.success('Receipt updated successfully')
       loadReceipts()
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to update receipt')
-      setShowErrorToast(true)
-      setTimeout(() => setShowErrorToast(false), 5000)
+      toast.error(err.message || 'Failed to update receipt')
     }
   }
 
@@ -535,7 +597,7 @@ export default function TransactionsPage() {
       // Clean up the URL after a delay
       setTimeout(() => window.URL.revokeObjectURL(url), 1000)
     } catch (err) {
-      alert('Failed to view document: ' + err.message)
+      toast.error('Failed to view document: ' + err.message)
     }
   }
 
@@ -566,7 +628,7 @@ export default function TransactionsPage() {
       // Clean up the URL after a delay
       setTimeout(() => window.URL.revokeObjectURL(url), 1000)
     } catch (err) {
-      alert('Failed to download document: ' + err.message)
+      toast.error('Failed to download document: ' + err.message)
     }
   }
 
@@ -596,12 +658,20 @@ export default function TransactionsPage() {
   }
 
   // Helper function to get the correct scheme name for display
-  // For switch over transactions, show the "to" scheme, not the "from" scheme
+  // For switch over transactions, show "FROM → TO" scheme details
   // Note: receipts are already normalized, so we only need to check snake_case fields
   const getDisplaySchemeName = (receipt) => {
-    // For switch over transactions, show switch_to_scheme_name
+    // For switch over transactions, prefer "from → to" if both are available
     if (isSwitchOver(receipt)) {
-      return receipt.switch_to_scheme_name || receipt.scheme_name || receipt.fd_scheme_name || 'N/A'
+      const fromName = receipt.switch_from_scheme_name || receipt.scheme_name || receipt.fd_scheme_name
+      const toName = receipt.switch_to_scheme_name || receipt.scheme_name || receipt.fd_scheme_name
+      
+      if (fromName && toName && fromName !== toName) {
+        return `${fromName} → ${toName}`
+      }
+      
+      // Fallback: at least show the "to" scheme
+      return toName || fromName || 'N/A'
     }
     // For regular transactions, show the normal scheme name
     return receipt.fd_scheme_name || receipt.scheme_name || 'N/A'
@@ -665,34 +735,33 @@ export default function TransactionsPage() {
   const getStatusBadge = (receipt) => {
     if (receipt.deleted_at) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-400"></span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-caption font-semibold bg-[var(--error-muted)] text-[var(--error)] border border-[var(--error)]/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--error)]" />
           Deleted
         </span>
       )
     }
     
-    // Check transaction status - default to 'Pending' if not set
     const status = receipt.status || receipt.transaction_status || 'Pending'
     
     if (status === 'Completed') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-600 dark:bg-green-400"></span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-caption font-semibold bg-[var(--success-muted)] text-[var(--success)] border border-[var(--success)]/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" />
           Completed
         </span>
       )
     } else if (status === 'Failed') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-400"></span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-caption font-semibold bg-[var(--error-muted)] text-[var(--error)] border border-[var(--error)]/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--error)]" />
           Failed
         </span>
       )
     } else {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">
-          <span className="w-1.5 h-1.5 rounded-full bg-yellow-600 dark:bg-yellow-400"></span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-caption font-semibold bg-[var(--warn-muted)] text-[var(--warn)] border border-[var(--warn)]/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--warn)]" />
           Pending
         </span>
       )
@@ -751,9 +820,7 @@ export default function TransactionsPage() {
         setTimeout(() => window.URL.revokeObjectURL(url), 1000)
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to export transaction history')
-      setShowErrorToast(true)
-      setTimeout(() => setShowErrorToast(false), 5000)
+      toast.error(err.message || 'Failed to export transaction history')
     }
   }
 
@@ -836,93 +903,66 @@ export default function TransactionsPage() {
   }
 
   const getRowBackgroundColor = (receipt) => {
-    if (receipt.deleted_at) {
-      return 'bg-red-50 dark:bg-red-900/10 border-l-4 border-red-400'
-    }
-    
     const status = receipt.status || receipt.transaction_status || 'Pending'
-    
+
+    // Always show a colored left bar based on semantic status
     if (status === 'Completed') {
-      return 'bg-green-50 dark:bg-green-900/10 border-l-4 border-green-400'
-    } else if (status === 'Failed') {
-      return 'bg-red-50 dark:bg-red-900/10 border-l-4 border-red-400'
-    } else {
-      return 'bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-yellow-400'
+      // success: green
+      return 'border-l-4 border-[var(--success)] bg-[var(--success-muted)]'
     }
+
+    if (status === 'Failed') {
+      // danger: red
+      return 'border-l-4 border-[var(--error)] bg-[var(--error-muted)]'
+    }
+
+    // Treat everything else (including explicit Pending) as warning/open
+    return 'border-l-4 border-[var(--warn)] bg-[var(--warn-muted)]'
   }
 
   return (
     <div className="space-y-4 lg:space-y-6">
-      {/* Success Toast */}
-      {showSuccessToast && (
-        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center">
-          <FiCheck className="w-5 h-5 mr-2" />
-          <span>{successMessage}</span>
-          <button
-            onClick={() => setShowSuccessToast(false)}
-            className="ml-4 text-white hover:text-gray-200"
-          >
-            ×
-          </button>
-        </div>
-      )}
-      
-      {/* Error Toast */}
-      {showErrorToast && (
-        <div className="fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center">
-          <FiAlertCircle className="w-5 h-5 mr-2" />
-          <span>{errorMessage}</span>
-          <button
-            onClick={() => setShowErrorToast(false)}
-            className="ml-4 text-white hover:text-gray-200"
-          >
-            ×
-          </button>
-        </div>
-      )}
-      
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center flex-1 min-w-0">
-          <FiClock className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400 mr-2 sm:mr-3 flex-shrink-0" />
+          <FiClock className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)] mr-2 sm:mr-3 flex-shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">Transaction History</h1>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 mt-0.5 hidden sm:block">View and manage all receipts</p>
+            <h1 className="text-page-title text-[var(--text-primary)] truncate">Transaction History</h1>
+            <p className="text-helper mt-0.5 hidden sm:block">View and manage all receipts</p>
           </div>
         </div>
-        <button
-          onClick={loadReceipts}
-          disabled={loading}
-          className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
-        >
-          <FiRefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline ml-2">Refresh</span>
-        </button>
+        <Button variant="secondary" icon={loading ? <FiRefreshCw className="w-4 h-4 animate-spin" /> : <FiRefreshCw className="w-4 h-4" />} onClick={loadReceipts} disabled={loading}>
+          Refresh
+        </Button>
         <div className="relative group">
-          <button
+          <Button
+            variant="secondary"
+            icon={<FiDownload className="w-4 h-4" />}
             onClick={() => handleDownloadHistory('csv')}
             disabled={loading}
-            className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg sm:text-sm font-medium text-gray-700 dark:text-dark-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 transition-colors duration-200"
+            className="sm:inline-flex"
           >
-            <FiDownload className="w-5 h-5 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline ml-2">Export</span>
-          </button>
-          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+            <span className="hidden sm:inline">Export</span>
+          </Button>
+          <div className="absolute right-0 mt-2 w-48 rounded-card border border-[var(--stroke)] bg-[var(--card-bg)] shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 overflow-hidden">
             <button
+              type="button"
               onClick={() => handleDownloadHistory('csv')}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-dark-200 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-t-lg"
+              className="w-full text-left px-4 py-2.5 text-body text-[var(--text-primary)] hover:bg-[var(--card-hover)]"
             >
               Download CSV
             </button>
             <button
+              type="button"
               onClick={() => handleDownloadHistory('excel')}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-dark-200 hover:bg-gray-50 dark:hover:bg-dark-700"
+              className="w-full text-left px-4 py-2.5 text-body text-[var(--text-primary)] hover:bg-[var(--card-hover)]"
             >
               Download Excel
             </button>
             <button
+              type="button"
               onClick={() => handleDownloadHistory('pdf')}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-dark-200 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-b-lg"
+              className="w-full text-left px-4 py-2.5 text-body text-[var(--text-primary)] hover:bg-[var(--card-hover)]"
             >
               Download PDF Report
             </button>
@@ -952,14 +992,32 @@ export default function TransactionsPage() {
                     <span className="mx-2 text-gray-400">·</span>
                     <span className="text-gray-700 dark:text-gray-300">{source}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/receipts?draftId=${id}`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60"
-                  >
-                    <FiSave className="w-3.5 h-3.5" />
-                    Resume
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/receipts?draftId=${id}`)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                    >
+                      <FiSave className="w-3.5 h-3.5" />
+                      Resume
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm('Delete this draft?')) return
+                        try {
+                          await api.deleteReceiptDraft(token, id)
+                          loadDrafts()
+                        } catch (err) {
+                          alert(err.message || 'Failed to delete draft')
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50"
+                    >
+                      <FiTrash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 </li>
               )
             })}
@@ -970,223 +1028,254 @@ export default function TransactionsPage() {
       {/* Summary Statistics Cards */}
       {summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+          <Card padding="md" hover>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-label text-[var(--text-muted)] mb-1">Total Receipts</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                   {summary.total_receipts || 0}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <FiFileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="w-12 h-12 bg-[var(--accent-muted)] rounded-card flex items-center justify-center">
+                <FiFileText className="w-6 h-6 text-[var(--accent)]" />
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+          <Card padding="md" hover>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Total Investment</div>
-                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                <div className="text-label text-[var(--text-muted)] mb-1">Total Investment</div>
+                <div className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
                   {formatCurrency(summary.total_investment || 0)}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <span className="text-green-600 dark:text-green-400 text-xl font-bold">₹</span>
+              <div className="w-12 h-12 bg-[var(--success-muted)] rounded-card flex items-center justify-center">
+                <FiDollarSign className="w-6 h-6 text-[var(--success)]" />
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+          <Card padding="md" hover>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Avg Transaction</div>
-                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                <div className="text-label text-[var(--text-muted)] mb-1">Avg Transaction</div>
+                <div className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
                   {formatCurrency(summary.avg_investment || 0)}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <FiBarChart className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <div className="w-12 h-12 bg-[var(--accent-muted)] rounded-card flex items-center justify-center">
+                <FiBarChart className="w-6 h-6 text-[var(--accent)]" />
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+          <Card padding="md" hover>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Pending</div>
-                <div className="text-2xl sm:text-3xl font-bold text-yellow-600 dark:text-yellow-400">
+                <div className="text-label text-[var(--text-muted)] mb-1">Pending</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--warn)]">
                   {summary.status_counts?.Pending || 0}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                <FiClock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+              <div className="w-12 h-12 bg-[var(--warn-muted)] rounded-card flex items-center justify-center">
+                <FiClock className="w-6 h-6 text-[var(--warn)]" />
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+          <Card padding="md" hover>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Completed</div>
-                <div className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400">
+                <div className="text-label text-[var(--text-muted)] mb-1">Completed</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--success)]">
                   {summary.status_counts?.Completed || 0}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <FiCheck className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div className="w-12 h-12 bg-[var(--success-muted)] rounded-card flex items-center justify-center">
+                <FiCheck className="w-6 h-6 text-[var(--success)]" />
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700 hover:shadow-md transition-shadow">
+          <Card padding="md" hover>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-gray-500 dark:text-dark-400 mb-1">Failed</div>
-                <div className="text-2xl sm:text-3xl font-bold text-red-600 dark:text-red-400">
+                <div className="text-label text-[var(--text-muted)] mb-1">Failed</div>
+                <div className="text-2xl sm:text-3xl font-bold text-[var(--error)]">
                   {summary.status_counts?.Failed || 0}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                <FiAlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+              <div className="w-12 h-12 bg-[var(--error-muted)] rounded-card flex items-center justify-center">
+                <FiAlertCircle className="w-6 h-6 text-[var(--error)]" />
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       )}
       
       {/* Filters */}
-      <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+      <Card padding="md" hover={false}>
         <div className="flex items-center mb-3 sm:mb-4">
-          <FiFilter className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 mr-2" />
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Filters & Search</h3>
+          <FiFilter className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--accent)] mr-2" />
+          <h3 className="text-section-title text-[var(--text-primary)]">Filters & Search</h3>
         </div>
+
+        {/* Active filter chips */}
+        {(filters.category || filters.status || filters.branch_code || filters.emp_code || filters.search) && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-label text-[var(--text-muted)]">Active:</span>
+            {filters.search && (
+              <Chip
+                label={`Search: ${filters.search.slice(0, 20)}${filters.search.length > 20 ? '…' : ''}`}
+                onClose={() => setFilters(prev => ({ ...prev, search: '' }))}
+                selected
+              />
+            )}
+            {filters.category && (
+              <Chip
+                label={`Category: ${getCategoryDisplayName(filters.category)}`}
+                onClose={() => setFilters(prev => ({ ...prev, category: '', mode: '' }))}
+                selected
+              />
+            )}
+            {filters.status && (
+              <Chip
+                label={`Status: ${filters.status}`}
+                onClose={() => setFilters(prev => ({ ...prev, status: '' }))}
+                selected
+              />
+            )}
+            {filters.branch_code && (
+              <Chip
+                label={`Branch: ${branches.find(b => (b.branch_code || b.id) === filters.branch_code)?.branch_name || filters.branch_code}`}
+                onClose={() => setFilters(prev => ({ ...prev, branch_code: '' }))}
+                selected
+              />
+            )}
+            {filters.emp_code && (
+              <Chip
+                label={`Employee: ${filters.emp_code}`}
+                onClose={() => setFilters(prev => ({ ...prev, emp_code: '' }))}
+                selected
+              />
+            )}
+          </div>
+        )}
         
         {/* Search Bar */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Search</label>
+          <label className="block text-label text-[var(--text-secondary)] mb-2">Search</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+              <FiSearch className="h-4 w-4 text-[var(--text-muted)]" />
             </div>
             <input
               type="text"
               value={filters.search}
               onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
               placeholder="Search by investor name, investor ID, or receipt ID..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+              className="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder:text-[var(--placeholder)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
             />
           </div>
         </div>
 
-        {/* Quick Date Range Selectors */}
+        {/* Quick Date - SegmentedControl */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Quick Select</label>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: 'Today', days: 0 },
-              { label: 'This Week', days: 7 },
-              { label: 'This Month', days: 30 },
-              { label: 'This Quarter', days: 90 },
-              { label: 'This Year', days: 365 },
-              { label: 'Custom', days: null }
-            ].map(({ label, days }) => {
-              const isActive = days !== null && (() => {
-                const today = new Date()
-                const fromDate = new Date(filters.from)
-                const toDate = new Date(filters.to)
-                if (days === 0) {
-                  const todayStr = today.toISOString().slice(0, 10)
-                  return filters.from === todayStr && filters.to === todayStr
-                }
-                const expectedFrom = new Date(today)
-                expectedFrom.setDate(today.getDate() - days)
-                return fromDate.toDateString() === expectedFrom.toDateString() && toDate.toDateString() === today.toDateString()
-              })()
-              
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    if (days === null) return // Custom - do nothing
-                    const today = new Date()
-                    const from = new Date(today)
-                    from.setDate(today.getDate() - days)
-                    setFilters(prev => ({
-                      ...prev,
-                      from: from.toISOString().slice(0, 10),
-                      to: today.toISOString().slice(0, 10)
-                    }))
-                  }}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200 hover:bg-gray-200 dark:hover:bg-dark-600'
-                  }`}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
+          <label className="block text-label text-[var(--text-secondary)] mb-2">Quick select</label>
+          <SegmentedControl
+            options={[
+              { value: 'today', label: 'Today' },
+              { value: 'week', label: 'This Week' },
+              { value: 'month', label: 'This Month' },
+              { value: 'quarter', label: 'This Quarter' },
+              { value: 'year', label: 'This Year' }
+            ]}
+            value={(() => {
+              const today = new Date()
+              const fromDate = new Date(filters.from)
+              const toDate = new Date(filters.to)
+              const todayStr = today.toISOString().slice(0, 10)
+              if (filters.from === todayStr && filters.to === todayStr) return 'today'
+              const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7)
+              if (fromDate.toDateString() === weekAgo.toDateString() && toDate.toDateString() === today.toDateString()) return 'week'
+              const monthAgo = new Date(today); monthAgo.setMonth(today.getMonth() - 1)
+              if (fromDate.toDateString() === monthAgo.toDateString() && toDate.toDateString() === today.toDateString()) return 'month'
+              const quarterAgo = new Date(today); quarterAgo.setMonth(today.getMonth() - 3)
+              if (fromDate.toDateString() === quarterAgo.toDateString() && toDate.toDateString() === today.toDateString()) return 'quarter'
+              const yearStart = `${today.getFullYear()}-01-01`
+              if (filters.from === yearStart && filters.to === todayStr) return 'year'
+              return 'today'
+            })()}
+            onChange={(value) => {
+              const today = new Date()
+              const toStr = today.toISOString().slice(0, 10)
+              let from = toStr
+              if (value === 'week') { const d = new Date(today); d.setDate(today.getDate() - 7); from = d.toISOString().slice(0, 10) }
+              else if (value === 'month') { const d = new Date(today); d.setMonth(today.getMonth() - 1); from = d.toISOString().slice(0, 10) }
+              else if (value === 'quarter') { const d = new Date(today); d.setMonth(today.getMonth() - 3); from = d.toISOString().slice(0, 10) }
+              else if (value === 'year') from = `${today.getFullYear()}-01-01`
+              setFilters(prev => ({ ...prev, from, to: toStr }))
+            }}
+          />
+        </div>
+
+        {/* Status - SegmentedControl */}
+        <div className="mb-4">
+          <label className="block text-label text-[var(--text-secondary)] mb-2">Status</label>
+          <SegmentedControl
+            options={[
+              { value: '', label: 'All' },
+              { value: 'Pending', label: 'Pending' },
+              { value: 'Completed', label: 'Completed' },
+              { value: 'Failed', label: 'Failed' }
+            ]}
+            value={filters.status || ''}
+            onChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">From Date</label>
+            <label className="block text-label text-[var(--text-secondary)] mb-2">From Date</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiCalendar className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                <FiCalendar className="h-4 w-4 text-[var(--text-muted)]" />
               </div>
               <input
                 type="date"
                 value={filters.from}
                 onChange={e => setFilters(prev => ({ ...prev, from: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                className="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">To Date</label>
+            <label className="block text-label text-[var(--text-secondary)] mb-2">To Date</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiCalendar className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                <FiCalendar className="h-4 w-4 text-[var(--text-muted)]" />
               </div>
               <input
                 type="date"
                 value={filters.to}
                 onChange={e => setFilters(prev => ({ ...prev, to: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                className="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Category</label>
+            <label className="block text-label text-[var(--text-secondary)] mb-2">Category</label>
             <select
               value={filters.category}
               onChange={e => setFilters(prev => ({ ...prev, category: e.target.value, mode: e.target.value !== 'MF' ? '' : prev.mode }))}
-              className="w-full p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+              className="w-full p-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
             >
               <option value="">All Categories</option>
               <option value="MF">Mutual Fund</option>
               <option value="FD">Fixed Deposit</option>
               <option value="INS">Insurance</option>
               <option value="BOND">Bonds</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Status</label>
-            <select
-              value={filters.status}
-              onChange={e => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
-            >
-              <option value="">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Completed">Completed</option>
-              <option value="Failed">Failed</option>
             </select>
           </div>
         </div>
@@ -1214,12 +1303,12 @@ export default function TransactionsPage() {
         {isAdmin && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Branch</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch</label>
               <select
                 value={filters.branch_code}
                 onChange={e => setFilters(prev => ({ ...prev, branch_code: e.target.value }))}
                 disabled={loadingBranches}
-                className="w-full p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 disabled:opacity-50"
+                className="w-full p-3 border border-gray-300 dark:border-[var(--stroke)] bg-white dark:bg-[var(--card-bg-opaque)] text-gray-900 dark:text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 disabled:opacity-50"
               >
                 <option value="">All Branches</option>
                 {branches.map(branch => (
@@ -1230,33 +1319,33 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Employee Code</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Employee Code</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiUser className="h-4 w-4 text-gray-400 dark:text-dark-400" />
+                  <FiUser className="h-4 w-4 text-[var(--text-muted)]" />
                 </div>
                 <input
                   type="text"
                   value={filters.emp_code}
                   onChange={e => setFilters(prev => ({ ...prev, emp_code: e.target.value }))}
                   placeholder="Filter by employee code"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-[var(--stroke)] bg-white dark:bg-[var(--card-bg-opaque)] text-gray-900 dark:text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Sort By</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Sort By</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <div className="flex flex-col">
-                    <FiArrowUp className="h-2 w-2 text-gray-400 dark:text-dark-400" />
-                    <FiArrowDown className="h-2 w-2 text-gray-400 dark:text-dark-400 -mt-0.5" />
+                    <FiArrowUp className="h-2 w-2 text-[var(--text-muted)]" />
+                    <FiArrowDown className="h-2 w-2 text-[var(--text-muted)] -mt-0.5" />
                   </div>
                 </div>
                 <select
                   value={filters.sort}
                   onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 appearance-none"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-[var(--stroke)] bg-white dark:bg-[var(--card-bg-opaque)] text-gray-900 dark:text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 appearance-none"
                 >
                   <option value="created_at:desc">Newest First</option>
                   <option value="created_at:asc">Oldest First</option>
@@ -1275,18 +1364,18 @@ export default function TransactionsPage() {
         {/* Employee Sort Option */}
         {!isAdmin && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Sort By</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Sort By</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <div className="flex flex-col">
-                  <FiArrowUp className="h-2 w-2 text-gray-400 dark:text-dark-400" />
-                  <FiArrowDown className="h-2 w-2 text-gray-400 dark:text-dark-400 -mt-0.5" />
+                  <FiArrowUp className="h-2 w-2 text-[var(--text-muted)]" />
+                  <FiArrowDown className="h-2 w-2 text-[var(--text-muted)] -mt-0.5" />
                 </div>
               </div>
               <select
                 value={filters.sort}
                 onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 appearance-none"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-[var(--stroke)] bg-white dark:bg-[var(--card-bg-opaque)] text-gray-900 dark:text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 appearance-none"
               >
                 <option value="created_at:desc">Newest First</option>
                 <option value="created_at:asc">Oldest First</option>
@@ -1300,27 +1389,25 @@ export default function TransactionsPage() {
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Results */}
       {loading && (
-        <div className="text-center py-12">
-          <div className="inline-flex items-center px-4 py-2 text-gray-500 dark:text-dark-400">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 dark:border-red-400 mr-3"></div>
-            Loading receipts...
-          </div>
-        </div>
+        <Card padding="lg">
+          <Skeleton variant="line" lines={8} />
+          <div className="mt-4 h-64"><Skeleton variant="block" /></div>
+        </Card>
       )}
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
-          <FiAlertCircle className="h-5 w-5 mr-2" />
+        <div className="rounded-card border border-[var(--error)]/30 bg-[var(--error-muted)] px-4 py-3 flex items-center text-[var(--error)]">
+          <FiAlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
           {error}
         </div>
       )}
 
       {!loading && !error && (
-        <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
+        <Card padding="none" hover={false} className="overflow-hidden">
           {/* Mobile Card View */}
           <div className="block sm:hidden">
             <div className="divide-y divide-gray-200 dark:divide-dark-700">
@@ -1425,6 +1512,16 @@ export default function TransactionsPage() {
                       </div>
                     )}
 
+                    {/* Bonus indicator */}
+                    {(Number(receipt.additional_cc || 0) !== 0 || Number(receipt.additional_si || 0) !== 0) && (
+                      <div className="mt-2">
+                        <span className="inline-flex items-center px-2 py-1 text-[10px] font-semibold rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">
+                          <FiAward className="w-3 h-3 mr-1" />
+                          Bonus CC/SI applied
+                        </span>
+                      </div>
+                    )}
+
                     {/* Actions */}
                     <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-dark-700">
                       <button
@@ -1482,28 +1579,29 @@ export default function TransactionsPage() {
           {/* Desktop Table View */}
           <div className="hidden sm:block overflow-x-auto max-h-[65vh] overflow-y-auto">
             <table className="w-full table-auto">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-dark-700 dark:to-dark-800 sticky top-0 z-10 border-b-2 border-gray-300 dark:border-dark-600">
+              <thead className="bg-[var(--card-hover)] sticky top-0 z-10 border-b-2 border-[var(--stroke)]">
                 <tr>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase tracking-wider w-[35px]"></th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase">Receipt #</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase">Investor / Product</th>
+                  <th className="px-2 py-3 text-center text-table-header w-[35px]"></th>
+                  <th className="px-3 py-3 text-left text-table-header">Receipt #</th>
+                  <th className="px-3 py-3 text-left text-table-header">Investor / Product</th>
                   {isAdmin ? (
                     <>
-                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase">Employee</th>
-                      <th className="px-3 py-3 text-right text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase">Amount</th>
+                      <th className="px-3 py-3 text-left text-table-header">Employee</th>
+                      <th className="px-3 py-3 text-right text-table-header">Amount</th>
                     </>
                   ) : (
                     <>
-                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase">Date</th>
-                      <th className="px-3 py-3 text-right text-xs font-semibold text-gray-700 dark:text-dark-300 uppercase">Amount</th>
+                      <th className="px-3 py-3 text-left text-table-header">Date</th>
+                      <th className="px-3 py-3 text-right text-table-header">Amount</th>
                     </>
                   )}
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-dark-700">
+              <tbody className="bg-[var(--canvas)] divide-y divide-[var(--stroke)]">
                 {receipts.map((receipt) => {
                   const receiptId = receipt._key || receipt.id
                   const isExpanded = expandedRows.has(receiptId)
+                  const hasBonus = Number(receipt.additional_cc || 0) !== 0 || Number(receipt.additional_si || 0) !== 0
                   
                   return (
                     <React.Fragment key={receiptId}>
@@ -1511,18 +1609,33 @@ export default function TransactionsPage() {
                         className={`hover:opacity-80 cursor-pointer transition-all group ${getRowBackgroundColor(receipt)}`}
                         onClick={() => toggleRow(receiptId)}
                       >
-                        <td className="px-2 py-3 text-center">
+                        <td className="px-2 py-3 text-center align-middle">
                           <div className="flex items-center justify-center w-full">
-                            {isExpanded ? (
-                              <FiChevronUp className="w-4 h-4 text-red-600 dark:text-red-400 transition-transform" />
-                            ) : (
-                              <FiChevronDown className="w-4 h-4 text-gray-400 dark:text-dark-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors" />
-                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleRow(receiptId) }}
+                              className="flex h-9 w-9 items-center justify-center rounded-pill border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-muted)] hover:bg-[var(--card-hover)] hover:text-[var(--accent)] hover:border-[var(--accent)]/50 transition-colors"
+                              aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
+                            >
+                              {isExpanded ? (
+                                <FiChevronUp className="w-5 h-5" />
+                              ) : (
+                                <FiChevronDown className="w-5 h-5" />
+                              )}
+                            </button>
                           </div>
                         </td>
                         <td className="px-3 py-3">
-                          <div className="font-semibold text-sm text-gray-900 dark:text-white tracking-tight">
-                            {receipt.receipt_no || receipt.receiptNo}
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-sm text-gray-900 dark:text-white tracking-tight">
+                              {receipt.receipt_no || receipt.receiptNo}
+                            </div>
+                            {hasBonus && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">
+                                <FiAward className="w-3 h-3 mr-0.5" />
+                                Bonus
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-3 py-3">
@@ -1597,13 +1710,12 @@ export default function TransactionsPage() {
                       
                       {/* Expanded Row */}
                       {isExpanded && (
-                        <tr className="bg-gray-50/50 dark:bg-dark-700/50 border-l-4 border-red-600">
+                        <tr className="bg-[var(--card-hover)]/50 border-l-4 border-[var(--accent)]">
                           <td colSpan="5" className="px-4 py-4">
-                            <div className="flex items-center justify-between gap-6">
-                              {/* Payment / Transaction details – full offline and online info */}
+                            <div className="flex flex-wrap items-start justify-between gap-6">
                               {hasPaymentDetails(receipt) && (
-                                <div className="flex flex-col gap-2">
-                                  <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Payment / Transaction</div>
+                                <div className="flex flex-col gap-2 min-w-0">
+                                  <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Payment / Transaction</div>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                                     <div>
                                       <span className="text-gray-500 dark:text-gray-400">Type</span>
@@ -1646,7 +1758,7 @@ export default function TransactionsPage() {
                               )}
                               {/* Status Section */}
                               <div className="flex flex-col gap-2">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Status</div>
+                                <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Status</div>
                                 <div>{getStatusBadge(receipt)}</div>
                                 {receipt.rejection_remark && (
                                   <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -1662,32 +1774,51 @@ export default function TransactionsPage() {
                               </div>
                               
                               {/* Documents Section */}
-                              <div className="flex flex-col gap-2 flex-1">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Documents</div>
+                              <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Documents</div>
                                 {receipt.media_files && receipt.media_files.length > 0 ? (
                                   <div className="flex flex-wrap items-center gap-2">
                                     {receipt.media_files.map((file, idx) => (
                                       <button
                                         key={idx}
+                                        type="button"
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           handleViewDocument(receiptId, file.id, file.filename)
                                         }}
-                                        className="inline-flex items-center justify-center w-9 h-9 text-blue-600 dark:text-blue-400 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 rounded-md transition-all hover:scale-110 group shadow-sm"
-                                        title={`View ${file.original_name}`}
+                                        className="inline-flex items-center gap-2 rounded-pill px-3 py-2 text-caption font-medium text-[var(--accent)] bg-[var(--accent-muted)] hover:bg-[var(--accent)]/20 border border-[var(--accent)]/30 transition-colors"
+                                        title={`View / Download ${file.original_name || file.filename || 'document'}`}
                                       >
-                                        <FiFile className="w-4 h-4" />
+                                        <FiFile className="w-4 h-4 flex-shrink-0" />
+                                        View
                                       </button>
                                     ))}
                                   </div>
                                 ) : (
-                                  <div className="text-xs text-gray-400 italic">No documents attached</div>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="text-helper text-[var(--text-muted)] italic">No documents attached</div>
+                                    {!receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setLegacyReceipt(receipt)
+                                          setLegacyFiles([])
+                                          setLegacyUploadError('')
+                                          setShowLegacyDocsModal(true)
+                                        }}
+                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] underline underline-offset-2"
+                                      >
+                                        Add supporting documents
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               
-                              {/* Actions Section - Pushed to the right */}
+                              {/* Actions Section */}
                               <div className="flex flex-col gap-2">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-dark-400 uppercase tracking-wider">Actions</div>
+                                <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Actions</div>
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={(e) => {
@@ -1782,24 +1913,30 @@ export default function TransactionsPage() {
           </div>
           
           {receipts.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <FiClock className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p>No receipts found for the selected filters.</p>
-            </div>
+            <EmptyState
+              icon={<FiClock className="w-12 h-12 mx-auto text-[var(--text-muted)]" />}
+              title="No receipts found"
+              message="Try adjusting your filters or create a new receipt."
+              primaryAction={<Button onClick={() => { setFilters(prev => ({ ...prev, category: '', branch_code: '', search: '', status: '' })); setSearchParams({}) }}>Reset filters</Button>}
+              secondaryAction={<Button variant="secondary" onClick={() => navigate('/receipts')}>Create receipt</Button>}
+            />
           )}
           
           {/* Pagination */}
           {pagination.hasMore && (
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-dark-700">
-              <button
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[var(--stroke)]">
+              <Button
+                className="w-full"
+                variant="secondary"
+                icon={loadingMore ? <FiRefreshCw className="w-4 h-4 animate-spin" /> : null}
                 onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                className="w-full py-2 sm:py-3 px-4 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
+                disabled={loadingMore}
               >
-                Load More
-              </button>
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </Button>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* Reject Modal */}
@@ -2170,7 +2307,7 @@ export default function TransactionsPage() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Current CC: ₹{((selectedReceipt.cc_amount || 0) + (selectedReceipt.additional_cc || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    Current CC: ₹{(Number((selectedReceipt.collection_credit ?? selectedReceipt.cc ?? selectedReceipt.calculations?.collection_credit ?? selectedReceipt.calculations?.cc ?? ((selectedReceipt.cc_amount || 0) + (selectedReceipt.additional_cc || 0))) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 

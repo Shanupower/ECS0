@@ -135,6 +135,7 @@ export const api={
   updateUser:(t,id,data)=>req(`/api/users/${id}`,{method:'PATCH',token:t,json:data}),
   changePassword:(t,id,password)=>req(`/api/users/${id}/password`,{method:'PATCH',token:t,json:{password}}),
   deleteUser:(t,id)=>req(`/api/users/${id}`,{method:'DELETE',token:t}),
+  deleteUserRelatedData:(t,id)=>req(`/api/users/${id}/related-data`,{method:'DELETE',token:t}),
   
   // Receipt endpoints
   listReceipts:(t,q)=>req('/api/receipts',{token:t,query:q}),
@@ -154,6 +155,7 @@ export const api={
   createReceiptDraft:(t,data)=>req('/api/receipt-drafts',{method:'POST',token:t,json:data}),
   getReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{token:t}),
   listReceiptDrafts:(t)=>req('/api/receipt-drafts',{token:t}),
+  deleteReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{method:'DELETE',token:t}),
   getRecentReceipts:(t,limit=10)=>req('/api/receipts/recent',{token:t,query:{limit}}),
   checkReceiptDuplicate:(t,params)=>req('/api/receipts/check-duplicate',{token:t,query:params}),
   
@@ -162,11 +164,13 @@ export const api={
   getCustomer:(t,id)=>req(`/api/customers/${id}`,{token:t}),
   createCustomer:(t,customerData)=>req('/api/customers',{method:'POST',token:t,json:customerData}),
   updateCustomer:(t,id,data)=>req(`/api/customers/${id}`,{method:'PATCH',token:t,json:data}),
+  uploadCustomerMedia:(t,id,files)=>reqWithFiles(`/api/customers/${id}/media`,{method:'POST',token:t,formData:createFormData({},files)}),
+  deleteCustomerMedia:(t,id,mediaId)=>req(`/api/customers/${id}/media/${mediaId}`,{method:'DELETE',token:t}),
   getPortfolioReview:(t,q)=>req('/api/customers/portfolio-review',{token:t,query:q}),
   deleteCustomer:(t,id)=>req(`/api/customers/${id}`,{method:'DELETE',token:t}),
   searchCustomers:(t,q)=>req('/api/customers/search',{token:t,query:q}),
   searchInvestors:(t,q)=>req('/api/customers/search',{token:t,query:q}),
-  searchInvestorsByBranch:(t,q,branch)=>req('/api/customers/search',{token:t,query:{...q,relationship_manager:branch}}),
+  searchInvestorsByBranch:(t,q,_branch)=>req('/api/customers/search',{token:t,query:q}),
   
   // Stats endpoints
   statsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
@@ -180,6 +184,7 @@ export const api={
   getBranchStats:(t,code,q)=>req(`/api/branches/${code}/stats`,{token:t,query:q}),
   getGlobalBranchStats:(t,q)=>req('/api/stats/branches',{token:t,query:q}),
   getEmployeePerformance:(t,q)=>req('/api/stats/employees/performance',{token:t,query:q}),
+  getInvestorLocations:(t,q)=>req('/api/stats/investor-locations',{token:t,query:q}),
   getBranchReceipts:(t,code,q)=>req(`/api/branches/${code}/receipts`,{token:t,query:q}),
   createBranchReceipt:(t,code,data,files)=>files && files.length > 0 ? reqWithFiles(`/api/branches/${code}/receipts`,{method:'POST',token:t,formData:createReceiptFormData(data,files)}) : req(`/api/branches/${code}/receipts`,{method:'POST',token:t,json:data}),
   
@@ -221,6 +226,7 @@ export const api={
   createLead:(t,data)=>req('/api/leads',{method:'POST',token:t,json:data}),
   updateLead:(t,id,data)=>req(`/api/leads/${id}`,{method:'PATCH',token:t,json:data}),
   convertLeadToCustomer:(t,id,data)=>req(`/api/leads/${id}/convert`,{method:'POST',token:t,json:data}),
+  deleteLead:(t,id)=>req(`/api/leads/${id}`,{method:'DELETE',token:t}),
 
   // Export endpoints
   exportReceipts:(t,q)=>req('/api/export/receipts',{token:t,query:q}),
@@ -259,7 +265,10 @@ export const api={
   
   // MF Schemes endpoints
   listAMCs:(t)=>req('/api/schemes/amcs',{token:t}),
-  getSchemesByAMC:(t,amc_code)=>req(`/api/schemes/amc/${amc_code}`,{token:t}),
+  getSchemesByAMC:(t,amc_code,amc_category)=>{
+    const qs = amc_category ? `?amc_category=${encodeURIComponent(amc_category)}` : ''
+    return req(`/api/schemes/amc/${amc_code}${qs}`,{token:t})
+  },
   getScheme:(t,scheme_code)=>req(`/api/schemes/${scheme_code}`,{token:t}),
   createAMC:(t,data)=>req('/api/schemes/amc',{method:'POST',token:t,json:data}),
   updateAMC:(t,amc_code,data)=>req(`/api/schemes/amc/${amc_code}`,{method:'PUT',token:t,json:data}),

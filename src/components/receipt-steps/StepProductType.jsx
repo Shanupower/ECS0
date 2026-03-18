@@ -1,116 +1,102 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { FiCheck, FiTrendingUp, FiShield, FiPieChart, FiAward, FiTool } from 'react-icons/fi'
+import { FaRupeeSign } from 'react-icons/fa'
 
 function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true, onTogglePreset = null }) {
   const [productType, setProductType] = useState('')
 
   const productTypes = [
-    { 
-      value: 'MF', 
-      label: 'Mutual Funds', 
-      icon: '📈',
-      description: 'Invest in diversified portfolios managed by professionals',
-      enabled: true
-    },
-    { 
-      value: 'INS', 
-      label: 'Insurance', 
-      icon: '🛡️',
-      description: 'Protect your future with life and health insurance',
-      enabled: true
-    },
-    { 
-      value: 'FD', 
-      label: 'Fixed Deposit', 
-      icon: '🏦',
-      description: 'Secure fixed returns with guaranteed interest rates',
-      enabled: true
-    },
-    { 
-      value: 'GOVT_FD', 
-      label: 'Government schemes', 
-      icon: '🏛️',
-      description: 'Post Office and other government savings schemes',
-      enabled: true
-    },
-    { 
-      value: 'BOND', 
-      label: 'Bonds/NCD', 
-      icon: '📊',
-      description: 'Government and corporate bonds / NCD for stable returns',
-      enabled: true
-    },
-    { 
-      value: 'MISC', 
-      label: 'Misc Services', 
-      icon: '🔧',
-      description: 'Various services and miscellaneous transactions',
-      enabled: true
-    }
+    { value: 'MF', label: 'Mutual Funds', Icon: FiTrendingUp, enabled: true },
+    { value: 'INS', label: 'Insurance', Icon: FiShield, enabled: true },
+    { value: 'FD', label: 'Fixed Deposit', Icon: FaRupeeSign, enabled: true, iconClass: 'font-extralight' },
+    { value: 'BOND', label: 'Bonds/NCD', Icon: FiPieChart, enabled: true },
+    { value: 'GOVT_FD', label: 'Government schemes', Icon: FiAward, enabled: true },
+    { value: 'MISC', label: 'Misc Services', Icon: FiTool, enabled: true }
   ]
 
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Enter' && productType && !e.target.matches('input, textarea, select')) {
+        e.preventDefault()
+        onNext(productType)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [productType, onNext])
+
   return (
-    <div>
-      <h3 className="mt-0 text-lg font-semibold text-gray-900 dark:text-gray-100">Step 3 — Select Product Type</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose the type of financial product you want to invest in</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {productTypes.map(type => (
-          <button
-            key={type.value}
-            type="button"
-            onClick={() => type.enabled && setProductType(type.value)}
-            disabled={!type.enabled}
-            className={`relative p-6 rounded-2xl border-2 transition-all duration-200 ${
-              !type.enabled 
-                ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 opacity-60 cursor-not-allowed'
-                : productType === type.value 
-                  ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-md hover:shadow-lg' 
-                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg'
-            }`}
-          >
-            {!type.enabled && (
-              <div className="absolute top-3 right-3 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-                Coming Soon
+    <div className="receipt-step-card py-2">
+      <h3 className="receipt-step-title mt-0 mb-1">Step 3 – Select Product Type</h3>
+      <p className="receipt-step-helper mb-4">Choose the type of financial product you want to invest in</p>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
+        {productTypes.map((type) => {
+          const isSelected = productType === type.value
+          const Icon = type.Icon
+          return (
+            <button
+              key={type.value}
+              type="button"
+              onClick={() => type.enabled && setProductType(type.value)}
+              disabled={!type.enabled}
+              className={`relative flex flex-col items-center text-center p-5 rounded-xl border-2 transition-all duration-200 min-h-[100px] ${
+                !type.enabled
+                  ? 'border-[var(--dashboard-border)] bg-[var(--dashboard-bg)] opacity-60 cursor-not-allowed'
+                  : isSelected
+                    ? 'border-[var(--dashboard-primary)] bg-[var(--dashboard-primary)]/10 shadow-md hover:shadow-lg'
+                    : 'border-[var(--dashboard-border)] bg-[var(--dashboard-card)] hover:border-[var(--dashboard-muted)] hover:shadow-lg'
+              }`}
+            >
+              {isSelected && (
+                <div className="absolute top-3 right-3 flex items-center justify-center w-6 h-6 rounded-full bg-[var(--dashboard-primary)] text-white">
+                  <FiCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </div>
+              )}
+              {!type.enabled && (
+                <div className="absolute top-3 right-3 bg-[var(--warn)] text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+                  Coming Soon
+                </div>
+              )}
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--dashboard-primary)]/10 text-[var(--dashboard-primary)] mb-2">
+                <Icon className="w-6 h-6 sm:w-7 sm:h-7" strokeWidth={2} />
               </div>
-            )}
-            <div className="text-center">
-              <div className="text-4xl mb-3">{type.icon}</div>
-              <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{type.label}</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{type.description}</p>
-            </div>
-          </button>
-        ))}
+              <h4 className="font-semibold text-[var(--dashboard-text)] text-center w-full">{type.label}</h4>
+            </button>
+          )
+        })}
       </div>
 
       {productType && presetsByType[productType] && (
-        <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
-          <label className="flex items-center gap-3 text-sm text-yellow-800 dark:text-yellow-200">
+        <div className="mb-4 rounded-xl border border-[var(--warn)]/40 bg-[var(--warn-muted)] p-4">
+          <label className="flex items-center gap-3 text-[var(--dashboard-text)]">
             <input
               type="checkbox"
               checked={usePreset}
               onChange={() => onTogglePreset && onTogglePreset(!usePreset)}
-              className="w-4 h-4 text-yellow-600"
+              className="w-4 h-4 rounded border-[var(--dashboard-border)] text-[var(--dashboard-primary)]"
             />
             Use preset for {presetsByType[productType]?.label || productType}
           </label>
         </div>
       )}
 
-      <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">
+      <div className="flex flex-wrap gap-3 justify-between items-center mt-4">
+        <button type="button" className="receipt-step-ghost-btn px-4 py-2.5 text-sm font-medium" onClick={onBack}>
           Back
         </button>
         <button
+          type="button"
+          className="receipt-step-primary-btn px-4 py-2.5 text-sm"
           onClick={() => onNext(productType)}
           disabled={!productType}
-          className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 font-bold bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-gray-900 dark:text-gray-100 cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
         >
           Continue
         </button>
       </div>
+      <p className="text-helper text-[var(--text-muted)] mt-2 text-center sm:text-left">Press Enter to continue</p>
     </div>
   )
 }
 
 export default StepProductType
-

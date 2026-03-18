@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
 import { api } from '../api'
-import { FiDownload, FiCalendar, FiFilter, FiLoader } from 'react-icons/fi'
+import { Card, Button, Select, Input } from '../components/ui'
+import { useToast } from '../components/ui/Toast.jsx'
+import { FiDownload, FiLoader } from 'react-icons/fi'
 
 export default function CSVExport({ token, user, onExport }) {
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [exportType, setExportType] = useState('receipts')
   const [dateRange, setDateRange] = useState({
@@ -74,7 +77,7 @@ export default function CSVExport({ token, user, onExport }) {
       
     } catch (error) {
       console.error('Export error:', error)
-      alert('Export failed: ' + error.message)
+      toast.error('Export failed: ' + (error.message || 'Unknown error'))
     } finally {
       setLoading(false)
     }
@@ -88,101 +91,69 @@ export default function CSVExport({ token, user, onExport }) {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-dark-700">
-      <div className="flex items-center mb-4">
-        <FiDownload className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Export Data</h3>
+    <Card padding="md" hover={false}>
+      <div className="flex items-center gap-2 mb-4">
+        <FiDownload className="w-5 h-5 text-[var(--accent)]" />
+        <h3 className="text-section-title text-[var(--text-primary)]">Export Data</h3>
       </div>
-      
       <div className="space-y-4">
-        {/* Export Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">
-            Export Type
-          </label>
-          <select
-            value={exportType}
-            onChange={(e) => setExportType(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="receipts">Receipts</option>
-            <option value="customers">Customers</option>
-            {isAdmin && <option value="users">Users</option>}
-            {isAdmin && <option value="branches">Branches</option>}
-          </select>
-        </div>
+        <Select
+          label="Export type"
+          value={exportType}
+          onChange={(e) => setExportType(e.target.value)}
+          className="text-[var(--text-primary)]"
+        >
+          <option value="receipts">Receipts</option>
+          <option value="customers">Customers</option>
+          {isAdmin && <option value="users">Users</option>}
+          {isAdmin && <option value="branches">Branches</option>}
+        </Select>
 
-        {/* Date Range Filter (for receipts) */}
         {exportType === 'receipts' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">
-                From Date
-              </label>
-              <input
-                type="date"
-                value={dateRange.from}
-                onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">
-                To Date
-              </label>
-              <input
-                type="date"
-                value={dateRange.to}
-                onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Branch Filter (for receipts and admin users) */}
-        {(exportType === 'receipts' || (exportType === 'users' && isAdmin)) && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">
-              Branch Filter (Optional)
-            </label>
-            <input
-              type="text"
-              value={branchCode}
-              onChange={(e) => setBranchCode(e.target.value)}
-              placeholder="Enter branch code (e.g., MEDAK)"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            <Input
+              label="From date"
+              type="date"
+              value={dateRange.from}
+              onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+            />
+            <Input
+              label="To date"
+              type="date"
+              value={dateRange.to}
+              onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
             />
           </div>
         )}
 
-        {/* Export Button */}
-        <button
-          onClick={handleExport}
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
-        >
-          {loading ? (
-            <>
-              <FiLoader className="w-4 h-4 mr-2 animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <FiDownload className="w-4 h-4 mr-2" />
-              Export {exportType.charAt(0).toUpperCase() + exportType.slice(1)}
-            </>
-          )}
-        </button>
+        {(exportType === 'receipts' || (exportType === 'users' && isAdmin)) && (
+          <Input
+            label="Branch filter (optional)"
+            value={branchCode}
+            onChange={(e) => setBranchCode(e.target.value)}
+            placeholder="e.g. MEDAK"
+          />
+        )}
 
-        {/* Help Text */}
-        <div className="text-xs text-gray-500 dark:text-dark-400">
-          <p>• CSV files will be downloaded automatically</p>
+        <div>
+          <Button
+            className="w-full"
+            variant="primary"
+            icon={loading ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
+            onClick={handleExport}
+            disabled={loading}
+          >
+            {loading ? 'Exporting...' : 'Export'}
+          </Button>
+          <p className="text-helper mt-1.5">Type: {exportType.charAt(0).toUpperCase() + exportType.slice(1)}</p>
+        </div>
+
+        <div className="text-helper space-y-1 pt-2 border-t border-[var(--stroke)]">
+          <p>• CSV files download automatically</p>
           <p>• Date filters apply to receipts only</p>
           <p>• Branch filter is optional for receipts and user exports</p>
-          {!isAdmin && <p>• Some export options are only available to administrators</p>}
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
