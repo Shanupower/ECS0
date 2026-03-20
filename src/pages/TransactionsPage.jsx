@@ -6,6 +6,7 @@ import { api } from '../api'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
 import { normalizeReceiptsArray } from '../utils/receiptNormalizer'
 import { Card, Button, EmptyState, Skeleton, SegmentedControl, Chip } from '../components/ui'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { 
   FiClock, 
@@ -110,7 +111,7 @@ export default function TransactionsPage() {
     const files = Array.from(event.target.files || [])
     if (!files.length) return
 
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'image/webp']
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
     const maxSize = 10 * 1024 * 1024 // 10MB per file, matches backend
 
     const valid = files.filter(file => {
@@ -545,6 +546,8 @@ export default function TransactionsPage() {
       folio_policy_no: receipt.folio_policy_no || '',
       mode: receipt.mode || '',
       txn_type: receipt.txn_type || '',
+      switch_from_scheme_name: receipt.switch_from_scheme_name || '',
+      switch_to_scheme_name: receipt.switch_to_scheme_name || '',
       // Transaction / payment details
       entry_mode: receipt.entry_mode || '',
       transaction_channel: receipt.channel || receipt.transaction_channel || '',
@@ -784,7 +787,6 @@ export default function TransactionsPage() {
       Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
 
       if (format === 'csv' || format === 'excel') {
-        // CSV/Excel export
         const qs = new URLSearchParams({
           ...query,
           format: format === 'excel' ? 'xlsx' : 'csv'
@@ -796,16 +798,30 @@ export default function TransactionsPage() {
           }
         })
         if (!res.ok) throw new Error('Failed to download transaction history')
-        const csvText = await res.text()
-        const blob = new Blob([csvText], { type: format === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv;charset=utf-8;' })
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `transactions_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : 'csv'}`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+        const stamp = new Date().toISOString().split('T')[0]
+        if (format === 'excel') {
+          const buf = await res.arrayBuffer()
+          const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `transactions_${stamp}.xlsx`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+        } else {
+          const csvText = await res.text()
+          const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `transactions_${stamp}.csv`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+        }
       } else if (format === 'pdf') {
         // PDF summary report - create from current data
         const pdfContent = generatePDFReport(receipts, summary, filters)
@@ -1174,7 +1190,7 @@ export default function TransactionsPage() {
               type="text"
               value={filters.search}
               onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              placeholder="Search by investor name, investor ID, or receipt ID..."
+              placeholder="Search by name, investor ID, PAN, or receipt #..."
               className="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder:text-[var(--placeholder)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
             />
           </div>
@@ -1242,11 +1258,10 @@ export default function TransactionsPage() {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FiCalendar className="h-4 w-4 text-[var(--text-muted)]" />
               </div>
-              <input
-                type="date"
+              <DatePickerInput
                 value={filters.from}
-                onChange={e => setFilters(prev => ({ ...prev, from: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+                onChange={(v) => setFilters(prev => ({ ...prev, from: v }))}
+                inputClassName="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
               />
             </div>
           </div>
@@ -1256,11 +1271,10 @@ export default function TransactionsPage() {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FiCalendar className="h-4 w-4 text-[var(--text-muted)]" />
               </div>
-              <input
-                type="date"
+              <DatePickerInput
                 value={filters.to}
-                onChange={e => setFilters(prev => ({ ...prev, to: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+                onChange={(v) => setFilters(prev => ({ ...prev, to: v }))}
+                inputClassName="w-full pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
               />
             </div>
           </div>
@@ -1587,6 +1601,7 @@ export default function TransactionsPage() {
                   {isAdmin ? (
                     <>
                       <th className="px-3 py-3 text-left text-table-header">Employee</th>
+                      <th className="px-3 py-3 text-left text-table-header">Date</th>
                       <th className="px-3 py-3 text-right text-table-header">Amount</th>
                     </>
                   ) : (
@@ -1679,14 +1694,24 @@ export default function TransactionsPage() {
                           </div>
                         </td>
                         {isAdmin ? (
-                          <td className="px-3 py-3">
-                            <div>
-                              <div className="font-medium text-sm text-gray-900 dark:text-white truncate" title={receipt.employee_name || receipt.employeeName}>
-                                {receipt.employee_name || receipt.employeeName}
+                          <>
+                            <td className="px-3 py-3">
+                              <div>
+                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate" title={receipt.employee_name || receipt.employeeName}>
+                                  {receipt.employee_name || receipt.employeeName}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.emp_code || receipt.empCode}</div>
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.emp_code || receipt.empCode}</div>
-                            </div>
-                          </td>
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {formatDate(receipt.date)}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-dark-400">
+                                {getCategoryDisplayName(receipt.product_category)}
+                              </div>
+                            </td>
+                          </>
                         ) : (
                           <td className="px-3 py-3">
                             <div>
@@ -1711,7 +1736,66 @@ export default function TransactionsPage() {
                       {/* Expanded Row */}
                       {isExpanded && (
                         <tr className="bg-[var(--card-hover)]/50 border-l-4 border-[var(--accent)]">
-                          <td colSpan="5" className="px-4 py-4">
+                          <td colSpan={isAdmin ? 6 : 5} className="px-4 py-4">
+                            <div className="w-full flex flex-col gap-3 mb-4">
+                              <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Receipt details</div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <span className="text-gray-500 dark:text-gray-400">Receipt date</span>
+                                  <p className="font-medium text-gray-900 dark:text-white">{formatDate(receipt.date)}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500 dark:text-gray-400">PAN</span>
+                                  <p className="font-medium text-gray-900 dark:text-white">{receipt.pan || '—'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500 dark:text-gray-400">Branch</span>
+                                  <p className="font-medium text-gray-900 dark:text-white">{receipt.branch || '—'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500 dark:text-gray-400">Mode</span>
+                                  <p className="font-medium text-gray-900 dark:text-white">{getMode(receipt) || receipt.mode || '—'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500 dark:text-gray-400">Transaction type</span>
+                                  <p className="font-medium text-gray-900 dark:text-white">{receipt.txn_type || receipt.transaction_type || '—'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500 dark:text-gray-400">Folio / Policy</span>
+                                  <p className="font-medium text-gray-900 dark:text-white">{receipt.folio_policy_no || receipt.insurance_policy_number || '—'}</p>
+                                </div>
+                                {(receipt.switch_from_scheme_name || receipt.switch_to_scheme_name) && (
+                                  <>
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Switch from</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">{receipt.switch_from_scheme_name || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Switch to</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">{receipt.switch_to_scheme_name || '—'}</p>
+                                    </div>
+                                  </>
+                                )}
+                                {receipt.product_category === 'INS' && (
+                                  <>
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Date of issue</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">{receipt.insurance_date_of_issue ? formatDate(receipt.insurance_date_of_issue) : '—'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Renewal date</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">{(receipt.insurance_renewal_date || receipt.renewal_due_date) ? formatDate(receipt.insurance_renewal_date || receipt.renewal_due_date) : '—'}</p>
+                                    </div>
+                                  </>
+                                )}
+                                {receipt.product_category === 'FD' && receipt.fd_maturity_date && (
+                                  <div>
+                                    <span className="text-gray-500 dark:text-gray-400">FD maturity</span>
+                                    <p className="font-medium text-gray-900 dark:text-white">{formatDate(receipt.fd_maturity_date)}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                             <div className="flex flex-wrap items-start justify-between gap-6">
                               {hasPaymentDetails(receipt) && (
                                 <div className="flex flex-col gap-2 min-w-0">
@@ -2041,11 +2125,10 @@ export default function TransactionsPage() {
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Date
                     </label>
-                    <input
-                      type="date"
-                      value={editData.date}
-                      onChange={(e) => setEditData({ ...editData, date: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    <DatePickerInput
+                      value={editData.date || ''}
+                      onChange={(v) => setEditData({ ...editData, date: v })}
+                      inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -2057,6 +2140,7 @@ export default function TransactionsPage() {
                       step="0.01"
                       value={editData.investment_amount}
                       onChange={(e) => setEditData({ ...editData, investment_amount: e.target.value })}
+                      onWheel={(e) => e.currentTarget.blur()}
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                   </div>
@@ -2111,8 +2195,35 @@ export default function TransactionsPage() {
                       <option value="Fresh">Fresh</option>
                       <option value="Additional">Additional</option>
                       <option value="Redemption">Redemption</option>
+                      <option value="Switch Over">Switch Over</option>
                     </select>
                   </div>
+                  {(editData.txn_type === 'Switch Over' || editData.switch_from_scheme_name || editData.switch_to_scheme_name) && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Switch from (scheme)
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.switch_from_scheme_name || ''}
+                          onChange={(e) => setEditData({ ...editData, switch_from_scheme_name: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Switch to (scheme)
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.switch_to_scheme_name || ''}
+                          onChange={(e) => setEditData({ ...editData, switch_to_scheme_name: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                    </>
+                  )}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Entry Mode
@@ -2154,11 +2265,10 @@ export default function TransactionsPage() {
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Transaction Date
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerInput
                       value={editData.txn_date || ''}
-                      onChange={(e) => setEditData({ ...editData, txn_date: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(v) => setEditData({ ...editData, txn_date: v })}
+                      inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -2218,11 +2328,10 @@ export default function TransactionsPage() {
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Instrument Date
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerInput
                       value={editData.instrument_date || ''}
-                      onChange={(e) => setEditData({ ...editData, instrument_date: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(v) => setEditData({ ...editData, instrument_date: v })}
+                      inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                   </div>
                   <div className="md:col-span-2">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { 
@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fi'
 import bondCategories from '../data/bond_categories.json'
 import { MF_AMC_CATEGORIES, formatMinInvestment } from '../data/mf_amc_categories'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 /** Life insurance subcategory options for scheme management */
 const LIFE_SUBCATEGORIES = [
@@ -76,6 +77,18 @@ export default function SchemeManagementPage() {
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  useEffect(() => {
+    // Prevent cross-screen filtering: reset the search when we navigate between tabs/drill-down views.
+    setSearchQuery('')
+  }, [
+    activeTab,
+    selectedAmc,
+    selectedFdIssuer,
+    selectedFdScheme,
+    selectedNcdBondIssuer,
+    selectedInsuranceIssuer,
+    selectedInsuranceProduct
+  ])
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importFile, setImportFile] = useState(null)
@@ -104,9 +117,10 @@ export default function SchemeManagementPage() {
   const [amcFormData, setAmcFormData] = useState({
     amc_name: '',
     amc_code: '',
-    amc_category: 'MF',
+    categories: ['MF'],
     min_investment: ''
   })
+  const [selectedAmcCategory, setSelectedAmcCategory] = useState(null)
   const [schemeFormData, setSchemeFormData] = useState({
     base_name: '',
     scheme_code: '',
@@ -324,7 +338,8 @@ export default function SchemeManagementPage() {
 
   useEffect(() => {
     if (selectedAmc) {
-      loadSchemes(selectedAmc.amc_code)
+      setSelectedAmcCategory(null)
+      loadSchemes(selectedAmc.amc_code, null)
     }
   }, [selectedAmc, token])
 
@@ -499,7 +514,7 @@ useEffect(() => {
       if (activeTab === 'MF') {
         result = await api.importSchemesExcel(token, importFile)
         if (result.updated > 0 && selectedAmc) {
-          await loadSchemes(selectedAmc.amc_code)
+          await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
         }
       } else if (activeTab === 'FD') {
         result = await api.importFDSchemesExcel(token, importFile)
@@ -564,15 +579,16 @@ useEffect(() => {
     }
   }
 
-  const loadSchemes = async (amc_code) => {
+  const loadSchemes = async (amc_code, amc_category = null) => {
     if (!token || !amc_code) return
     
     setLoading(true)
     setError('')
     
     try {
-      const result = await api.getSchemesByAMC(token, amc_code)
-      setSchemes(Array.isArray(result) ? result : [])
+      const result = await api.getSchemesByAMC(token, amc_code, amc_category || undefined)
+      const list = Array.isArray(result) ? result : (result?.schemes ?? [])
+      setSchemes(list)
     } catch (err) {
       setError(err.message || 'Failed to load schemes')
     } finally {
@@ -585,7 +601,15 @@ useEffect(() => {
     
     try {
       const trimmedData = trimFormData(amcFormData)
-      await api.createAMC(token, trimmedData)
+      const payload = {
+        amc_name: trimmedData.amc_name,
+        amc_code: trimmedData.amc_code,
+        categories: Array.isArray(trimmedData.categories) && trimmedData.categories.length > 0
+          ? trimmedData.categories
+          : ['MF'],
+        min_investment: trimmedData.min_investment !== '' && trimmedData.min_investment != null ? Number(trimmedData.min_investment) : null
+      }
+      await api.createAMC(token, payload)
       await loadAMCs()
       setShowAMCForm(false)
       resetAMCForm()
@@ -599,7 +623,14 @@ useEffect(() => {
     
     try {
       const trimmedData = trimFormData(amcFormData)
-      await api.updateAMC(token, editingAMC.amc_code, trimmedData)
+      const payload = {
+        amc_name: trimmedData.amc_name,
+        categories: Array.isArray(trimmedData.categories) && trimmedData.categories.length > 0
+          ? trimmedData.categories
+          : [editingAMC?.amc_category || 'MF'],
+        min_investment: trimmedData.min_investment !== '' && trimmedData.min_investment != null ? Number(trimmedData.min_investment) : null
+      }
+      await api.updateAMC(token, editingAMC.amc_code, payload)
       await loadAMCs()
       setEditingAMC(null)
       resetAMCForm()
@@ -644,13 +675,14 @@ useEffect(() => {
     
     setLoadingPreview(true)
     try {
+      const schemeCategory = selectedAmcCategory ?? selectedAmc?.categories?.[0] ?? selectedAmc?.amc_category ?? 'MF'
       const previewData = {
         amc_code: selectedAmc.amc_code,
         amc_name: selectedAmc.amc_name,
         base_name: schemeFormData.base_name,
         category: schemeFormData.category,
         sub_category: schemeFormData.sub_category,
-        amc_category: selectedAmc.amc_category || 'MF',
+        amc_category: schemeCategory,
         type: schemeFormData.type,
         is_nfo: schemeFormData.is_nfo,
         plans: schemeFormData.plans,
@@ -659,7 +691,12 @@ useEffect(() => {
       }
       
       const result = await api.expandPreview(token, previewData)
-      
+
+      if (!result?.variants || !Array.isArray(result.variants) || result.variants.length === 0) {
+        alert('No scheme variants were returned. Check plans, options, and scheme name, then try again.')
+        return
+      }
+
       // Initialize each variant with selected: true and editable amfi_code
       const initializedVariants = result.variants.map((v, idx) => ({
         ...v,
@@ -696,13 +733,14 @@ useEffect(() => {
     
     setLoadingPreview(true)
     try {
+      const schemeCategory = selectedAmcCategory ?? selectedAmc?.categories?.[0] ?? selectedAmc?.amc_category ?? 'MF'
       const commitData = trimFormData({
         amc_code: selectedAmc.amc_code,
         amc_name: selectedAmc.amc_name,
         base_name: schemeFormData.base_name,
         category: schemeFormData.category,
         sub_category: schemeFormData.sub_category,
-        amc_category: selectedAmc.amc_category || 'MF',
+        amc_category: schemeCategory,
         type: schemeFormData.type,
         is_nfo: schemeFormData.is_nfo,
         nfo_validity: schemeFormData.nfo_validity,
@@ -730,7 +768,7 @@ useEffect(() => {
       
       alert(message)
       
-      await loadSchemes(selectedAmc.amc_code)
+      await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
       setShowSchemeForm(false)
       setShowVariantPreview(false)
       resetSchemeForm()
@@ -752,14 +790,15 @@ useEffect(() => {
     e.preventDefault()
     
     try {
+      const schemeCategory = selectedAmcCategory ?? selectedAmc?.categories?.[0] ?? selectedAmc?.amc_category ?? 'MF'
       const trimmedData = trimFormData({
         ...schemeFormData,
-        amc_category: selectedAmc?.amc_category || 'MF',
+        amc_category: schemeCategory,
         cc: schemeFormData.cc !== undefined ? schemeFormData.cc : null,
         si: schemeFormData.si !== undefined ? schemeFormData.si : null
       })
       await api.updateScheme(token, editingScheme.scheme_code, trimmedData)
-      await loadSchemes(selectedAmc.amc_code)
+      await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
       setEditingScheme(null)
       resetSchemeForm()
     } catch (err) {
@@ -772,14 +811,14 @@ useEffect(() => {
     
     try {
       await api.deleteScheme(token, scheme_code)
-      await loadSchemes(selectedAmc.amc_code)
+      await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
     } catch (err) {
       alert('Failed to delete scheme: ' + err.message)
     }
   }
 
   const resetAMCForm = () => {
-    setAmcFormData({ amc_name: '', amc_code: '', amc_category: 'MF', min_investment: '' })
+    setAmcFormData({ amc_name: '', amc_code: '', categories: ['MF'], min_investment: '' })
   }
 
   const resetSchemeForm = () => {
@@ -804,10 +843,13 @@ useEffect(() => {
 
   const openAMCEdit = (amc) => {
     setEditingAMC(amc)
+    const categories = amc.categories && Array.isArray(amc.categories) && amc.categories.length > 0
+      ? amc.categories
+      : [amc.amc_category || 'MF']
     setAmcFormData({
       amc_name: amc.amc_name,
       amc_code: amc.amc_code,
-      amc_category: amc.amc_category || 'MF',
+      categories,
       min_investment: amc.min_investment != null ? amc.min_investment : ''
     })
   }
@@ -1758,17 +1800,103 @@ useEffect(() => {
     }
   }
 
-  // Filter schemes based on search query
-  const filteredSchemes = searchQuery
-    ? schemes.filter(scheme =>
-        scheme.scheme_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        scheme.scheme_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (scheme.category && scheme.category.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : schemes
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
-  const filteredFdIssuers = fdIssuers // Can add search later
-  const filteredFdSchemes = fdSchemes // Can add search later
+  // Filter AMCs based on search query
+  const filteredAmcs = useMemo(() => {
+    if (!normalizedSearchQuery) return amcs
+    return amcs.filter((amc) => {
+      const name = String(amc?.amc_name ?? '').toLowerCase()
+      const code = String(amc?.amc_code ?? '').toLowerCase()
+      const categories = Array.isArray(amc?.categories) ? String(amc.categories.join(' ')).toLowerCase() : ''
+      const fallbackCategory = String(amc?.amc_category ?? '').toLowerCase()
+      return (
+        name.includes(normalizedSearchQuery) ||
+        code.includes(normalizedSearchQuery) ||
+        categories.includes(normalizedSearchQuery) ||
+        fallbackCategory.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, amcs])
+
+  // Filter schemes (MF detail view) based on search query
+  const filteredSchemes = useMemo(() => {
+    if (!normalizedSearchQuery) return schemes
+    return schemes.filter((scheme) => {
+      const schemeName = String(scheme?.scheme_name ?? '').toLowerCase()
+      const schemeCode = String(scheme?.scheme_code ?? '').toLowerCase()
+      const category = String(scheme?.category ?? '').toLowerCase()
+      return (
+        schemeName.includes(normalizedSearchQuery) ||
+        schemeCode.includes(normalizedSearchQuery) ||
+        category.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, schemes])
+
+  // Filter FD issuers (FD master list) based on search query
+  const filteredFdIssuers = useMemo(() => {
+    if (!normalizedSearchQuery) return fdIssuers
+    return fdIssuers.filter((issuer) => {
+      const shortName = String(issuer?.short_name ?? '').toLowerCase()
+      const legalName = String(issuer?.legal_name ?? '').toLowerCase()
+      const type = String(issuer?.type ?? '').toLowerCase()
+      const credit = issuer?.credit_rating
+        ? `${issuer.credit_rating_agency ?? ''} ${issuer.credit_rating}`.toLowerCase()
+        : ''
+      return (
+        shortName.includes(normalizedSearchQuery) ||
+        legalName.includes(normalizedSearchQuery) ||
+        type.includes(normalizedSearchQuery) ||
+        credit.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, fdIssuers])
+
+  // Filter FD schemes (FD issuer detail view) based on search query
+  const filteredFdSchemes = useMemo(() => {
+    if (!normalizedSearchQuery) return fdSchemes
+    return fdSchemes.filter((scheme) => {
+      const schemeName = String(scheme?.scheme_name ?? '').toLowerCase()
+      const schemeId = String(scheme?.scheme_id ?? '').toLowerCase()
+      const description = String(scheme?.description_short ?? '').toLowerCase()
+      const tenureMin = String(scheme?.min_tenure_months ?? '').toLowerCase()
+      const tenureMax = String(scheme?.max_tenure_months ?? '').toLowerCase()
+      const status = scheme?.is_active === false ? 'inactive' : 'active'
+      return (
+        schemeName.includes(normalizedSearchQuery) ||
+        schemeId.includes(normalizedSearchQuery) ||
+        description.includes(normalizedSearchQuery) ||
+        tenureMin.includes(normalizedSearchQuery) ||
+        tenureMax.includes(normalizedSearchQuery) ||
+        status.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, fdSchemes])
+
+  // Filter FD rate slabs (FD slab detail view) based on search query
+  const filteredFdRateSlabs = useMemo(() => {
+    if (!normalizedSearchQuery) return fdRateSlabs
+    return fdRateSlabs.filter((slab) => {
+      const slabId = String(slab?.slab_id ?? '').toLowerCase()
+      const tenureMin = String(slab?.tenure_min_months ?? '').toLowerCase()
+      const tenureMax = String(slab?.tenure_max_months ?? '').toLowerCase()
+      const payoutFreq = String(slab?.payout_frequency_type ?? '').toLowerCase()
+      const baseRate = String(slab?.base_interest_rate_pa ?? '').toLowerCase()
+      const effectiveYield = String(slab?.effective_yield_pa ?? '').toLowerCase()
+      const status = slab?.is_active === false ? 'inactive' : 'active'
+
+      return (
+        slabId.includes(normalizedSearchQuery) ||
+        tenureMin.includes(normalizedSearchQuery) ||
+        tenureMax.includes(normalizedSearchQuery) ||
+        payoutFreq.includes(normalizedSearchQuery) ||
+        baseRate.includes(normalizedSearchQuery) ||
+        effectiveYield.includes(normalizedSearchQuery) ||
+        status.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, fdRateSlabs])
 
   const allFdSelected = filteredFdSchemes.length > 0 && selectedFdSchemeIds.length === filteredFdSchemes.length
 
@@ -2005,10 +2133,135 @@ useEffect(() => {
     loadInsuranceRiders(issuerKey, productId)
   }, [selectedInsuranceProduct, selectedInsuranceIssuer, token])
 
-  const filteredNcdBondIssuers = ncdBondIssuers
-  const filteredNcdBondSchemes = ncdBondSchemes
-  const filteredInsuranceIssuers = insuranceIssuers
-  const filteredInsuranceProducts = insuranceProducts
+  const filteredNcdBondIssuers = useMemo(() => {
+    if (!normalizedSearchQuery) return ncdBondIssuers
+    return ncdBondIssuers.filter((issuer) => {
+      const shortName = String(issuer?.short_name ?? '').toLowerCase()
+      const legalName = String(issuer?.legal_name ?? '').toLowerCase()
+      const type = String(issuer?.type ?? '').toLowerCase()
+      const credit = issuer?.credit_rating
+        ? `${issuer.credit_rating_agency ?? ''} ${issuer.credit_rating}`.toLowerCase()
+        : ''
+      return (
+        shortName.includes(normalizedSearchQuery) ||
+        legalName.includes(normalizedSearchQuery) ||
+        type.includes(normalizedSearchQuery) ||
+        credit.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, ncdBondIssuers])
+
+  const filteredNcdBondSchemes = useMemo(() => {
+    if (!normalizedSearchQuery) return ncdBondSchemes
+    return ncdBondSchemes.filter((scheme) => {
+      const schemeName = String(scheme?.scheme_name ?? '').toLowerCase()
+      const schemeId = String(scheme?.scheme_id ?? '').toLowerCase()
+      const isin = String(scheme?.isin ?? '').toLowerCase()
+      const category = String(scheme?.category ?? '').toLowerCase()
+      const subCategory = String(scheme?.sub_category ?? '').toLowerCase()
+      const description = String(scheme?.description ?? '').toLowerCase()
+      const couponRate = scheme?.coupon_rate !== undefined ? String(scheme.coupon_rate).toLowerCase() : ''
+      const maturityDate = scheme?.maturity_date
+        ? String(new Date(scheme.maturity_date).toISOString().slice(0, 10)).toLowerCase()
+        : ''
+      const status = scheme?.is_active !== false ? 'active' : 'inactive'
+
+      return (
+        schemeName.includes(normalizedSearchQuery) ||
+        schemeId.includes(normalizedSearchQuery) ||
+        isin.includes(normalizedSearchQuery) ||
+        category.includes(normalizedSearchQuery) ||
+        subCategory.includes(normalizedSearchQuery) ||
+        description.includes(normalizedSearchQuery) ||
+        couponRate.includes(normalizedSearchQuery) ||
+        maturityDate.includes(normalizedSearchQuery) ||
+        status.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, ncdBondSchemes])
+
+  const filteredInsuranceIssuers = useMemo(() => {
+    if (!normalizedSearchQuery) return insuranceIssuers
+    return insuranceIssuers.filter((issuer) => {
+      const shortName = String(issuer?.short_name ?? '').toLowerCase()
+      const legalName = String(issuer?.legal_name ?? '').toLowerCase()
+      const type = String(issuer?.type ?? '').toLowerCase()
+      return (
+        shortName.includes(normalizedSearchQuery) ||
+        legalName.includes(normalizedSearchQuery) ||
+        type.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, insuranceIssuers])
+
+  const filteredInsuranceProducts = useMemo(() => {
+    if (!normalizedSearchQuery) return insuranceProducts
+    return insuranceProducts.filter((product) => {
+      const name = String(product?.product_name ?? '').toLowerCase()
+      const id = String(product?.product_id ?? '').toLowerCase()
+      const category = String(product?.category ?? '').toLowerCase()
+      const subCategory = String(product?.sub_category ?? '').toLowerCase()
+      const description = String(product?.description ?? '').toLowerCase()
+      const status = product?.is_active !== false ? 'active' : 'inactive'
+      return (
+        name.includes(normalizedSearchQuery) ||
+        id.includes(normalizedSearchQuery) ||
+        category.includes(normalizedSearchQuery) ||
+        subCategory.includes(normalizedSearchQuery) ||
+        description.includes(normalizedSearchQuery) ||
+        status.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, insuranceProducts])
+
+  const filteredInsuranceRiders = useMemo(() => {
+    if (!normalizedSearchQuery) return insuranceRiders
+    return insuranceRiders.filter((rider) => {
+      const name = String(rider?.rider_name ?? '').toLowerCase()
+      const id = String(rider?.rider_id ?? '').toLowerCase()
+      const type = String(rider?.rider_type ?? '').toLowerCase()
+      const description = String(rider?.description ?? '').toLowerCase()
+      const minSum = rider?.min_sum_assured !== undefined && rider?.min_sum_assured !== null
+        ? String(rider.min_sum_assured).toLowerCase()
+        : ''
+      const maxSum = rider?.max_sum_assured !== undefined && rider?.max_sum_assured !== null
+        ? String(rider.max_sum_assured).toLowerCase()
+        : ''
+      const premiumPct = rider?.rider_premium_percentage !== undefined && rider?.rider_premium_percentage !== null
+        ? String(rider.rider_premium_percentage).toLowerCase()
+        : ''
+      const premiumFixed = rider?.rider_premium_fixed !== undefined && rider?.rider_premium_fixed !== null
+        ? String(rider.rider_premium_fixed).toLowerCase()
+        : ''
+      const status = rider?.is_active !== false ? 'active' : 'inactive'
+
+      return (
+        name.includes(normalizedSearchQuery) ||
+        id.includes(normalizedSearchQuery) ||
+        type.includes(normalizedSearchQuery) ||
+        description.includes(normalizedSearchQuery) ||
+        minSum.includes(normalizedSearchQuery) ||
+        maxSum.includes(normalizedSearchQuery) ||
+        premiumPct.includes(normalizedSearchQuery) ||
+        premiumFixed.includes(normalizedSearchQuery) ||
+        status.includes(normalizedSearchQuery)
+      )
+    })
+  }, [normalizedSearchQuery, insuranceRiders])
+
+  const filteredMiscPriceRanges = useMemo(() => {
+    const ranges = miscServicesScheme?.price_ranges || []
+    if (!normalizedSearchQuery) return ranges
+
+    return ranges.filter((range) => {
+      const minPrice = range?.min_price !== undefined ? String(range.min_price) : ''
+      const maxPrice = range?.max_price !== undefined ? String(range.max_price) : ''
+      const cc = range?.cc !== undefined ? String(range.cc) : ''
+      const si = range?.si !== undefined ? String(range.si) : ''
+      const combined = `${minPrice} ${maxPrice} ${cc} ${si}`.toLowerCase()
+      return combined.includes(normalizedSearchQuery)
+    })
+  }, [normalizedSearchQuery, miscServicesScheme])
 
   if (!isAdmin) {
     return (
@@ -2072,6 +2325,20 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search NCD/Bond schemes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+
         {/* NCD/Bond Schemes Table */}
         <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
@@ -2114,7 +2381,7 @@ useEffect(() => {
                 ) : filteredNcdBondSchemes.length === 0 ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                      No NCD/Bond schemes available.
+                      {searchQuery ? 'No NCD/Bond schemes match your search.' : 'No NCD/Bond schemes available.'}
                     </td>
                   </tr>
                 ) : (
@@ -2336,24 +2603,24 @@ useEffect(() => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Issue Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="date"
-                        required
+                      <DatePickerInput
                         value={ncdBondSchemeFormData.issue_date}
-                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        required
+                        onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: v })}
+                        inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        ariaLabel="Issue date"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Maturity Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="date"
-                        required
+                      <DatePickerInput
                         value={ncdBondSchemeFormData.maturity_date}
-                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        required
+                        onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: v })}
+                        inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        ariaLabel="Maturity date"
                       />
                     </div>
                   </div>
@@ -2621,6 +2888,34 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search rate slabs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search insurance riders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+
         <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-[var(--stroke)]/70">
@@ -2647,8 +2942,14 @@ useEffect(() => {
                       No rate slabs available. Add one to get started.
                     </td>
                   </tr>
+                ) : filteredFdRateSlabs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
+                      {searchQuery ? 'No rate slabs match your search.' : 'No rate slabs available.'}
+                    </td>
+                  </tr>
                 ) : (
-                  fdRateSlabs.map((slab) => (
+                  filteredFdRateSlabs.map((slab) => (
                     <tr key={slab._key} className="hover:bg-[var(--card-bg-opaque)]">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[var(--text-primary)]">
                         {slab.tenure_min_months} - {slab.tenure_max_months} months
@@ -2988,8 +3289,14 @@ useEffect(() => {
                       No riders available for this product.
                     </td>
                   </tr>
+                ) : filteredInsuranceRiders.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
+                      {searchQuery ? 'No riders match your search.' : 'No riders available for this product.'}
+                    </td>
+                  </tr>
                 ) : (
-                  insuranceRiders.map((rider) => (
+                  filteredInsuranceRiders.map((rider) => (
                     <tr key={rider.rider_id} className="hover:bg-[var(--card-bg-opaque)]">
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-[var(--text-primary)]">{rider.rider_name}</div>
@@ -3274,6 +3581,20 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search insurance products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+
         {/* Insurance Products Table */}
         <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="overflow-x-auto">
@@ -3307,7 +3628,7 @@ useEffect(() => {
                 ) : filteredInsuranceProducts.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                      No insurance products available.
+                      {searchQuery ? 'No insurance products match your search.' : 'No insurance products available.'}
                     </td>
                   </tr>
                 ) : (
@@ -3739,6 +4060,20 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search FD schemes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+
         {/* FD Schemes Table */}
         <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
           {filteredFdSchemes.length > 0 && (
@@ -3815,7 +4150,7 @@ useEffect(() => {
                 ) : filteredFdSchemes.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                      No FD schemes available.
+                      {searchQuery ? 'No FD schemes match your search.' : 'No FD schemes available.'}
                     </td>
                   </tr>
                 ) : (
@@ -4215,6 +4550,34 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Category filter (when AMC has multiple categories) */}
+        {(selectedAmc?.categories?.length > 1) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-[var(--text-secondary)]">Filter by category:</span>
+            <button
+              onClick={() => {
+                setSelectedAmcCategory(null)
+                loadSchemes(selectedAmc.amc_code, null)
+              }}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedAmcCategory === null ? 'bg-[var(--accent)] text-white' : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'}`}
+            >
+              All
+            </button>
+            {selectedAmc.categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => {
+                  setSelectedAmcCategory(cat)
+                  loadSchemes(selectedAmc.amc_code, cat)
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedAmcCategory === cat ? 'bg-[var(--accent)] text-white' : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Search */}
         <div className="mb-6">
           <div className="relative">
@@ -4287,9 +4650,9 @@ useEffect(() => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
-                      {selectedAmc?.amc_category || 'MF'}
-                      {(selectedAmc?.amc_category && selectedAmc.amc_category !== 'MF') && (() => {
-                        const minInv = selectedAmc?.min_investment != null ? selectedAmc.min_investment : MF_AMC_CATEGORIES.find(c => c.id === selectedAmc?.amc_category)?.minInvestment
+                      {scheme.amc_category || 'MF'}
+                      {(() => {
+                        const minInv = scheme.min_investment != null ? scheme.min_investment : MF_AMC_CATEGORIES.find(c => c.id === (scheme.amc_category || 'MF'))?.minInvestment
                         return minInv != null ? ` (${formatMinInvestment(minInv)})` : ''
                       })()}
                     </td>
@@ -4369,7 +4732,11 @@ useEffect(() => {
               }
             }}
           >
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div
+              className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-h-[90vh] overflow-y-auto ${
+                showVariantPreview ? 'max-w-[min(96vw,72rem)] sm:max-w-5xl' : 'max-w-2xl'
+              }`}
+            >
               <div className="p-6">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                   {editingScheme ? 'Edit Scheme' : 'Add New Scheme'}
@@ -4674,12 +5041,12 @@ useEffect(() => {
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           NFO Validity Date <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="date"
+                        <DatePickerInput
                           required={schemeFormData.is_nfo}
                           value={schemeFormData.nfo_validity}
-                          onChange={(e) => setSchemeFormData({ ...schemeFormData, nfo_validity: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          onChange={(v) => setSchemeFormData({ ...schemeFormData, nfo_validity: v })}
+                          inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          ariaLabel="NFO validity date"
                         />
                         <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
                           ⚠️ AMFI code required before activation
@@ -5086,31 +5453,37 @@ useEffect(() => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                    Type (AMC Category)
+                    Categories (MF, SIF, PMS, AIF, Gift City)
                   </label>
-                  <select
-                    value={amcFormData.amc_category || 'MF'}
-                    onChange={(e) => {
-                      const id = e.target.value
-                      const cat = MF_AMC_CATEGORIES.find(c => c.id === id)
-                      setAmcFormData({
-                        ...amcFormData,
-                        amc_category: id,
-                        min_investment: cat?.minInvestment != null ? cat.minInvestment : ''
-                      })
-                    }}
-                    className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
-                  >
-                    {MF_AMC_CATEGORIES.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}{c.minInvestment != null ? ` – ${formatMinInvestment(c.minInvestment)}` : ' (default)'}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex flex-wrap gap-3 py-2">
+                    {MF_AMC_CATEGORIES.map((c) => {
+                      const checked = (amcFormData.categories || []).includes(c.id)
+                      return (
+                        <label key={c.id} className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...(amcFormData.categories || []), c.id].filter((x, i, a) => a.indexOf(x) === i)
+                                : (amcFormData.categories || []).filter((x) => x !== c.id)
+                              if (next.length === 0) return
+                              setAmcFormData({ ...amcFormData, categories: next })
+                            }}
+                            className="rounded border-[var(--stroke)] text-[var(--accent)] focus:ring-[var(--accent)]"
+                          />
+                          <span className="text-sm text-[var(--text-primary)]">
+                            {c.label}{c.minInvestment != null ? ` – ${formatMinInvestment(c.minInvestment)}` : ''}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Select all categories this AMC operates in.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                    Min Investment (editable)
+                    Min Investment (optional, default per category)
                   </label>
                   <input
                     type="number"
@@ -5328,6 +5701,32 @@ useEffect(() => {
         ) : null}
       </div>
 
+      {/* Issuer Search (master lists) */}
+      {['MF', 'FD', 'NCDBond', 'Insurance', 'MiscServices'].includes(activeTab) && (
+        <div className="mb-6">
+          <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              placeholder={
+                activeTab === 'MF'
+                  ? 'Search AMCs...'
+                  : activeTab === 'FD'
+                    ? 'Search FD issuers...'
+                    : activeTab === 'NCDBond'
+                      ? 'Search NCD/Bond issuers...'
+                      : activeTab === 'Insurance'
+                        ? 'Search insurance issuers...'
+                        : 'Search price ranges...'
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Conditional Table */}
       {activeTab === 'MF' ? (
         <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
@@ -5342,6 +5741,9 @@ useEffect(() => {
                   AMC Code
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+                  Categories
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                   Schemes
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
@@ -5352,18 +5754,22 @@ useEffect(() => {
             <tbody className="bg-[var(--card-bg)] divide-y divide-[var(--stroke)]/70">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center">
+                  <td colSpan="5" className="px-6 py-8 text-center">
                     <FiRefreshCw className="w-6 h-6 animate-spin text-[var(--text-muted)] mx-auto" />
                   </td>
                 </tr>
-              ) : amcs.length === 0 ? (
+              ) : filteredAmcs.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                    No AMCs available. Add one to get started.
+                  <td colSpan="5" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
+                    {searchQuery
+                      ? 'No AMCs found matching your search.'
+                      : 'No AMCs available. Add one to get started.'}
                   </td>
                 </tr>
               ) : (
-                amcs.map((amc, idx) => (
+                filteredAmcs.map((amc, idx) => {
+                  const catList = amc.categories && Array.isArray(amc.categories) && amc.categories.length > 0 ? amc.categories : [amc.amc_category || 'MF']
+                  return (
                   <tr 
                     key={amc.amc_code || idx} 
                     className="hover:bg-[var(--card-bg-opaque)] cursor-pointer"
@@ -5376,6 +5782,15 @@ useEffect(() => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                       {amc.amc_code}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {catList.map((c) => (
+                          <span key={c} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[var(--accent-muted)] text-[var(--accent)]">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
@@ -5409,7 +5824,8 @@ useEffect(() => {
                       </button>
                     </td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -5448,7 +5864,7 @@ useEffect(() => {
                 ) : filteredFdIssuers.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                      No FD issuers available.
+                      {searchQuery ? 'No FD issuers found matching your search.' : 'No FD issuers available.'}
                     </td>
                   </tr>
                 ) : (
@@ -5542,7 +5958,7 @@ useEffect(() => {
                 ) : filteredNcdBondIssuers.length === 0 ? (
                   <tr>
                     <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                      No NCD/Bond issuers available.
+                      {searchQuery ? 'No NCD/Bond issuers found matching your search.' : 'No NCD/Bond issuers available.'}
                     </td>
                   </tr>
                 ) : (
@@ -5633,7 +6049,7 @@ useEffect(() => {
                 ) : filteredInsuranceIssuers.length === 0 ? (
                   <tr>
                     <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
-                      No insurance issuers available.
+                      {searchQuery ? 'No insurance issuers found matching your search.' : 'No insurance issuers available.'}
                     </td>
                   </tr>
                 ) : (
@@ -6528,24 +6944,24 @@ useEffect(() => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Issue Date <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      required
+                    <DatePickerInput
                       value={ncdBondSchemeFormData.issue_date}
-                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      required
+                      onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: v })}
+                      inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      ariaLabel="Issue date"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Maturity Date <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      required
+                    <DatePickerInput
                       value={ncdBondSchemeFormData.maturity_date}
-                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      required
+                      onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: v })}
+                      inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      ariaLabel="Maturity date"
                     />
                   </div>
                 </div>
@@ -6917,8 +7333,14 @@ useEffect(() => {
                           No price ranges configured. Click "Add Price Range" to get started.
                         </td>
                       </tr>
+                    ) : filteredMiscPriceRanges.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">
+                          {searchQuery ? 'No price ranges match your search.' : 'No price ranges available.'}
+                        </td>
+                      </tr>
                     ) : (
-                      miscServicesScheme.price_ranges.map((range, idx) => (
+                      filteredMiscPriceRanges.map((range, idx) => (
                         <tr key={idx} className="hover:bg-[var(--card-bg-opaque)]">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[var(--text-primary)]">
                             ₹{range.min_price?.toLocaleString('en-IN') || 0} - ₹{range.max_price?.toLocaleString('en-IN') || 0}

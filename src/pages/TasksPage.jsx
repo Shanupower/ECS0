@@ -12,6 +12,7 @@ import {
   FiChevronDown,
   FiFilter
 } from 'react-icons/fi'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const statusOptions = [
@@ -227,11 +228,11 @@ export default function TasksPage() {
             rows={2}
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <input
-              type="date"
+            <DatePickerInput
               value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+              onChange={(v) => setFormData({ ...formData, due_date: v })}
+              inputClassName="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+              ariaLabel="Due date"
             />
             <select
               value={formData.priority}
@@ -366,11 +367,11 @@ export default function TasksPage() {
               rows={2}
             />
             <div className="flex gap-2">
-              <input
-                type="date"
+              <DatePickerInput
                 value={formData.due_date}
-                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="flex-1 px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+                onChange={(v) => setFormData({ ...formData, due_date: v })}
+                inputClassName="flex-1 px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+                ariaLabel="Due date"
               />
               <select
                 value={formData.priority}

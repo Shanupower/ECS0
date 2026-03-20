@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import CSVExport from '../components/CSVExport'
 import { Card, Button, SegmentedControl, Switch, Skeleton } from '../components/ui'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import {
   FiTrendingUp,
   FiFileText,
@@ -386,20 +387,18 @@ export default function DashboardPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-label text-[var(--text-secondary)]">From</label>
-                <input
-                  type="date"
+                <DatePickerInput
                   value={dateRange.from}
-                  onChange={e => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-                  className="rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2 text-body text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+                  onChange={(v) => setDateRange(prev => ({ ...prev, from: v }))}
+                  inputClassName="rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2 text-body text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-label text-[var(--text-secondary)]">To</label>
-                <input
-                  type="date"
+                <DatePickerInput
                   value={dateRange.to}
-                  onChange={e => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-                  className="rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2 text-body text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+                  onChange={(v) => setDateRange(prev => ({ ...prev, to: v }))}
+                  inputClassName="rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2 text-body text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
                 />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -461,36 +460,27 @@ export default function DashboardPage() {
 
       {!loading && !error && summary && (
         <div className="space-y-6">
-          {showWidget('target_vs_actual') && (summary.monthly_target != null || summary.branch_target != null) && (
+          {showWidget('target_vs_actual') && summary.branch_target != null && (
             <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
               <div className="flex items-center gap-2 mb-2">
                 <FiTarget className="w-5 h-5 text-[var(--accent)]" />
                 <h3 className="text-title font-semibold text-[var(--text)]">Target vs actual</h3>
               </div>
-              {summary.monthly_target != null && (
-                <div className="mb-3">
-                  <div className="flex justify-between text-small mb-1">
-                    <span className="text-[var(--text-muted)]">Personal target</span>
-                    <span className="font-medium text-[var(--success)]">{formatCurrency(summary.monthly_target)}</span>
-                  </div>
-                  <div className="h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[var(--success)] to-emerald-400 transition-all duration-500 ease-out" style={{ width: `${Math.min(100, ((summary.collection_credit_earned || 0) / (summary.monthly_target || 1)) * 100)}%` }} />
-                  </div>
-                  <div className="text-helper mt-1">Actual CC: {formatCurrency(summary.collection_credit_earned || 0)}</div>
+              <div>
+                <div className="flex justify-between text-small mb-1">
+                  <span className="text-[var(--text-muted)]">Branch monthly target</span>
+                  <span className="font-medium text-[var(--accent)]">{formatCurrency(summary.branch_target)}</span>
                 </div>
-              )}
-              {summary.branch_target != null && (
-                <div>
-                  <div className="flex justify-between text-small mb-1">
-                    <span className="text-[var(--text-muted)]">Branch target</span>
-                    <span className="font-medium text-[var(--accent)]">{formatCurrency(summary.branch_target)}</span>
-                  </div>
-                  <div className="h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] to-blue-400 transition-all duration-500 ease-out" style={{ width: `${Math.min(100, ((summary.collection_credit_earned || 0) / (summary.branch_target || 1)) * 100)}%` }} />
-                  </div>
-                  <div className="text-helper mt-1">Actual CC: {formatCurrency(summary.collection_credit_earned || 0)}</div>
+                <div className="h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] to-blue-400 transition-all duration-500 ease-out"
+                    style={{
+                      width: `${Math.min(100, ((summary.collection_credit_earned || 0) / (summary.branch_target || 1)) * 100)}%`,
+                    }}
+                  />
                 </div>
-              )}
+                <div className="text-helper mt-1">Actual CC (selected scope): {formatCurrency(summary.collection_credit_earned || 0)}</div>
+              </div>
             </Card>
           )}
 

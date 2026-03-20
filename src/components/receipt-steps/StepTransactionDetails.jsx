@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { api } from '../../api'
 import SearchableSelect from '../SearchableSelect.jsx'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, token }) {
   const [amount, setAmount] = useState('')
@@ -10,8 +11,11 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
   const [isPerpetual, setIsPerpetual] = useState(false)
   const [schemes, setSchemes] = useState([])
   const [targetScheme, setTargetScheme] = useState('')
-  const [switchType, setSwitchType] = useState('Amount')
   const [loading, setLoading] = useState(false)
+
+  const blockWheelChangeNumber = (e) => {
+    e.currentTarget.blur()
+  }
   const [stpOriginalAmount, setStpOriginalAmount] = useState('')
 
   useEffect(() => {
@@ -72,7 +76,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       transactionData.switch_from_scheme_name = selectedScheme.scheme_name
       transactionData.switch_to_scheme_code = target?.scheme_code
       transactionData.switch_to_scheme_name = target?.scheme_name
-      transactionData.switch_type = switchType
+      transactionData.switch_type = 'Amount'
       transactionData.switch_value = amount
     }
 
@@ -103,6 +107,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onWheel={blockWheelChangeNumber}
               placeholder="Enter amount"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
             />
@@ -120,6 +125,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onWheel={blockWheelChangeNumber}
               placeholder="Enter SIP amount"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
             />
@@ -145,11 +151,10 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Start Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <DatePickerInput
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              onChange={(v) => setStartDate(v)}
+              inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -167,17 +172,16 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   End Date <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  max={startDate ? (() => {
-                    const maxDate = new Date(startDate)
-                    maxDate.setFullYear(maxDate.getFullYear() + 30)
-                    return maxDate.toISOString().split('T')[0]
-                  })() : undefined}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
+                  <DatePickerInput
+                    value={endDate}
+                    onChange={(v) => setEndDate(v)}
+                    max={startDate ? (() => {
+                      const maxDate = new Date(startDate)
+                      maxDate.setFullYear(maxDate.getFullYear() + 30)
+                      return maxDate.toISOString().split('T')[0]
+                    })() : undefined}
+                    inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  />
               </div>
             )}
           </div>
@@ -205,11 +209,10 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Start Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <DatePickerInput
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              onChange={(v) => setStartDate(v)}
+              inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -220,6 +223,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onWheel={blockWheelChangeNumber}
               placeholder="Enter withdrawal amount"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
@@ -237,6 +241,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               type="number"
               value={stpOriginalAmount}
               onChange={(e) => setStpOriginalAmount(e.target.value)}
+              onWheel={blockWheelChangeNumber}
               placeholder="Enter total original scheme amount"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
             />
@@ -310,11 +315,10 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Start Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <DatePickerInput
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              onChange={(v) => setStartDate(v)}
+              inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -325,6 +329,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onWheel={blockWheelChangeNumber}
               placeholder="Enter periodic transfer amount"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500"
             />
@@ -395,43 +400,15 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Type <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="switchType"
-                  value="Amount"
-                  checked={switchType === 'Amount'}
-                  onChange={(e) => setSwitchType(e.target.value)}
-                  className="mr-2 w-4 h-4 text-red-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Amount</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="switchType"
-                  value="Units"
-                  checked={switchType === 'Units'}
-                  onChange={(e) => setSwitchType(e.target.value)}
-                  className="mr-2 w-4 h-4 text-red-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Units</span>
-              </label>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Value {switchType === 'Amount' ? '(₹)' : '(Units)'} <span className="text-red-500">*</span>
+              Switch amount (₹) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
-              step={switchType === 'Units' ? '0.01' : '1'}
+              step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder={`Enter ${switchType === 'Amount' ? 'amount in rupees' : 'number of units'}`}
+              onWheel={blockWheelChangeNumber}
+              placeholder="Enter amount in rupees"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>

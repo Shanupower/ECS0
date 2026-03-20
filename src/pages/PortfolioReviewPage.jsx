@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { FiClipboard, FiRefreshCw, FiCheck, FiCalendar, FiSearch, FiAlertCircle } from 'react-icons/fi'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 const REVIEW_FILTERS = [
   { value: 'overdue', label: 'Overdue' },
@@ -289,11 +290,11 @@ function SetNextReviewModal({ customer, onSave, onClose, saving }) {
         <p className="text-sm text-[var(--text-secondary)] mb-4">{customer.name}</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="block text-sm font-medium text-[var(--text-secondary)]">Next review due</label>
-          <input
-            type="date"
+          <DatePickerInput
             value={nextReviewDue}
-            onChange={(e) => setNextReviewDue(e.target.value)}
-            className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+            onChange={(v) => setNextReviewDue(v)}
+            inputClassName="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+            ariaLabel="Next review due"
           />
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">

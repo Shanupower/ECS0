@@ -20,6 +20,7 @@ import {
   FiCheckCircle,
   FiX
 } from 'react-icons/fi'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 export default function CustomerManagementPage() {
   const { user, token } = useAuth()
@@ -27,6 +28,8 @@ export default function CustomerManagementPage() {
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterBranchKey, setFilterBranchKey] = useState('')
+  const branchFilterMountRef = useRef(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCustomers, setTotalCustomers] = useState(0)
@@ -249,6 +252,9 @@ export default function CustomerManagementPage() {
       if (search.trim()) {
         query.search = search.trim()
       }
+      if (user?.role === 'admin' && filterBranchKey) {
+        query.branch_key = filterBranchKey
+      }
 
       const data = await api.listCustomers(token, query)
       setCustomers(data.items || [])
@@ -290,6 +296,15 @@ export default function CustomerManagementPage() {
 
     return () => clearTimeout(debounceTimer)
   }, [searchTerm])
+
+  useEffect(() => {
+    if (branchFilterMountRef.current) {
+      branchFilterMountRef.current = false
+      return
+    }
+    setCurrentPage(1)
+    fetchCustomers(1, searchTerm)
+  }, [filterBranchKey])
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -756,8 +771,8 @@ export default function CustomerManagementPage() {
 
       {/* Search and Filters */}
       <div className="bg-[var(--dashboard-card)] rounded-lg shadow-sm border border-[var(--dashboard-border)] p-4 sm:p-6">
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="flex-1">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
             <div className="relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--dashboard-muted)] w-4 h-4" />
               <input
@@ -769,6 +784,16 @@ export default function CustomerManagementPage() {
               />
             </div>
           </div>
+          {user?.role === 'admin' && (
+            <div className="w-full sm:w-56">
+              <SearchableSelect
+                options={[{ label: 'All branches', value: '' }, ...availableBranches]}
+                value={filterBranchKey}
+                onChange={(v) => setFilterBranchKey(v != null ? String(v) : '')}
+                placeholder="Filter by branch"
+              />
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}
@@ -1245,13 +1270,11 @@ function CustomerModal({
                       <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                         Date of Birth *
                       </label>
-                      <input
-                        type="date"
-                        name="date_of_birth"
+                      <DatePickerInput
                         value={formData.date_of_birth}
-                        onChange={handleChange}
+                        onChange={(v) => setFormData(prev => ({ ...prev, date_of_birth: v }))}
                         required
-                        className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        inputClassName="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-red-500 focus:border-red-500"
                       />
                     </div>
                     
@@ -1510,17 +1533,16 @@ function CustomerModal({
                         <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Date of Birth <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="date"
+                        <DatePickerInput
                           value={minor.date_of_birth || ''}
-                          onChange={(e) => {
+                          onChange={(v) => {
                             const newMinors = [...formData.minors]
-                            newMinors[index].date_of_birth = e.target.value
+                            newMinors[index].date_of_birth = v
                             setFormData(prev => ({ ...prev, minors: newMinors }))
                           }}
                           required
                           max={new Date().toISOString().split('T')[0]}
-                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)] transition-colors"
+                          inputClassName="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)] transition-colors"
                         />
                       </div>
 

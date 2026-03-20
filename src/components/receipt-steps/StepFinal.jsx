@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { FiUpload, FiFile, FiTrash2, FiCheck, FiAlertCircle, FiRefreshCw, FiPlus } from 'react-icons/fi'
 import { Button } from '../ui'
 import { formatMinInvestment } from '../../data/mf_amc_categories'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 // Support both single (legacy) and array of documents
 function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '', isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument, supportingDocuments, setSupportingDocuments }) {
@@ -53,7 +54,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
   const handleFileUpload = (event) => {
     const files = Array.from(event.target.files || [])
     if (files.length === 0) return
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
     const maxSize = 10 * 1024 * 1024 // 10MB to match backend/upload limits
     const valid = files.filter(file => {
       if (file.size > maxSize) {
@@ -1153,11 +1154,11 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                     <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
                       Cheque Date *
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerInput
                       value={offlineDetails.chequeDate}
-                      onChange={(e) => setOfflineDetails({...offlineDetails, chequeDate: e.target.value})}
-                      className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
+                      onChange={(v) => setOfflineDetails({ ...offlineDetails, chequeDate: v })}
+                      inputClassName="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
+                      ariaLabel="Cheque date"
                     />
                   </div>
                   

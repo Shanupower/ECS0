@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false }) {
   const [principalAmount, setPrincipalAmount] = useState('')
@@ -315,11 +316,10 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Booking Date <span className="text-red-500">*</span>
           </label>
-          <input
-            type="date"
+          <DatePickerInput
             value={bookingDate}
-            onChange={(e) => setBookingDate(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            onChange={(v) => setBookingDate(v)}
+            inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
             {isGovtScheme ? 'Scheme rate is locked as of this date' : 'Rate is locked as of this date'}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import SearchableSelect from '../SearchableSelect.jsx'
 import { api } from '../../api'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 /** General or Health: same simple form (Date of Issue, Policy Period years, auto Renewal Date, Policy No, Premium) */
 const isSimpleInsuranceForm = (product) => {
@@ -8,15 +9,30 @@ const isSimpleInsuranceForm = (product) => {
   return cat === 'general' || cat === 'health'
 }
 
-/** Add years to a date string (YYYY-MM-DD), returns YYYY-MM-DD */
-function addYearsToDate(dateStr, years) {
-  if (!dateStr || years === '' || years == null) return ''
-  const n = parseInt(years, 10)
-  if (Number.isNaN(n)) return ''
-  const d = new Date(dateStr)
+/** Calendar day immediately before a date (YYYY-MM-DD) */
+function dayBeforeDateOfIssue(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(`${dateStr}T12:00:00`)
   if (Number.isNaN(d.getTime())) return ''
-  d.setFullYear(d.getFullYear() + n)
+  d.setDate(d.getDate() - 1)
   return d.toISOString().slice(0, 10)
+}
+
+function addYearsToDate(dateStr, years) {
+  if (!dateStr) return ''
+  const y = Number(years)
+  if (!Number.isFinite(y)) return ''
+  const d = new Date(`${dateStr}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  d.setFullYear(d.getFullYear() + y)
+  return d.toISOString().slice(0, 10)
+}
+
+function computeRenewalDate(dateOfIssueStr, policyYears) {
+  if (!dateOfIssueStr || !policyYears) return ''
+  const plusYears = addYearsToDate(dateOfIssueStr, policyYears)
+  if (!plusYears) return ''
+  return dayBeforeDateOfIssue(plusYears)
 }
 
 const TXN_TYPES = [
@@ -68,13 +84,20 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
 
   const simpleForm = isSimpleInsuranceForm(product)
 
-  // For General/Health: renewal date = date of issue + policy period (years)
-  const computedRenewalDate = simpleForm ? addYearsToDate(dateOfIssue, policyPeriod) : ''
+  // Renewal date on file = (Date of issue + policy period years) - 1 day
   useEffect(() => {
-    if (simpleForm && computedRenewalDate) {
-      setRenewalDate(computedRenewalDate)
+    if (!dateOfIssue) {
+      setRenewalDate('')
+      return
     }
-  }, [simpleForm, computedRenewalDate])
+
+    if (simpleForm && policyPeriod) {
+      setRenewalDate(computeRenewalDate(dateOfIssue, policyPeriod))
+    } else {
+      // Fallback: if policy period isn't available, keep the older simpler rule.
+      setRenewalDate(dayBeforeDateOfIssue(dateOfIssue))
+    }
+  }, [dateOfIssue, policyPeriod, simpleForm])
 
   const handleNext = () => {
     setValidationError('')
@@ -159,7 +182,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
       insurance_selected_riders: selectedRiders.length > 0 ? selectedRiders : null,
       insurance_selected_riders_details: selectedRiderDetails.length > 0 ? selectedRiderDetails : null,
       insurance_date_of_issue: dateOfIssue || null,
-      insurance_renewal_date: simpleForm && computedRenewalDate ? computedRenewalDate : (renewalDate || null),
+      insurance_renewal_date: renewalDate || null,
       insurance_policy_period: simpleForm && policyPeriod ? parseFloat(policyPeriod) || null : (policyPeriod || null),
       insurance_sum_assured: sumAssured ? parseFloat(sumAssured) : null,
       insurance_term: term ? parseFloat(term) : null,
@@ -237,11 +260,10 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
             <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
               <div className="col" style={{ flex: '1 1 320px' }}>
                 <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Date of Issue</label>
-                <input
-                  type="date"
+                <DatePickerInput
                   value={dateOfIssue}
-                  onChange={e => setDateOfIssue(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onChange={(v) => setDateOfIssue(v)}
+                  inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>
@@ -260,12 +282,11 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
             <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
               <div className="col" style={{ flex: '1 1 320px' }}>
                 <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Renewal Date</label>
-                <input
-                  type="date"
-                  value={computedRenewalDate || renewalDate}
+                <DatePickerInput
+                  value={renewalDate}
                   readOnly
-                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 cursor-not-allowed"
-                  title="Auto-filled from Date of Issue + Policy Period"
+                  inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                  ariaLabel="Renewal date"
                 />
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>
@@ -295,20 +316,19 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
             <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
               <div className="col" style={{ flex: '1 1 320px' }}>
                 <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Date of Issue</label>
-                <input
-                  type="date"
+                <DatePickerInput
                   value={dateOfIssue}
-                  onChange={e => setDateOfIssue(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onChange={(v) => setDateOfIssue(v)}
+                  inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>
                 <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Renewal Date</label>
-                <input
-                  type="date"
+                <DatePickerInput
                   value={renewalDate}
-                  onChange={e => setRenewalDate(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  readOnly
+                  inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                  ariaLabel="Renewal date"
                 />
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>

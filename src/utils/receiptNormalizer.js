@@ -192,13 +192,25 @@ export function normalizeReceiptFields(receipt) {
   normalized.stp_amount = getValue('transaction.stp.amount', 'stp_amount', 'stpAmount')
   normalized.stp_original_amount = getValue('transaction.stp.original_amount', 'stp_original_amount', 'stpOriginalAmount')
 
-  // Switch Over fields (from structured.transaction.switch_over or flat)
-  normalized.switch_from_scheme_code = getValue('transaction.switch_over.from_scheme_code', 'switch_from_scheme_code', 'switchFromSchemeCode')
-  normalized.switch_from_scheme_name = getValue('transaction.switch_over.from_scheme_name', 'switch_from_scheme_name', 'switchFromSchemeName')
-  normalized.switch_to_scheme_code = getValue('transaction.switch_over.to_scheme_code', 'switch_to_scheme_code', 'switchToSchemeCode')
-  normalized.switch_to_scheme_name = getValue('transaction.switch_over.to_scheme_name', 'switch_to_scheme_name', 'switchToSchemeName')
-  normalized.switch_type = getValue('transaction.switch_over.type', 'switch_type', 'switchType')
-  normalized.switch_value = getValue('transaction.switch_over.value', 'switch_value', 'switchValue')
+  // Switch Over — prefer root-level fields when present (PATCH / legacy flat) over nested transaction.switch_over
+  normalized.switch_from_scheme_code = Object.prototype.hasOwnProperty.call(receipt, 'switch_from_scheme_code')
+    ? receipt.switch_from_scheme_code
+    : getValue('transaction.switch_over.from_scheme_code', 'switchFromSchemeCode')
+  normalized.switch_from_scheme_name = Object.prototype.hasOwnProperty.call(receipt, 'switch_from_scheme_name')
+    ? receipt.switch_from_scheme_name
+    : getValue('transaction.switch_over.from_scheme_name', 'switchFromSchemeName')
+  normalized.switch_to_scheme_code = Object.prototype.hasOwnProperty.call(receipt, 'switch_to_scheme_code')
+    ? receipt.switch_to_scheme_code
+    : getValue('transaction.switch_over.to_scheme_code', 'switchToSchemeCode')
+  normalized.switch_to_scheme_name = Object.prototype.hasOwnProperty.call(receipt, 'switch_to_scheme_name')
+    ? receipt.switch_to_scheme_name
+    : getValue('transaction.switch_over.to_scheme_name', 'switchToSchemeName')
+  normalized.switch_type = Object.prototype.hasOwnProperty.call(receipt, 'switch_type')
+    ? receipt.switch_type
+    : getValue('transaction.switch_over.type', 'switchType')
+  normalized.switch_value = Object.prototype.hasOwnProperty.call(receipt, 'switch_value')
+    ? receipt.switch_value
+    : getValue('transaction.switch_over.value', 'switchValue')
 
   // FD Issuer information (from structured.product_details.fd.issuer or flat)
   normalized.fd_issuer_key = getValue('product_details.fd.issuer.key', 'fd_issuer_key', 'fdIssuerKey')
@@ -331,6 +343,12 @@ export function normalizeReceiptFields(receipt) {
   normalized.insurance_premium_frequency = getValue('product_details.insurance.policy.premium_frequency', 'insurance_premium_frequency', 'insurancePremiumFrequency', 'interest_frequency', 'interestFrequency')
   normalized.insurance_premium_payment_term = getValue('product_details.insurance.policy.premium_payment_term', 'insurance_premium_payment_term', 'insurancePremiumPaymentTerm')
   normalized.insurance_date_of_issue = getValue('product_details.insurance.coverage.policy_start_date', 'insurance_date_of_issue', 'insuranceDateOfIssue', 'insurance_policy_start_date')
+  normalized.insurance_renewal_date = getValue(
+    'product_details.insurance.policy.renewal_date',
+    'product_details.insurance.coverage.renewal_date',
+    'insurance_renewal_date',
+    'insuranceRenewalDate'
+  )
   normalized.insurance_maturity_date = getValue('product_details.insurance.coverage.maturity_date', 'insurance_maturity_date', 'insuranceMaturityDate')
 
   // FD Tax details (from structured.product_details.fd.tax or flat)

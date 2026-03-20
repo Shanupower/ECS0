@@ -34,7 +34,6 @@ export default function UserManagementPage() {
     email: '',
     branch: '',
     role: 'employee',
-    monthly_target: '',
     password: ''
   })
   const [fieldErrors, setFieldErrors] = useState({})
@@ -92,9 +91,6 @@ export default function UserManagementPage() {
           trimmedData[key] = typeof value === 'string' ? value.trim() : value
         }
       }
-      if (trimmedData.monthly_target === '') trimmedData.monthly_target = null
-      else if (trimmedData.monthly_target != null) trimmedData.monthly_target = Number(trimmedData.monthly_target)
-      
       await api.createUser(token, trimmedData)
       await loadUsers()
       setShowCreateForm(false)
@@ -129,9 +125,7 @@ export default function UserManagementPage() {
       
       const newPassword = trimmedData.password
       delete trimmedData.password
-      if (trimmedData.monthly_target === '') trimmedData.monthly_target = null
-      else if (trimmedData.monthly_target != null) trimmedData.monthly_target = Number(trimmedData.monthly_target)
-      
+
       await api.updateUser(token, editingUser.id, trimmedData)
       
       if (newPassword) {
@@ -199,7 +193,6 @@ export default function UserManagementPage() {
       email: '',
       branch: '',
       role: 'employee',
-      monthly_target: '',
       password: ''
     })
     setFieldErrors({})
@@ -228,7 +221,6 @@ export default function UserManagementPage() {
       email: user.email || '',
       branch: getBranchFormValue(user.branch, user.branch_code),
       role: user.role || 'employee',
-      monthly_target: user.monthly_target != null ? String(user.monthly_target) : '',
       password: ''
     })
   }
@@ -551,19 +543,6 @@ export default function UserManagementPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Monthly target (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="Optional"
-                  value={formData.monthly_target}
-                  onChange={e => setFormData(prev => ({ ...prev, monthly_target: e.target.value }))}
-                  className="w-full px-4 py-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none"
-                />
-              </div>
-              
-              <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Password {editingUser && '(leave blank to keep current)'}
                 </label>
@@ -656,7 +635,6 @@ export default function UserManagementPage() {
                         <div><span className="font-medium">Code:</span> {user.emp_code}</div>
                         <div><span className="font-medium">Email:</span> {user.email}</div>
                         <div><span className="font-medium">Branch:</span> {getUserBranchDisplay(user.branch)}</div>
-                        <div><span className="font-medium">Monthly target:</span> {user.monthly_target != null ? `₹${Number(user.monthly_target).toLocaleString('en-IN')}` : '—'}</div>
                         <div><span className="font-medium">Created:</span> {formatDate(user.created_at)}</div>
                       </div>
                     </div>
@@ -699,7 +677,6 @@ export default function UserManagementPage() {
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Email</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Branch</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Role</th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Monthly target</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Created</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
                 </tr>
@@ -737,9 +714,6 @@ export default function UserManagementPage() {
                         {user.role === 'admin' && <FiShield className="w-3 h-3 mr-1" />}
                         {user.role === 'manager' ? 'Branch Manager' : user.role}
                       </span>
-                    </td>
-                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)]">
-                      {user.monthly_target != null ? `₹${Number(user.monthly_target).toLocaleString('en-IN')}` : '—'}
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)]">
                       {formatDate(user.created_at)}

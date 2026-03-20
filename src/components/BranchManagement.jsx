@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { 
@@ -37,8 +37,16 @@ export default function BranchManagement() {
   const [selectedBranchForInsights, setSelectedBranchForInsights] = useState(null)
   const [branchInsightsData, setBranchInsightsData] = useState(null)
   const [loadingInsights, setLoadingInsights] = useState(false)
+  const branchEditFormRef = useRef(null)
 
   const isAdmin = user?.role === 'admin'
+
+  useEffect(() => {
+    if (!editingBranch) return
+    requestAnimationFrame(() => {
+      branchEditFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [editingBranch])
 
   useEffect(() => {
     if (isAdmin) {
@@ -188,7 +196,10 @@ export default function BranchManagement() {
             Refresh
           </button>
           <button
-            onClick={() => setShowCreateForm(true)}
+            onClick={() => {
+              setEditingBranch(null)
+              setShowCreateForm(true)
+            }}
             className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 transition-colors duration-200"
           >
             <FiPlus className="w-4 h-4 mr-2" />
@@ -221,13 +232,15 @@ export default function BranchManagement() {
       )}
 
       {/* Edit Branch Form */}
-      {editingBranch && (
-        <EditBranchForm 
-          branch={editingBranch}
-          onSubmit={(data) => handleUpdateBranch(editingBranch.branch_code, data)}
-          onCancel={() => setEditingBranch(null)}
-        />
-      )}
+      <div ref={branchEditFormRef}>
+        {editingBranch && (
+          <EditBranchForm 
+            branch={editingBranch}
+            onSubmit={(data) => handleUpdateBranch(editingBranch.branch_code, data)}
+            onCancel={() => setEditingBranch(null)}
+          />
+        )}
+      </div>
 
       {/* User Assignment Modal */}
       {showUserAssignment && selectedBranch && (
@@ -315,6 +328,7 @@ export default function BranchManagement() {
                     <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Branch Code</th>
                     <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Branch Name</th>
                     <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Type</th>
+                    <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Monthly target</th>
                     <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Users</th>
                     <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Status</th>
                     <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Actions</th>
@@ -334,6 +348,11 @@ export default function BranchManagement() {
                       </td>
                       <td className="py-3 px-4 text-[var(--text-secondary)]">
                         {branch.branch_type || 'Operational'}
+                      </td>
+                      <td className="py-3 px-4 text-right text-[var(--text-secondary)] tabular-nums">
+                        {branch.monthly_target != null && branch.monthly_target !== ''
+                          ? `₹${Number(branch.monthly_target).toLocaleString('en-IN')}`
+                          : '—'}
                       </td>
                       <td className="py-3 px-4 text-[var(--text-secondary)]">
                         {users.filter((u) => u.branch_code === branch.branch_code).length} users
@@ -371,7 +390,10 @@ export default function BranchManagement() {
                             <FiBarChart className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setEditingBranch(branch)}
+                            onClick={() => {
+                              setShowCreateForm(false)
+                              setEditingBranch(branch)
+                            }}
                             className="p-2 rounded-lg text-[var(--warn)] hover:bg-[var(--warn-muted)]/40 transition-colors duration-200"
                             title="Edit Branch"
                           >
@@ -444,6 +466,14 @@ export default function BranchManagement() {
                             {branch.branch_type || 'Operational'}
                           </div>
                         </div>
+                        <div className="p-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] col-span-2">
+                          <div className="text-xs text-[var(--text-secondary)] mb-1">Monthly target (₹)</div>
+                          <div className="text-sm font-semibold text-[var(--text-primary)] tabular-nums">
+                            {branch.monthly_target != null && branch.monthly_target !== ''
+                              ? `₹${Number(branch.monthly_target).toLocaleString('en-IN')}`
+                              : '—'}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Branch Info */}
@@ -476,7 +506,10 @@ export default function BranchManagement() {
                           <FiBarChart className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => setEditingBranch(branch)}
+                          onClick={() => {
+                            setShowCreateForm(false)
+                            setEditingBranch(branch)
+                          }}
                           className="px-3 py-2 rounded-lg bg-[var(--warn-muted)] text-[var(--warn)] hover:bg-[var(--warn-muted)]/80 transition-colors"
                           title="Edit Branch"
                         >
@@ -593,12 +626,18 @@ function CreateBranchForm({ onSubmit, onCancel }) {
     address: '',
     phone: '',
     email: '',
-    password: 'password123'
+    monthly_target: ''
   })
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSubmit(formData)
+    const payload = { ...formData }
+    if (payload.monthly_target === '' || payload.monthly_target == null) {
+      payload.monthly_target = null
+    } else {
+      payload.monthly_target = Number(payload.monthly_target)
+    }
+    onSubmit(payload)
   }
 
   return (
@@ -644,6 +683,19 @@ function CreateBranchForm({ onSubmit, onCancel }) {
         </div>
 
         <div>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Monthly target (₹)</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={formData.monthly_target}
+            onChange={(e) => setFormData(prev => ({ ...prev, monthly_target: e.target.value }))}
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            placeholder="Optional — branch CC target for dashboard"
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Address</label>
           <textarea
             value={formData.address}
@@ -677,18 +729,6 @@ function CreateBranchForm({ onSubmit, onCancel }) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Password</label>
-          <input
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
-            placeholder="Branch login password"
-            required
-          />
-        </div>
-
         <div className="flex justify-end space-x-3">
           <button
             type="button"
@@ -717,13 +757,17 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
     address: branch.address || '',
     phone: branch.phone || '',
     email: branch.email || '',
-    password: ''
+    monthly_target: branch.monthly_target != null ? String(branch.monthly_target) : ''
   })
 
   const handleSubmit = (e) => {
     e.preventDefault()
     const updateData = { ...formData }
-    if (!updateData.password) delete updateData.password
+    if (updateData.monthly_target === '' || updateData.monthly_target == null) {
+      updateData.monthly_target = null
+    } else {
+      updateData.monthly_target = Number(updateData.monthly_target)
+    }
     onSubmit(updateData)
   }
 
@@ -756,6 +800,19 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
         </div>
 
         <div>
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Monthly target (₹)</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={formData.monthly_target}
+            onChange={(e) => setFormData(prev => ({ ...prev, monthly_target: e.target.value }))}
+            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
+            placeholder="Optional"
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Address</label>
           <textarea
             value={formData.address}
@@ -784,17 +841,6 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
               className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">New Password (leave empty to keep current)</label>
-          <input
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-            className="w-full px-3 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
-            placeholder="Enter new password"
-          />
         </div>
 
         <div className="flex justify-end space-x-3">

@@ -20,6 +20,7 @@ import {
   FiCheckCircle,
   FiX
 } from 'react-icons/fi'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 export default function ClientManagementPage() {
   const { user, token } = useAuth()
@@ -512,9 +513,19 @@ export default function ClientManagementPage() {
     setShowEditModal(true)
   }
 
-  // Open view modal
-  const openViewModal = (customer) => {
-    setSelectedCustomer(customer)
+  // Open view modal — load full record so minors and documents are complete
+  const openViewModal = async (customer) => {
+    try {
+      if (token && customer?.investor_id) {
+        const fresh = await api.getCustomer(token, customer.investor_id)
+        setSelectedCustomer(fresh)
+      } else {
+        setSelectedCustomer(customer)
+      }
+    } catch (err) {
+      console.error('Failed to load client for view:', err)
+      setSelectedCustomer(customer)
+    }
     setShowViewModal(true)
   }
 
@@ -1207,13 +1218,11 @@ function CustomerModal({
                       <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
                         Date of Birth *
                       </label>
-                      <input
-                        type="date"
-                        name="date_of_birth"
+                      <DatePickerInput
                         value={formData.date_of_birth}
-                        onChange={handleChange}
+                        onChange={(v) => setFormData(prev => ({ ...prev, date_of_birth: v }))}
                         required
-                        className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
+                        inputClassName="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-[var(--dashboard-primary)]"
                       />
                     </div>
                     
@@ -1472,17 +1481,16 @@ function CustomerModal({
                         <label className="block text-sm font-semibold text-[var(--dashboard-text)] mb-2">
                           Date of Birth <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="date"
+                        <DatePickerInput
                           value={minor.date_of_birth || ''}
-                          onChange={(e) => {
+                          onChange={(v) => {
                             const newMinors = [...formData.minors]
-                            newMinors[index].date_of_birth = e.target.value
+                            newMinors[index].date_of_birth = v
                             setFormData(prev => ({ ...prev, minors: newMinors }))
                           }}
                           required
                           max={new Date().toISOString().split('T')[0]}
-                          className="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          inputClassName="w-full px-4 py-2.5 text-sm border-2 border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         />
                       </div>
 
@@ -1946,6 +1954,31 @@ function ViewCustomerModal({ customer, onClose, getBranchDisplay }) {
                 </div>
               </div>
             </div>
+
+            {/* Minors */}
+            {customer.minors && Array.isArray(customer.minors) && customer.minors.length > 0 && (
+              <div className="md:col-span-2 pt-4 border-t border-[var(--dashboard-border)]">
+                <h4 className="text-sm font-medium text-gray-500 dark:text-dark-300 mb-3">Minors ({customer.minors.length})</h4>
+                <div className="space-y-4">
+                  {customer.minors.map((m, idx) => (
+                    <div key={m.investor_id || m.minor_id || idx} className="rounded-lg border border-[var(--dashboard-border)] p-3 bg-[var(--dashboard-bg)]">
+                      <p className="text-sm font-semibold text-[var(--dashboard-text)]">{m.name || `Minor ${idx + 1}`}</p>
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-[var(--dashboard-text)]">
+                        {m.investor_id && <div><span className="text-gray-500 dark:text-dark-300">Investor ID:</span> {m.investor_id}</div>}
+                        {m.pan && <div><span className="text-gray-500 dark:text-dark-300">PAN:</span> {m.pan}</div>}
+                        {m.date_of_birth && <div><span className="text-gray-500 dark:text-dark-300">DOB:</span> {m.date_of_birth}</div>}
+                        {m.relationship_type && <div><span className="text-gray-500 dark:text-dark-300">Relationship:</span> {m.relationship_type}</div>}
+                        {(m.father_name || m.mother_name) && (
+                          <div className="sm:col-span-2">
+                            {[m.father_name && `Father: ${m.father_name}`, m.mother_name && `Mother: ${m.mother_name}`].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Documents Section */}
             {customer.media_documents && customer.media_documents.length > 0 && (

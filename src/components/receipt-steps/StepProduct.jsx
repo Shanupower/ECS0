@@ -3,6 +3,7 @@ import SearchableSelect from '../SearchableSelect.jsx'
 import { api } from '../../api'
 import mfSchemes from '../../data/mf_schemes.json'
 import nonMfIssuers from '../../data/non_mf_issuers.json'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 function StepProduct({ onBack, onNext, investmentType, productType, token }) {
   const [product, setProduct] = useState(productType)
@@ -492,11 +493,21 @@ function StepProduct({ onBack, onNext, investmentType, productType, token }) {
               <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
                 <div className="col" style={{ flex:'1 1 320px' }}>
                   <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Date of Issue</label>
-                  <input type="date" value={insDateOfIssue} onChange={e=>setInsDateOfIssue(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <DatePickerInput
+                    value={insDateOfIssue}
+                    onChange={(v) => setInsDateOfIssue(v)}
+                    inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    ariaLabel="Insurance date of issue"
+                  />
                 </div>
                 <div className="col" style={{ flex:'1 1 320px' }}>
                   <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Renewal Date</label>
-                  <input type="date" value={insRenewalDate} onChange={e=>setInsRenewalDate(e.target.value)} className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <DatePickerInput
+                    value={insRenewalDate}
+                    onChange={(v) => setInsRenewalDate(v)}
+                    inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    ariaLabel="Insurance renewal date"
+                  />
                 </div>
                 <div className="col" style={{ flex:'1 1 320px' }}>
                   <label className="text-sm text-gray-600 dark:text-gray-400 font-semibold mb-1.5">Policy No</label>

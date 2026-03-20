@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 export default function StepNCDBondDetails({ onBack, onNext, token, issuer, scheme }) {
   const [transactionType, setTransactionType] = useState('Purchase') // Purchase or Redemption
@@ -102,11 +103,11 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Transaction Date <span className="text-red-500">*</span>
           </label>
-          <input
-            type="date"
+          <DatePickerInput
             value={transactionDate}
-            onChange={(e) => setTransactionDate(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            onChange={(v) => setTransactionDate(v)}
+            inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            ariaLabel="Transaction date"
           />
         </div>
 

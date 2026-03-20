@@ -3,6 +3,7 @@ import { api } from '../api'
 import { Card, Button, Select, Input } from '../components/ui'
 import { useToast } from '../components/ui/Toast.jsx'
 import { FiDownload, FiLoader } from 'react-icons/fi'
+import DatePickerInput from './ui/DatePickerInput.jsx'
 
 export default function CSVExport({ token, user, onExport }) {
   const toast = useToast()
@@ -111,18 +112,22 @@ export default function CSVExport({ token, user, onExport }) {
 
         {exportType === 'receipts' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="From date"
-              type="date"
-              value={dateRange.from}
-              onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-            />
-            <Input
-              label="To date"
-              type="date"
-              value={dateRange.to}
-              onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-            />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-label text-[var(--text-secondary)]">From date</label>
+              <DatePickerInput
+                value={dateRange.from}
+                onChange={(v) => setDateRange(prev => ({ ...prev, from: v }))}
+                ariaLabel="From date"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-label text-[var(--text-secondary)]">To date</label>
+              <DatePickerInput
+                value={dateRange.to}
+                onChange={(v) => setDateRange(prev => ({ ...prev, to: v }))}
+                ariaLabel="To date"
+              />
+            </div>
           </div>
         )}
 

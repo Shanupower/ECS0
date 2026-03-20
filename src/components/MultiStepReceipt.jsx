@@ -25,6 +25,7 @@ import StepMiscDetails from './receipt-steps/StepMiscDetails.jsx'
 import StepProductType from './receipt-steps/StepProductType.jsx'
 import StepProduct from './receipt-steps/StepProduct.jsx'
 import StepFinal from './receipt-steps/StepFinal.jsx'
+import DatePickerInput from './ui/DatePickerInput.jsx'
 import { getAmcCategoryById } from '../data/mf_amc_categories'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
@@ -360,7 +361,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
 }
 
 // Validate data size to prevent truncation errors
-function validateDataSize(data, maxSizeBytes = 1024 * 1024) { // 1MB default limit
+function validateDataSize(data, maxSizeBytes = 10 * 1024 * 1024) { // 10MB — JSON payload only; files upload separately after save
   try {
     const jsonString = JSON.stringify(data)
     const sizeInBytes = new Blob([jsonString]).size
@@ -1191,11 +1192,10 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
               </div>
               <div>
                 <label className="text-sm text-[var(--dashboard-muted)] font-semibold mb-1.5">Date of Birth</label>
-                <input
-                  type="date"
+                <DatePickerInput
                   value={newCustomer.date_of_birth}
-                  onChange={e => setNewCustomer(prev => ({ ...prev, date_of_birth: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
+                  onChange={(v) => setNewCustomer(prev => ({ ...prev, date_of_birth: v }))}
+                  inputClassName="w-full px-4 py-3 rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-text)] focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                 />
               </div>
             </div>
@@ -2207,9 +2207,10 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       
       const receiptId = result.id || result.receiptNo || result.receipt_id || result._key || 'Unknown'
 
-      // Then, upload supporting documents against the created receipt and verify they were persisted
+      // Upload supporting documents only after the receipt exists (sequential, like Drive: save then attach)
       if (files.length > 0 && receiptId && receiptId !== 'Unknown') {
         try {
+          toast.info(`Uploading ${files.length} file(s)…`)
           const uploadResult = await api.uploadReceiptMedia(token, receiptId, files)
           // Backend returns { message, files: [...] }; use files.length; if shape is missing, assume all saved
           const uploadedCount = (uploadResult && Array.isArray(uploadResult.files))

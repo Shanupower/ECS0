@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, R
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { SegmentedControl } from '../components/ui'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import { 
   FiTrendingUp, 
   FiFileText, 
@@ -386,6 +387,47 @@ export default function BranchDashboard() {
               Include Pending
             </span>
           </label>
+          <div className="flex flex-wrap items-center gap-2 pl-4 border-l border-[var(--stroke)] w-full sm:w-auto">
+            <span className="text-xs font-medium text-[var(--text-secondary)] shrink-0">Period</span>
+            {['today', 'week', 'month', 'quarter', 'year'].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handlePeriodSelect(p)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  selectedPeriod === p
+                    ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--accent)]'
+                    : 'border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]'
+                }`}
+              >
+                {p === 'today' ? 'Today' : p === 'week' ? '7d' : p === 'month' ? 'Month' : p === 'quarter' ? 'Quarter' : 'Year'}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+              <span>From</span>
+              <DatePickerInput
+                value={dateRange.from.slice(0, 10)}
+                onChange={(v) => {
+                  setSelectedPeriod('custom')
+                  setDateRange((prev) => ({ ...prev, from: v }))
+                }}
+                inputClassName="px-2 py-1 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-primary)] text-xs"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+              <span>To</span>
+              <DatePickerInput
+                value={dateRange.to.slice(0, 10)}
+                onChange={(v) => {
+                  setSelectedPeriod('custom')
+                  setDateRange((prev) => ({ ...prev, to: v }))
+                }}
+                inputClassName="px-2 py-1 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-primary)] text-xs"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -1182,7 +1224,8 @@ export default function BranchDashboard() {
                                       <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Receipts</th>
                                       <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Investment</th>
                                       <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Avg/Receipt</th>
-                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">Collection/Credit</th>
+                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">CC</th>
+                                      <th className="text-right py-3 px-4 font-medium text-[var(--text-secondary)]">SI</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1210,6 +1253,9 @@ export default function BranchDashboard() {
                                         </td>
                                         <td className="py-3 px-4 text-right font-medium text-[var(--success)]">
                                           {formatCurrency(emp.total_cc || 0)}
+                                        </td>
+                                        <td className="py-3 px-4 text-right font-medium text-purple-600 dark:text-purple-400">
+                                          {formatCurrency(emp.total_si || 0)}
                                         </td>
                                       </tr>
                                     ))}
@@ -1271,6 +1317,12 @@ export default function BranchDashboard() {
                                       <div className="text-xs text-[var(--text-secondary)]">
                                         {receipt.product_category || 'N/A'}
                                       </div>
+                                      {(receipt.status == null || receipt.status === 'Pending') && (
+                                        <div className="text-[10px] text-[var(--text-muted)] mt-1 space-x-2">
+                                          <span>CC {formatCurrency(receipt.collection_credit ?? receipt.cc_amount ?? receipt.calculations?.collection_credit ?? 0)}</span>
+                                          <span>SI {formatCurrency(receipt.service_income ?? receipt.si_amount ?? receipt.calculations?.service_income ?? 0)}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
