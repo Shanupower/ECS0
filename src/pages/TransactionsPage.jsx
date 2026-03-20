@@ -2093,6 +2093,127 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {/* Legacy Documents Modal (receipts missing media_files) */}
+      {showLegacyDocsModal && legacyReceipt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Add supporting documents
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Receipt: {legacyReceipt.receipt_no || legacyReceipt.receiptNo || legacyReceipt._key}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLegacyDocsModal(false)
+                    setLegacyReceipt(null)
+                    setLegacyFiles([])
+                    setLegacyUploadError('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Upload files <span className="text-red-500 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,application/pdf"
+                    onChange={handleLegacyFilesChange}
+                    className="w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4
+                      file:rounded-full file:border-0 file:text-sm file:font-semibold
+                      file:bg-blue-50 dark:file:bg-blue-900/40 file:text-blue-700 dark:file:text-blue-300
+                      hover:file:bg-blue-100 dark:hover:file:bg-blue-900/60"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Allowed: images and PDF. Max size: 10MB per file.
+                  </p>
+                </div>
+
+                {legacyFiles.length > 0 && (
+                  <div className="rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] p-4">
+                    <div className="text-sm font-semibold text-[var(--text-primary)] mb-2">
+                      Selected files ({legacyFiles.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {legacyFiles.map((f, idx) => (
+                        <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-3">
+                          <div className="text-sm text-[var(--text-secondary)] truncate">
+                            {f.name}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLegacyFiles(prev => prev.filter((_, i) => i !== idx))
+                              setLegacyUploadError('')
+                            }}
+                            className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                            aria-label={`Remove ${f.name}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {legacyUploadError && (
+                  <div className="p-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 text-sm">
+                    {legacyUploadError}
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLegacyDocsModal(false)
+                      setLegacyReceipt(null)
+                      setLegacyFiles([])
+                      setLegacyUploadError('')
+                    }}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 font-medium transition-all"
+                    disabled={legacyUploading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLegacyUpload}
+                    disabled={legacyUploading || legacyFiles.length === 0}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {legacyUploading ? (
+                      <>
+                        <FiRefreshCw className="w-4 h-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <FiUpload className="w-4 h-4" />
+                        Upload
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Modal */}
       {showEditModal && selectedReceipt && editData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
