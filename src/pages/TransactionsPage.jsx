@@ -36,6 +36,7 @@ import {
   FiActivity,
   FiTrendingUp,
   FiSave,
+  FiUpload,
   FiUploadCloud
 } from 'react-icons/fi'
 
