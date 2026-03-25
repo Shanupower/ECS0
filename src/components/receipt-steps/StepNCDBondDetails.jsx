@@ -5,7 +5,8 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
   const [transactionType, setTransactionType] = useState('Purchase') // Purchase or Redemption
   const [numberOfUnits, setNumberOfUnits] = useState('')
   const [investmentAmount, setInvestmentAmount] = useState('')
-  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0])
+  const todayYyyyMmDd = new Date().toISOString().split('T')[0]
+  const [transactionDate, setTransactionDate] = useState(todayYyyyMmDd)
   const [applicationNumber, setApplicationNumber] = useState('')
   const [form15g15h, setForm15g15h] = useState(false)
 
@@ -106,6 +107,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           <DatePickerInput
             value={transactionDate}
             onChange={(v) => setTransactionDate(v)}
+            max={todayYyyyMmDd}
             inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             ariaLabel="Transaction date"
           />

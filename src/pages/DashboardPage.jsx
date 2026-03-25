@@ -84,6 +84,12 @@ export default function DashboardPage() {
   const [includePending, setIncludePending] = useState(true)
   const [viewMode, setViewMode] = useState('personal')
   const [overdueTasks, setOverdueTasks] = useState([])
+  const formatDateForInput = (date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
   const isAdmin = user?.role === 'admin'
   const effectiveWidgetIds = (user?.dashboard_widgets != null && Array.isArray(user.dashboard_widgets))
@@ -228,14 +234,14 @@ export default function DashboardPage() {
   const datePresets = [
     { label: 'This month', getValue: () => {
       const d = new Date()
-      const from = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
-      const to = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
+      const from = formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 1))
+      const to = formatDateForInput(new Date(d.getFullYear(), d.getMonth() + 1, 0))
       return { from, to }
     }},
     { label: 'Last month', getValue: () => {
       const d = new Date()
-      const from = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().slice(0, 10)
-      const to = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().slice(0, 10)
+      const from = formatDateForInput(new Date(d.getFullYear(), d.getMonth() - 1, 1))
+      const to = formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 0))
       return { from, to }
     }},
     { label: 'YTD', getValue: () => {
@@ -959,7 +965,7 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <div className="text-small font-medium text-[var(--text)]">{branch.branch || branch.branch_name || 'Unknown Branch'}</div>
-                          <div className="text-xs text-[var(--text-muted)]">{branch.branch_code || ''}</div>
+                          <div className="text-xs text-[var(--text-muted)]">{branch.branch_name || branch.branch || 'Unknown Branch'}</div>
                         </div>
                       </div>
                     </div>

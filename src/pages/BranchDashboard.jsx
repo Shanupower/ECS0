@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
@@ -59,12 +59,20 @@ export default function BranchDashboard() {
   const [loadingBranchDetails, setLoadingBranchDetails] = useState(false)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
-  const [includePending, setIncludePending] = useState(false)
+  const [includePending, setIncludePending] = useState(true)
+  const formatDateForInput = (date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  const now = new Date()
+  const currentYear = now.getFullYear()
   const [dateRange, setDateRange] = useState({
-    from: new Date().toISOString().slice(0, 7) + '-01',
-    to: new Date().toISOString().slice(0, 10)
+    from: `${currentYear}-01-01`,
+    to: `${currentYear}-12-31`
   })
-  const [selectedPeriod, setSelectedPeriod] = useState('month')
+  const [selectedPeriod, setSelectedPeriod] = useState('year')
   const [scope, setScope] = useState('my_branch') // 'my_branch' | 'all_branches' (admin only)
 
   const isAdmin = user?.role === 'admin'
@@ -95,7 +103,7 @@ export default function BranchDashboard() {
           setSelectedBranch(null)
         } else if (branchCode) {
           const branchObj = branchesData.find(b => b.branch_code === branchCode)
-          setSelectedBranch(branchObj || { branch_code: branchCode, branch_name: branchCode })
+          setSelectedBranch(branchObj || { branch_code: branchCode, branch_name: 'Unknown Branch' })
           const [stats, empPerf, receiptsRes] = await Promise.all([
             api.getBranchStats(token, branchCode, { includePending: includePending ? '1' : '0', from: dateRange.from, to: dateRange.to }),
             api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, branch_code: branchCode, includePending: includePending ? '1' : '0' }).catch(() => []),
@@ -117,7 +125,8 @@ export default function BranchDashboard() {
         const globalStatsData = await api.getGlobalBranchStats(token, {
           includePending: includePending ? '1' : '0',
           from: dateRange.from,
-          to: dateRange.to
+          to: dateRange.to,
+          viewMode: 'all'
         })
         setGlobalStats(globalStatsData)
         setBranchStats(null)
@@ -265,8 +274,8 @@ export default function BranchDashboard() {
     }
     
     setDateRange({
-      from: from.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10)
+      from: formatDateForInput(from),
+      to: formatDateForInput(today)
     })
   }
 
@@ -283,6 +292,119 @@ export default function BranchDashboard() {
     return new Intl.NumberFormat('en-IN').format(num || 0)
   }
 
+  const normalizeBranchKey = (value) => String(value ?? '').trim().toLowerCase().replace(/[.\s-]/g, '')
+  const branchNameLookup = useMemo(() => {
+    const lookup = new Map()
+
+    const addKey = (key, displayName) => {
+      const raw = String(key ?? '').trim()
+      if (!raw || !displayName) return
+      lookup.set(raw, displayName)
+      lookup.set(normalizeBranchKey(raw), displayName)
+    }
+
+    branches.forEach((b) => {
+      const displayName = String(b.branch_name || b.branch || '').trim()
+      if (!displayName) return
+
+      addKey(b.branch_code, displayName)
+      addKey(b.id, displayName)
+      addKey(b.branch_id, displayName)
+      addKey(b.branch_name, displayName)
+      addKey(b.branchName, displayName)
+      addKey(b.branch, displayName)
+      addKey(b.code, displayName)
+      addKey(b.name, displayName)
+    })
+
+    return lookup
+  }, [branches])
+
+  const getBranchDisplayName = (branchStat) => {
+    if (!branchStat) return 'Unknown Branch'
+
+    const displayFromStat = String(branchStat.branch_name || branchStat.branchName || '').trim()
+    if (displayFromStat) return displayFromStat
+
+    const candidates = [
+      branchStat.branch,
+      branchStat.branch_code,
+      branchStat.branchCode,
+      branchStat.branch_id,
+      branchStat.id,
+      branchStat.code,
+      branchStat.name
+    ]
+
+    for (const candidate of candidates) {
+      const raw = String(candidate ?? '').trim()
+      if (!raw) continue
+      const resolved = branchNameLookup.get(raw) || branchNameLookup.get(normalizeBranchKey(raw))
+      if (resolved) return resolved
+    }
+
+    const fallback = String(
+      branchStat.branch ??
+      branchStat.branch_code ??
+      branchStat.branchCode ??
+      branchStat.branch_id ??
+      branchStat.id ??
+      ''
+    ).trim()
+    if (/^\d+$/.test(fallback)) return `Branch ${fallback}`
+    return fallback || 'Unknown Branch'
+  }
+
+  const globalBranchStatsLookup = useMemo(() => {
+    const lookup = new Map()
+    const addKey = (key, row) => {
+      const raw = String(key ?? '').trim()
+      if (!raw || !row) return
+      lookup.set(raw, row)
+      lookup.set(normalizeBranchKey(raw), row)
+    }
+
+    const rows = Array.isArray(globalStats?.branches) ? globalStats.branches : []
+    rows.forEach((row) => {
+      ;[
+        row.branch,
+        row.branch_code,
+        row.branchCode,
+        row.branch_id,
+        row.id,
+        row.code,
+        row.name,
+        row.branch_name,
+        row.branchName
+      ].forEach((key) => addKey(key, row))
+    })
+
+    return lookup
+  }, [globalStats?.branches])
+
+  const getBranchSummaryRow = (branch) => {
+    if (!branch) return null
+
+    const candidates = [
+      branch.branch_code,
+      branch.id,
+      branch.branch_id,
+      branch.branch_name,
+      branch.branch,
+      branch.branchCode,
+      branch.code,
+      branch.name
+    ]
+
+    for (const candidate of candidates) {
+      const raw = String(candidate ?? '').trim()
+      if (!raw) continue
+      const row = globalBranchStatsLookup.get(raw) || globalBranchStatsLookup.get(normalizeBranchKey(raw))
+      if (row) return row
+    }
+    return null
+  }
+
   const getTopPerformers = () => {
     if (!globalStats || !globalStats.branches) return []
     
@@ -295,7 +417,7 @@ export default function BranchDashboard() {
     if (!globalStats || !globalStats.branches) return []
     
     return globalStats.branches.map(branch => ({
-      name: branch.branch || branch.branch_name || 'Unknown Branch',
+      name: getBranchDisplayName(branch),
       investments: branch.total_investments || 0,
       receipts: branch.total_receipts || 0,
       users: branch.total_employees || 0,
@@ -311,7 +433,7 @@ export default function BranchDashboard() {
     return globalStats.branches
       .filter(branch => branch.total_investments > 0)
       .map((branch, index) => ({
-        name: branch.branch || branch.branch_name || 'Unknown Branch',
+        name: getBranchDisplayName(branch),
         value: branch.total_investments || 0,
         percentage: total > 0 ? ((branch.total_investments || 0) / total * 100).toFixed(1) : 0
       }))
@@ -345,7 +467,7 @@ export default function BranchDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || selectedBranch.branch_code || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
+            {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
           </h1>
           <p className="text-[var(--text-secondary)] mt-1">
             {isMyBranchView ? (selectedBranch ? 'Your branch team performance metrics' : isAdmin ? 'No branch assigned. Switch to All branches or assign yourself a branch.' : 'Your branch team performance metrics') : 'Overview of all branch performance'}
@@ -901,10 +1023,10 @@ export default function BranchDashboard() {
                     </div>
                     <div>
                       <div className="text-sm font-medium text-[var(--text-primary)]">
-                        {branch.branch || branch.branch_name || 'Unknown Branch'}
+                        {getBranchDisplayName(branch)}
                       </div>
                       <div className="text-xs text-[var(--text-secondary)]">
-                        {branch.branch_code || ''}
+                        {getBranchDisplayName(branch)}
                       </div>
                     </div>
                   </div>
@@ -936,7 +1058,7 @@ export default function BranchDashboard() {
       )}
 
       {/* Individual Branch Details */}
-      {isAdmin && (
+      {isAdmin && !isMyBranchView && (
         <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
           <div className="flex items-center mb-6">
             <FiMapPin className="w-5 h-5 text-red-600 mr-2" />
@@ -945,23 +1067,7 @@ export default function BranchDashboard() {
           <div className="space-y-4">
             {branches.map((branch) => {
               const isExpanded = expandedBranches.has(branch.branch_code)
-              // Match by branch_name (exact or fuzzy match - receipts may have full names like "CHEMBUR - MUMBAI")
-              // Normalize names by removing dots, spaces, and special characters for comparison
-              const normalizeName = (name) => name?.toUpperCase().replace(/[.\s-]/g, '') || ''
-              const normalizedBranchName = normalizeName(branch.branch_name)
-              
-              const branchData = globalStats?.branches?.find(b => {
-                const statBranchName = b.branch || b.branch_name || ''
-                const normalizedStatName = normalizeName(statBranchName)
-                return (
-                  statBranchName === branch.branch_name || 
-                  b.branch_code === branch.branch_code ||
-                  normalizedStatName.includes(normalizedBranchName) ||
-                  normalizedBranchName.includes(normalizedStatName) ||
-                  statBranchName?.toUpperCase().includes(branch.branch_name?.toUpperCase()) ||
-                  branch.branch_name?.toUpperCase().includes(statBranchName?.toUpperCase())
-                )
-              })
+              const branchData = getBranchSummaryRow(branch)
               
               return (
                 <div key={branch.branch_code} className="border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)]">
@@ -977,7 +1083,7 @@ export default function BranchDashboard() {
                         <div>
                           <div className="text-sm font-medium text-[var(--text-primary)]">{branch.branch_name}</div>
                           <div className="text-xs text-[var(--text-secondary)]">
-                            {branch.branch_code} • {branch.branch_type || 'Operational'}
+                            {branch.branch_name || 'Unknown Branch'} • {branch.branch_type || 'Operational'}
                           </div>
                         </div>
                       </div>
@@ -1020,7 +1126,7 @@ export default function BranchDashboard() {
                                 <div className="flex flex-wrap gap-4 text-sm text-[var(--text-secondary)]">
                                   <div className="flex items-center">
                                     <FiMapPin className="w-4 h-4 mr-1" />
-                                    <span>{branch.branch_code} • {branch.branch_type || 'Operational'}</span>
+                                    <span>{branch.branch_name || 'Unknown Branch'} • {branch.branch_type || 'Operational'}</span>
                                   </div>
                                   {branch.address && (
                                     <div className="flex items-center">

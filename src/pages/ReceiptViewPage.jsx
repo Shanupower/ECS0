@@ -15,6 +15,22 @@ export default function ReceiptViewPage() {
   const [error, setError] = useState('')
   const [mediaFiles, setMediaFiles] = useState([])
   const [loadingMedia, setLoadingMedia] = useState(false)
+  const formatDateDisplay = (value) => {
+    if (!value) return '—'
+    const raw = String(value).trim()
+    let date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, d] = raw.split('-').map(Number)
+      date = new Date(y, m - 1, d)
+    } else {
+      date = new Date(raw)
+    }
+    if (Number.isNaN(date.getTime())) return '—'
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
 
   useEffect(() => {
     loadReceipt()
@@ -433,6 +449,21 @@ export default function ReceiptViewPage() {
   }
   const displaySchemeName = getDisplaySchemeName(transformedReceipt)
 
+  const normalizeTxnTypeToDisplayMode = (raw) => {
+    const v = String(raw || '').trim()
+    if (!v) return ''
+    const upper = v.toUpperCase()
+    if (upper === 'SWITCHOVER' || upper === 'SWITCH_OVER') return 'Switch Over'
+    if (v === 'Switch Over') return 'Switch Over'
+    if (v === 'Lumpsum' || v === 'LumpSum' || v === 'Lump Sum') return 'Lump Sum'
+    return v // SIP / SWP / STP
+  }
+
+  // Prefer txnType for MF mode display; fallback to legacy receipt.mode
+  const mfModeDisplay = transformedReceipt.product_category === 'MF'
+    ? (normalizeTxnTypeToDisplayMode(transformedReceipt.txnType) || transformedReceipt.mode || '')
+    : ''
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-800">
       {/* Header */}
@@ -452,7 +483,7 @@ export default function ReceiptViewPage() {
                   Receipt {transformedReceipt.receiptNo}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Created on {new Date(transformedReceipt.date).toLocaleDateString('en-IN')}
+                  Created on {formatDateDisplay(transformedReceipt.date)}
                 </p>
               </div>
             </div>
@@ -508,7 +539,7 @@ export default function ReceiptViewPage() {
               <div className="text-right">
                 <div className="text-sm text-red-100">Receipt No</div>
                 <div className="text-lg font-bold">{transformedReceipt.receiptNo || '—'}</div>
-                <div className="text-sm text-red-100 mt-1">{transformedReceipt.date ? new Date(transformedReceipt.date).toLocaleDateString('en-IN') : '—'}</div>
+                <div className="text-sm text-red-100 mt-1">{formatDateDisplay(transformedReceipt.date)}</div>
               </div>
             </div>
           </div>
@@ -614,12 +645,7 @@ export default function ReceiptViewPage() {
                     </div>
                   )}
                   
-                  {transformedReceipt.mode && transformedReceipt.product_category !== 'FD' && (
-                    <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Mode</div>
-                      <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.mode}</div>
-                    </div>
-                  )}
+                  {/* Mode tile removed; MF investment type is still shown via `txnType`. */}
                   
                   {transformedReceipt.investmentAmount && (
                     <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
@@ -637,11 +663,67 @@ export default function ReceiptViewPage() {
                     </div>
                   )}
 
-                  {(displaySchemeName || transformedReceipt.schemeName) && (
+                  {transformedReceipt.product_category === 'MF' && transformedReceipt.switch_to_scheme_name ? (
+                    <>
+                      {transformedReceipt.switch_from_scheme_name && (
+                        <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Source Scheme</div>
+                          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.switch_from_scheme_name}</div>
+                          {transformedReceipt.scheme_option && (
+                            <div className="mt-2">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                transformedReceipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                                transformedReceipt.scheme_option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                                'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                              }`}>
+                                {transformedReceipt.scheme_option === 'GROWTH' ? 'Growth' : 
+                                 transformedReceipt.scheme_option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                                 transformedReceipt.scheme_option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                                 transformedReceipt.scheme_option}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {transformedReceipt.switch_to_scheme_name && (
+                        <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Target Scheme</div>
+                          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.switch_to_scheme_name}</div>
+                        </div>
+                      )}
+                    </>
+                  ) : transformedReceipt.product_category === 'MF' && transformedReceipt.txnType === 'STP' ? (
+                    <>
+                      {transformedReceipt.schemeName && (
+                        <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Source Scheme</div>
+                          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.schemeName}</div>
+                          {transformedReceipt.scheme_option && (
+                            <div className="mt-2">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                transformedReceipt.scheme_option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                                transformedReceipt.scheme_option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                                'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                              }`}>
+                                {transformedReceipt.scheme_option === 'GROWTH' ? 'Growth' : 
+                                 transformedReceipt.scheme_option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                                 transformedReceipt.scheme_option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                                 transformedReceipt.scheme_option}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {transformedReceipt.stp_target_scheme_name && (
+                        <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Target Scheme</div>
+                          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.stp_target_scheme_name}</div>
+                        </div>
+                      )}
+                    </>
+                  ) : ((displaySchemeName || transformedReceipt.schemeName) && (
                     <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {transformedReceipt.switch_to_scheme_name ? 'Switch Over (From → To)' : 'Scheme Name'}
-                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Scheme Name</div>
                       <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{displaySchemeName || transformedReceipt.schemeName}</div>
                       {transformedReceipt.scheme_option && (
                         <div className="mt-2">
@@ -658,7 +740,7 @@ export default function ReceiptViewPage() {
                         </div>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
 
@@ -708,18 +790,10 @@ export default function ReceiptViewPage() {
                         <div className="font-semibold text-green-600 dark:text-green-400">{transformedReceipt.fd_locked_interest_rate_pa?.toFixed(2)}% p.a.</div>
                       </div>
                     )}
-                    {transformedReceipt.fd_maturity_amount && (
-                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Maturity Amount</div>
-                        <div className="font-semibold text-green-700 dark:text-green-400">
-                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(transformedReceipt.fd_maturity_amount)}
-                        </div>
-                      </div>
-                    )}
                     {transformedReceipt.fd_maturity_date && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Maturity Date</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.fd_maturity_date).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.fd_maturity_date)}</div>
                       </div>
                     )}
                     {transformedReceipt.fd_application_number && (
@@ -802,13 +876,13 @@ export default function ReceiptViewPage() {
                     {transformedReceipt.bond_issue_date && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Issue date</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.bond_issue_date).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.bond_issue_date)}</div>
                       </div>
                     )}
                     {(transformedReceipt.bond_maturity_date || transformedReceipt.renewal_due_date) && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Maturity / Renewal due</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.bond_maturity_date || transformedReceipt.renewal_due_date).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.bond_maturity_date || transformedReceipt.renewal_due_date)}</div>
                       </div>
                     )}
                     {transformedReceipt.bond_application_number && (
@@ -890,13 +964,13 @@ export default function ReceiptViewPage() {
                     {transformedReceipt.insurance_date_of_issue && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Date of issue</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.insurance_date_of_issue).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.insurance_date_of_issue)}</div>
                       </div>
                     )}
                     {transformedReceipt.insurance_maturity_date && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Maturity date</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.insurance_maturity_date).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.insurance_maturity_date)}</div>
                       </div>
                     )}
                     {(transformedReceipt.fd_transaction_type || transformedReceipt.txnType) && (
@@ -926,13 +1000,13 @@ export default function ReceiptViewPage() {
                     {transformedReceipt.sip_start_date && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.sip_start_date).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.sip_start_date)}</div>
                       </div>
                     )}
                     {transformedReceipt.sip_end_date && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                         <div className="text-sm text-gray-600 dark:text-gray-400">End Date</div>
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">{new Date(transformedReceipt.sip_end_date).toLocaleDateString('en-IN')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.sip_end_date)}</div>
                       </div>
                     )}
                     {transformedReceipt.sip_is_perpetual && (
@@ -991,7 +1065,7 @@ export default function ReceiptViewPage() {
                           <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
                             <div className="text-sm text-gray-600 dark:text-gray-400">Date</div>
                             <div className="font-semibold text-gray-900 dark:text-gray-100">
-                              {new Date(transformedReceipt.instrumentDate || transformedReceipt.txnDate).toLocaleDateString('en-IN')}
+                              {formatDateDisplay(transformedReceipt.instrumentDate || transformedReceipt.txnDate)}
                             </div>
                           </div>
                         )}

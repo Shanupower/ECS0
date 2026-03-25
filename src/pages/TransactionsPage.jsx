@@ -97,6 +97,18 @@ export default function TransactionsPage() {
   const [legacyUploading, setLegacyUploading] = useState(false)
 
   const isAdmin = user?.role === 'admin'
+  const formatDateForInput = (date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  const parseDateInput = (value) => {
+    if (!value) return null
+    const [year, month, day] = value.split('-').map(Number)
+    if (!year || !month || !day) return null
+    return new Date(year, month - 1, day)
+  }
 
   const toggleRow = (receiptId) => {
     const newExpanded = new Set(expandedRows)
@@ -169,12 +181,13 @@ export default function TransactionsPage() {
     
     setLoadingSummary(true)
     try {
+      const txnType = filters.category === 'MF' ? mapModeDisplayToTxnType(filters.mode) : ''
       const query = {
         from: filters.from,
         to: filters.to,
         category: filters.category || undefined,
         status: filters.status || undefined,
-        mode: filters.mode || undefined,
+        txn_type: txnType || undefined,
         search: filters.search || undefined,
         branch_code: filters.branch_code || undefined,
         emp_code: filters.emp_code || undefined
@@ -201,13 +214,14 @@ export default function TransactionsPage() {
     setError('')
     
     try {
+      const txnType = filters.category === 'MF' ? mapModeDisplayToTxnType(filters.mode) : ''
       // Create a clean query object with all filters
       const query = {
         from: filters.from,
         to: filters.to,
         category: filters.category || undefined,
         status: filters.status || undefined,
-        mode: filters.mode || undefined,
+        txn_type: txnType || undefined,
         search: filters.search || undefined,
         branch_code: filters.branch_code || undefined,
         sort: filters.sort || 'created_at:desc',
@@ -236,7 +250,7 @@ export default function TransactionsPage() {
           to: filters.to,
           category: filters.category || undefined,
           status: filters.status || undefined,
-          mode: filters.mode || undefined,
+          txn_type: txnType || undefined,
           search: filters.search || undefined,
           sort: filters.sort || 'created_at:desc',
           page: pagination.page,
@@ -539,14 +553,25 @@ export default function TransactionsPage() {
   const handleEdit = (receipt) => {
     setSelectedReceipt(receipt)
     // Pre-populate edit data with current receipt values (receipt is already normalized)
+    const normalizeMfTxnTypeForEdit = (raw) => {
+      const v = String(raw || '').trim()
+      if (!v) return ''
+      const lower = v.toLowerCase()
+      // Switch Over variants -> backend expects "Switch Over"
+      if (lower === 'switchover' || lower === 'switch_over' || lower === 'switch-over' || v === 'Switch Over' || lower === 'switch over') return 'Switch Over'
+      // Lumpsum variants -> backend expects "Lumpsum"
+      if (v === 'Lumpsum' || v === 'LumpSum' || v === 'Lump Sum') return 'Lumpsum'
+      return v // SIP / STP / SWP
+    }
     setEditData({
       // Core fields
       date: receipt.date || '',
       investment_amount: receipt.investment_amount || receipt.fd_deposit_amount || '',
       scheme_name: receipt.scheme_name || receipt.fd_scheme_name || '',
       folio_policy_no: receipt.folio_policy_no || '',
-      mode: receipt.mode || '',
-      txn_type: receipt.txn_type || '',
+      txn_type: receipt.product_category === 'MF'
+        ? (normalizeMfTxnTypeForEdit(receipt.txn_type) || normalizeMfTxnTypeForEdit(mapModeDisplayToTxnType(receipt.mode)) || '')
+        : (receipt.txn_type || ''),
       switch_from_scheme_name: receipt.switch_from_scheme_name || '',
       switch_to_scheme_name: receipt.switch_to_scheme_name || '',
       // Transaction / payment details
@@ -644,8 +669,25 @@ export default function TransactionsPage() {
     }).format(amount || 0)
   }
 
+  const formatDateDisplay = (value) => {
+    if (!value) return ''
+    const raw = String(value).trim()
+    let date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, d] = raw.split('-').map(Number)
+      date = new Date(y, m - 1, d)
+    } else {
+      date = new Date(raw)
+    }
+    if (Number.isNaN(date.getTime())) return ''
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-IN')
+    return formatDateDisplay(dateString)
   }
 
   // Helper function to check if this is a switch over transaction
@@ -684,38 +726,33 @@ export default function TransactionsPage() {
   // Helper function to get mode from receipt
   // Note: receipts are already normalized, so we only need to check snake_case fields
   const getMode = (receipt) => {
-    // First check if mode is explicitly stored
-    let mode = receipt.mode || ''
-    
-    // If mode is not found, try to infer from transaction type
-    if (!mode && receipt.product_category === 'MF') {
-      const txnType = receipt.txn_type || ''
-      
-      // Map transaction types to modes
-      if (txnType === 'SIP') {
-        mode = 'SIP'
-      } else if (txnType === 'SWP') {
-        mode = 'SWP'
-      } else if (txnType === 'STP') {
-        mode = 'STP'
-      } else if (txnType === 'Lumpsum' || txnType === 'Lump Sum') {
-        mode = 'Lump Sum'
-      } else if (isSwitchOver(receipt)) {
-        // Switch over is typically lump sum
-        mode = 'Lump Sum'
-      } else if (receipt.sip_frequency) {
-        mode = 'SIP'
-      } else if (receipt.swp_frequency) {
-        mode = 'SWP'
-      } else if (receipt.stp_frequency) {
-        mode = 'STP'
-      } else {
-        // Default to Lump Sum for MF if no other indicators
-        mode = 'Lump Sum'
-      }
+    const normalizeTxnTypeToDisplayMode = (raw) => {
+      const v = String(raw || '').trim()
+      if (!v) return ''
+      if (v === 'SwitchOver' || v === 'SWITCH_OVER' || v === 'switch_over') return 'Switch Over'
+      if (v === 'Switch Over') return 'Switch Over'
+      if (v === 'Lumpsum' || v === 'LumpSum' || v === 'Lump Sum') return 'Lump Sum'
+      return v // SIP / SWP / STP
     }
-    
-    return mode
+
+    // MF: prefer txn_type for mode display; fallback to legacy receipt.mode + inference
+    if (receipt.product_category === 'MF') {
+      const txnTypeRaw = receipt.txn_type || receipt.transaction_type || ''
+      const txnMode = normalizeTxnTypeToDisplayMode(txnTypeRaw)
+      if (txnMode) return txnMode
+
+      // Legacy fallback: use receipt.mode when txn_type isn't present (older receipts)
+      if (receipt.mode) return String(receipt.mode)
+
+      // Infer from MF frequencies
+      if (isSwitchOver(receipt)) return 'Switch Over'
+      if (receipt.sip_frequency) return 'SIP'
+      if (receipt.swp_frequency) return 'SWP'
+      if (receipt.stp_frequency) return 'STP'
+      return 'Lump Sum'
+    }
+
+    return receipt.mode || ''
   }
 
   // Helper function to get mode display with description
@@ -734,7 +771,16 @@ export default function TransactionsPage() {
 
   // Helper: format payment/transaction details for display (receipts are normalized with entry_mode, bank_name, etc.)
   const hasPaymentDetails = (receipt) => receipt.entry_mode || receipt.channel || receipt.reference_no || receipt.bank_name || receipt.bank_branch || receipt.instrument_no || receipt.instrument_type || receipt.notes
-  const formatPaymentDate = (d) => d ? new Date(d).toLocaleDateString('en-IN') : ''
+  const formatPaymentDate = (d) => formatDateDisplay(d)
+
+  // Backend expects txn_type values like "Lumpsum" for Lump Sum and "Switch Over" for Switch Over.
+  const mapModeDisplayToTxnType = (modeDisplay) => {
+    const v = String(modeDisplay || '').trim()
+    if (!v) return ''
+    if (v === 'Lump Sum') return 'Lumpsum'
+    if (v === 'Switch Over') return 'Switch Over'
+    return v // SIP / SWP / STP
+  }
 
   const getStatusBadge = (receipt) => {
     if (receipt.deleted_at) {
@@ -775,6 +821,7 @@ export default function TransactionsPage() {
   const handleDownloadHistory = async (format = 'csv') => {
     if (!token) return
     try {
+      const txnType = filters.category === 'MF' ? mapModeDisplayToTxnType(filters.mode) : ''
       const query = {
         from: filters.from,
         to: filters.to,
@@ -782,7 +829,7 @@ export default function TransactionsPage() {
         emp_code: isAdmin ? (filters.emp_code || undefined) : undefined,
         status: filters.status || undefined,
         category: filters.category || undefined,
-        mode: filters.mode || undefined,
+        txn_type: txnType || undefined,
         search: filters.search || undefined
       }
       Object.keys(query).forEach(key => query[key] === undefined && delete query[key])
@@ -1210,27 +1257,27 @@ export default function TransactionsPage() {
             ]}
             value={(() => {
               const today = new Date()
-              const fromDate = new Date(filters.from)
-              const toDate = new Date(filters.to)
-              const todayStr = today.toISOString().slice(0, 10)
+              const fromDate = parseDateInput(filters.from)
+              const toDate = parseDateInput(filters.to)
+              const todayStr = formatDateForInput(today)
               if (filters.from === todayStr && filters.to === todayStr) return 'today'
               const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7)
-              if (fromDate.toDateString() === weekAgo.toDateString() && toDate.toDateString() === today.toDateString()) return 'week'
+              if (fromDate?.toDateString() === weekAgo.toDateString() && toDate?.toDateString() === today.toDateString()) return 'week'
               const monthAgo = new Date(today); monthAgo.setMonth(today.getMonth() - 1)
-              if (fromDate.toDateString() === monthAgo.toDateString() && toDate.toDateString() === today.toDateString()) return 'month'
+              if (fromDate?.toDateString() === monthAgo.toDateString() && toDate?.toDateString() === today.toDateString()) return 'month'
               const quarterAgo = new Date(today); quarterAgo.setMonth(today.getMonth() - 3)
-              if (fromDate.toDateString() === quarterAgo.toDateString() && toDate.toDateString() === today.toDateString()) return 'quarter'
+              if (fromDate?.toDateString() === quarterAgo.toDateString() && toDate?.toDateString() === today.toDateString()) return 'quarter'
               const yearStart = `${today.getFullYear()}-01-01`
               if (filters.from === yearStart && filters.to === todayStr) return 'year'
               return 'today'
             })()}
             onChange={(value) => {
               const today = new Date()
-              const toStr = today.toISOString().slice(0, 10)
+              const toStr = formatDateForInput(today)
               let from = toStr
-              if (value === 'week') { const d = new Date(today); d.setDate(today.getDate() - 7); from = d.toISOString().slice(0, 10) }
-              else if (value === 'month') { const d = new Date(today); d.setMonth(today.getMonth() - 1); from = d.toISOString().slice(0, 10) }
-              else if (value === 'quarter') { const d = new Date(today); d.setMonth(today.getMonth() - 3); from = d.toISOString().slice(0, 10) }
+              if (value === 'week') { const d = new Date(today); d.setDate(today.getDate() - 7); from = formatDateForInput(d) }
+              else if (value === 'month') { const d = new Date(today); d.setMonth(today.getMonth() - 1); from = formatDateForInput(d) }
+              else if (value === 'quarter') { const d = new Date(today); d.setMonth(today.getMonth() - 3); from = formatDateForInput(d) }
               else if (value === 'year') from = `${today.getFullYear()}-01-01`
               setFilters(prev => ({ ...prev, from, to: toStr }))
             }}
@@ -1602,11 +1649,13 @@ export default function TransactionsPage() {
                   {isAdmin ? (
                     <>
                       <th className="px-3 py-3 text-left text-table-header">Employee</th>
+                      <th className="px-3 py-3 text-left text-table-header">Branch</th>
                       <th className="px-3 py-3 text-left text-table-header">Date</th>
                       <th className="px-3 py-3 text-right text-table-header">Amount</th>
                     </>
                   ) : (
                     <>
+                      <th className="px-3 py-3 text-left text-table-header">Branch</th>
                       <th className="px-3 py-3 text-left text-table-header">Date</th>
                       <th className="px-3 py-3 text-right text-table-header">Amount</th>
                     </>
@@ -1705,6 +1754,11 @@ export default function TransactionsPage() {
                               </div>
                             </td>
                             <td className="px-3 py-3">
+                              <div>
+                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{receipt.branch || '—'}</div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">
                                 {formatDate(receipt.date)}
                               </div>
@@ -1714,7 +1768,13 @@ export default function TransactionsPage() {
                             </td>
                           </>
                         ) : (
-                          <td className="px-3 py-3">
+                          <>
+                            <td className="px-3 py-3">
+                              <div>
+                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{receipt.branch || '—'}</div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
                             <div>
                               <div className="text-sm font-medium text-gray-900 dark:text-white">
                                 {formatDate(receipt.date)}
@@ -1723,7 +1783,8 @@ export default function TransactionsPage() {
                                 {getCategoryDisplayName(receipt.product_category)}
                               </div>
                             </div>
-                          </td>
+                            </td>
+                          </>
                         )}
                         <td className="px-3 py-3">
                           <div className="text-right">
@@ -1737,7 +1798,7 @@ export default function TransactionsPage() {
                       {/* Expanded Row */}
                       {isExpanded && (
                         <tr className="bg-[var(--card-hover)]/50 border-l-4 border-[var(--accent)]">
-                          <td colSpan={isAdmin ? 6 : 5} className="px-4 py-4">
+                          <td colSpan={isAdmin ? 7 : 6} className="px-4 py-4">
                             <div className="w-full flex flex-col gap-3 mb-4">
                               <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Receipt details</div>
                               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
@@ -1774,6 +1835,18 @@ export default function TransactionsPage() {
                                     <div>
                                       <span className="text-gray-500 dark:text-gray-400">Switch to</span>
                                       <p className="font-medium text-gray-900 dark:text-white">{receipt.switch_to_scheme_name || '—'}</p>
+                                    </div>
+                                  </>
+                                )}
+                                {(String(receipt.txn_type || receipt.transaction_type || '').trim().toUpperCase() === 'STP' || receipt.stp_target_scheme_name) && (
+                                  <>
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">STP from</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">{receipt.scheme_name || receipt.schemeName || '—'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">STP to</span>
+                                      <p className="font-medium text-gray-900 dark:text-white">{receipt.stp_target_scheme_name || '—'}</p>
                                     </div>
                                   </>
                                 )}
@@ -2289,36 +2362,25 @@ export default function TransactionsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Mode
-                    </label>
-                    <select
-                      value={editData.mode}
-                      onChange={(e) => setEditData({ ...editData, mode: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                    >
-                      <option value="">Select Mode</option>
-                      <option value="Lump Sum">Lump Sum</option>
-                      <option value="SIP">SIP</option>
-                      <option value="STP">STP</option>
-                      <option value="SWP">SWP</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Transaction Type
-                    </label>
-                    <select
-                      value={editData.txn_type}
-                      onChange={(e) => setEditData({ ...editData, txn_type: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                    >
-                      <option value="">Select Type</option>
-                      <option value="Fresh">Fresh</option>
-                      <option value="Additional">Additional</option>
-                      <option value="Redemption">Redemption</option>
-                      <option value="Switch Over">Switch Over</option>
-                    </select>
+                    {selectedReceipt?.product_category === 'MF' && (
+                      <>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Investment Type
+                        </label>
+                        <select
+                          value={editData.txn_type}
+                          onChange={(e) => setEditData({ ...editData, txn_type: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        >
+                          <option value="">Select Type</option>
+                          <option value="Lumpsum">Lump Sum</option>
+                          <option value="SIP">SIP</option>
+                          <option value="STP">STP</option>
+                          <option value="SWP">SWP</option>
+                          <option value="Switch Over">Switch Over</option>
+                        </select>
+                      </>
+                    )}
                   </div>
                   {(editData.txn_type === 'Switch Over' || editData.switch_from_scheme_name || editData.switch_to_scheme_name) && (
                     <>
@@ -2341,6 +2403,32 @@ export default function TransactionsPage() {
                           type="text"
                           value={editData.switch_to_scheme_name || ''}
                           onChange={(e) => setEditData({ ...editData, switch_to_scheme_name: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {(editData.txn_type === 'STP' || editData.stp_target_scheme_name) && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          STP from (scheme)
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.scheme_name || ''}
+                          onChange={(e) => setEditData({ ...editData, scheme_name: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          STP to (scheme)
+                        </label>
+                        <input
+                          type="text"
+                          value={editData.stp_target_scheme_name || ''}
+                          onChange={(e) => setEditData({ ...editData, stp_target_scheme_name: e.target.value })}
                           className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                         />
                       </div>

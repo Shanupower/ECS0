@@ -307,6 +307,14 @@ export function normalizeReceiptFields(receipt) {
   normalized.fd_periodic_payout = getValue('product_details.fd.maturity.periodic_payout', 'fd_periodic_payout', 'fdPeriodicPayout')
   normalized.fd_total_interest = getValue('product_details.fd.maturity.total_interest', 'fd_total_interest', 'fdTotalInterest')
 
+  // FD: expected returns/maturity amount intentionally hidden
+  if (normalized.product_category === 'FD') {
+    normalized.fd_maturity_amount = null
+    normalized.maturity_amount = null
+    normalized.fd_periodic_payout = null
+    normalized.fd_total_interest = null
+  }
+
   // FD Application details (from structured.product_details.fd.application or flat)
   normalized.fd_application_number = getValue('product_details.fd.application.number', 'fd_application_number', 'fdApplicationNumber')
 

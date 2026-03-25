@@ -6,7 +6,8 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
   const [principalAmount, setPrincipalAmount] = useState('')
   const [tenureMonths, setTenureMonths] = useState('')
   const [payoutFrequency, setPayoutFrequency] = useState('')
-  const [bookingDate, setBookingDate] = useState(new Date().toISOString().split('T')[0])
+  const todayYyyyMmDd = new Date().toISOString().split('T')[0]
+  const [bookingDate, setBookingDate] = useState(todayYyyyMmDd)
   const [seniorCitizen, setSeniorCitizen] = useState(false)
   const [women, setWomen] = useState(false)
   const [renewal, setRenewal] = useState(false)
@@ -20,9 +21,6 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
   const [lockedInterestRatePa, setLockedInterestRatePa] = useState(null)
   const [effectiveYieldPa, setEffectiveYieldPa] = useState(null)
   const [maturityDate, setMaturityDate] = useState(null)
-  const [expectedMaturityValue, setExpectedMaturityValue] = useState(null)
-  const [expectedPeriodicPayout, setExpectedPeriodicPayout] = useState(null)
-  const [expectedTotalInterest, setExpectedTotalInterest] = useState(null)
   
   const [rateCalculation, setRateCalculation] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -173,36 +171,8 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       setEffectiveYieldPa(result.effective_yield_pa || result.total_rate_pa)
       setRateError(null) // Clear error on success
       
-      // Calculate maturity/payout amounts
-      if (principalAmount) {
-        const principal = parseFloat(principalAmount)
-        const rate = result.total_rate_pa / 100
-        const months = parseInt(tenureMonths)
-        const years = months / 12
-        
-        const schemeToUse = fullScheme || scheme
-        if (schemeToUse.is_cumulative) {
-          // Cumulative - interest compounded
-          const compounding = result.compounding_frequency || rateCalculation?.compounding_frequency || 'Quarterly'
-          const n =
-            compounding === 'Monthly' ? 12 :
-            compounding === 'Quarterly' ? 4 :
-            compounding === 'Half-Yearly' ? 2 : 1
-
-          const maturity = principal * Math.pow(1 + rate / n, n * years)
-          setExpectedMaturityValue(maturity)
-          setExpectedTotalInterest(maturity - principal)
-        } else {
-          // Non-cumulative - periodic payout
-          const periodsPerYear =
-            payoutFrequency === 'Monthly' ? 12 :
-            payoutFrequency === 'Quarterly' ? 4 :
-            payoutFrequency === 'Half-Yearly' ? 2 : 1
-          const interestPerPeriod = principal * rate * (1 / periodsPerYear)
-          setExpectedPeriodicPayout(interestPerPeriod)
-          setExpectedTotalInterest(principal * rate * years)
-        }
-      }
+      // Intentionally no expected maturity/payout calculations here:
+      // these values are not shown for FD.
     } catch (error) {
       console.error('Failed to calculate rate:', error)
       setRateCalculation(null)
@@ -239,10 +209,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       fd_booking_date: bookingDate,
       fd_locked_interest_rate_pa: lockedInterestRatePa,
       fd_effective_yield_pa: effectiveYieldPa,
-      fd_maturity_amount: expectedMaturityValue,
       fd_maturity_date: maturityDate,
-      fd_periodic_payout: expectedPeriodicPayout,
-      fd_total_interest: expectedTotalInterest,
       fd_base_rate_pa: rateCalculation?.base_rate_pa,
       fd_senior_citizen_bonus: rateCalculation?.bonuses?.senior_citizen,
       fd_women_bonus: rateCalculation?.bonuses?.women,
@@ -319,6 +286,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           <DatePickerInput
             value={bookingDate}
             onChange={(v) => setBookingDate(v)}
+            max={todayYyyyMmDd}
             inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
@@ -624,85 +592,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           </div>
         </div>
 
-        {/* Calculation Card */}
-        {lockedInterestRatePa && principalAmount && !loading && (
-          <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border-2 border-green-300 dark:border-green-700">
-            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Expected Returns</h4>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Interest Rate</div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{lockedInterestRatePa.toFixed(2)}% p.a.</div>
-              </div>
-              {scheme.lock_in_months > 0 && (
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Lock-in Period</div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{scheme.lock_in_months} months</div>
-                </div>
-              )}
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Maturity Date</div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-white">{new Date(maturityDate).toLocaleDateString()}</div>
-              </div>
-              {rateCalculation?.bonuses && (
-                <>
-                  {rateCalculation.bonuses.senior_citizen > 0 && (
-                    <div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">SC Bonus</div>
-                      <div className="text-lg font-semibold text-green-600 dark:text-green-400">+{rateCalculation.bonuses.senior_citizen.toFixed(2)}%</div>
-                    </div>
-                  )}
-                  {rateCalculation.bonuses.women > 0 && (
-                    <div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">Women Bonus</div>
-                      <div className="text-lg font-semibold text-green-600 dark:text-green-400">+{rateCalculation.bonuses.women.toFixed(2)}%</div>
-                    </div>
-                  )}
-                  {rateCalculation.bonuses.renewal > 0 && (
-                    <div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">Renewal Bonus</div>
-                      <div className="text-lg font-semibold text-green-600 dark:text-green-400">+{rateCalculation.bonuses.renewal.toFixed(2)}%</div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {scheme.is_cumulative && expectedMaturityValue ? (
-              <div className="mt-4 pt-4 border-t border-green-300 dark:border-green-700">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Maturity Amount</div>
-                    <div className="text-2xl font-bold text-green-700 dark:text-green-300">₹{expectedMaturityValue.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Total Interest</div>
-                    <div className="text-xl font-semibold text-green-700 dark:text-green-300">₹{expectedTotalInterest.toFixed(2)}</div>
-                  </div>
-                </div>
-              </div>
-            ) : expectedPeriodicPayout ? (
-              <div className="mt-4 pt-4 border-t border-green-300 dark:border-green-700">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Periodic Payout</div>
-                    <div className="text-2xl font-bold text-green-700 dark:text-green-300">₹{expectedPeriodicPayout.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">per {payoutFrequency.toLowerCase()}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Total Interest</div>
-                    <div className="text-xl font-semibold text-green-700 dark:text-green-300">₹{expectedTotalInterest.toFixed(2)}</div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {scheme.premature_allowed && (
-              <div className="mt-3 text-xs text-yellow-700 dark:text-yellow-300">
-                {scheme.premature_terms || 'Premature withdrawal allowed with penalties'}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Expected returns / maturity amount intentionally hidden for FD */}
 
         {/* TDS */}
         {scheme.tds_applicable && (

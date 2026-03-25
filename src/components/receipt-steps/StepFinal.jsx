@@ -9,6 +9,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
   const docs = supportingDocuments != null ? supportingDocuments : (supportingDocument ? [supportingDocument] : [])
   const setDocs = setSupportingDocuments != null ? setSupportingDocuments : (files => { if (files.length === 1) setSupportingDocument(files[0]); else if (files.length === 0) setSupportingDocument(null) })
   const [transactionType, setTransactionType] = useState('')
+  const todayYyyyMmDd = new Date().toISOString().split('T')[0]
   const [offlineDetails, setOfflineDetails] = useState({
     bankName: '',
     chequeNumber: '',
@@ -16,7 +17,9 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
     branch: ''
   })
   const [onlineTransactionNumber, setOnlineTransactionNumber] = useState('')
+  const [onlineTransactionDate, setOnlineTransactionDate] = useState('')
   const [othersTransactionType, setOthersTransactionType] = useState('')
+  const [othersTransactionDate, setOthersTransactionDate] = useState('')
   const [validationError, setValidationError] = useState('')
   const [lastDocMeta, setLastDocMeta] = useState(null)
 
@@ -114,13 +117,13 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
         return
       }
     } else if (transactionType === 'Online') {
-      if (!onlineTransactionNumber || onlineTransactionNumber.trim() === '') {
-        setValidationError('Please enter transaction number')
+      if (!onlineTransactionNumber || onlineTransactionNumber.trim() === '' || !onlineTransactionDate) {
+        setValidationError('Please enter transaction number and transaction date')
         return
       }
     } else if (transactionType === 'Others') {
-      if (!othersTransactionType || othersTransactionType.trim() === '') {
-        setValidationError('Please enter transaction type (e.g., RTGS, NEFT, etc.)')
+      if (!othersTransactionType || othersTransactionType.trim() === '' || !othersTransactionDate) {
+        setValidationError('Please enter transaction type and transaction date (e.g., RTGS, NEFT, etc.)')
         return
       }
     }
@@ -210,10 +213,12 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
         bank_branch: offlineDetails.branch
       } : {}),
       ...(transactionType === 'Online' ? {
-        reference_no: onlineTransactionNumber
+        reference_no: onlineTransactionNumber,
+        txn_date: onlineTransactionDate
       } : {}),
       ...(transactionType === 'Others' ? {
-        notes: othersTransactionType
+        notes: othersTransactionType,
+        txn_date: othersTransactionDate
       } : {})
     }
     
@@ -233,8 +238,14 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
         instrumentNo: offlineDetails.chequeNumber,
         instrumentDate: offlineDetails.chequeDate
       } : {}),
-      ...(transactionType === 'Online' ? { transactionNumber: onlineTransactionNumber } : {}),
-      ...(transactionType === 'Others' ? { othersTransactionType } : {})
+      ...(transactionType === 'Online' ? {
+        transactionNumber: onlineTransactionNumber,
+        transactionDate: onlineTransactionDate
+      } : {}),
+      ...(transactionType === 'Others' ? {
+        othersTransactionType,
+        transactionDate: othersTransactionDate
+      } : {})
     }
     
     onSave(finalData)
@@ -424,12 +435,6 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                     <div className="text-body font-semibold text-[var(--success)]">{data.fd_total_rate_pa.toFixed(2)}% p.a.</div>
                   </div>
                 )}
-                {data.fd_maturity_amount && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Maturity Amount</div>
-                    <div className="text-lg font-semibold text-[var(--success)]">{fmtAmt(data.fd_maturity_amount)}</div>
-                  </div>
-                )}
                 {data.fd_application_number && (
                   <div className="bg-[var(--card-bg)] rounded-card p-4">
                     <div className="text-helper text-[var(--text-muted)]">Application/FD Number</div>
@@ -549,14 +554,6 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                 <div className="text-helper text-[var(--text-muted)]">Transaction</div>
                 <div className="text-body font-semibold text-[var(--text-primary)]">{data.txn_type || 'Fresh'}</div>
               </div>
-              
-              {/* Only show mode for MF products */}
-              {data.product_category === 'MF' && (
-                <div className="bg-[var(--card-bg)] rounded-card p-4">
-                  <div className="text-helper text-[var(--text-muted)]">Mode</div>
-                  <div className="text-body font-semibold text-[var(--text-primary)]">{data.mode || 'Lump Sum'}</div>
-                </div>
-              )}
               
               {data.investment_amount && (
                 <div className="bg-[var(--card-bg)] rounded-card p-4">
@@ -828,12 +825,6 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                         <div className="font-semibold text-[var(--success)]">{data.fd_total_rate_pa.toFixed(2)}% p.a.</div>
                       </div>
                     )}
-                    {data.fd_maturity_amount && (
-                      <div className="bg-[var(--card-bg)] rounded-card p-4">
-                        <div className="text-helper text-[var(--text-muted)]">Maturity Amount</div>
-                        <div className="font-semibold text-[var(--success)]">{fmtAmt(data.fd_maturity_amount)}</div>
-                      </div>
-                    )}
                     {data.fd_maturity_date && (
                       <div className="bg-[var(--card-bg)] rounded-card p-4">
                         <div className="text-helper text-[var(--text-muted)]">Maturity Date</div>
@@ -1003,9 +994,15 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                       <div className="font-semibold text-[var(--success)]">{fmtAmt(data.swp_amount)}</div>
                     </div>
                   )}
+                  {(data.scheme_name || data.schemeName) && (
+                    <div className="bg-[var(--card-bg)] rounded-card p-4">
+                      <div className="text-helper text-[var(--text-muted)]">Source Scheme</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{data.scheme_name || data.schemeName}</div>
+                    </div>
+                  )}
                   {data.stp_target_scheme_name && (
                     <div className="bg-[var(--card-bg)] rounded-card p-4">
-                      <div className="text-helper text-[var(--text-muted)]">Transfer to Scheme</div>
+                      <div className="text-helper text-[var(--text-muted)]">Target Scheme</div>
                       <div className="font-semibold text-[var(--text-primary)]">{data.stp_target_scheme_name}</div>
                     </div>
                   )}
@@ -1027,9 +1024,15 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                       <div className="font-semibold text-[var(--success)]">{fmtAmt(data.stp_amount)}</div>
                     </div>
                   )}
+                  {data.switch_from_scheme_name && (
+                    <div className="bg-[var(--card-bg)] rounded-card p-4">
+                      <div className="text-helper text-[var(--text-muted)]">Source Scheme</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{data.switch_from_scheme_name}</div>
+                    </div>
+                  )}
                   {data.switch_to_scheme_name && (
                     <div className="bg-[var(--card-bg)] rounded-card p-4">
-                      <div className="text-helper text-[var(--text-muted)]">Switch to Scheme</div>
+                      <div className="text-helper text-[var(--text-muted)]">Target Scheme</div>
                       <div className="font-semibold text-[var(--text-primary)]">{data.switch_to_scheme_name}</div>
                     </div>
                   )}
@@ -1106,17 +1109,31 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
 
             {/* Online Transaction Details */}
             {transactionType === 'Online' && (
-              <div className="bg-[var(--card-bg)] rounded-card p-4">
-                <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
-                  Transaction Number *
-                </label>
-                <input
-                  type="text"
-                  value={onlineTransactionNumber}
-                  onChange={(e) => setOnlineTransactionNumber(e.target.value)}
-                  placeholder="Enter transaction number"
-                  className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
+              <div className="bg-[var(--card-bg)] rounded-card p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
+                    Transaction Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={onlineTransactionNumber}
+                    onChange={(e) => setOnlineTransactionNumber(e.target.value)}
+                    placeholder="Enter transaction number"
+                    className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
+                    Transaction Date *
+                  </label>
+                  <DatePickerInput
+                    value={onlineTransactionDate}
+                    onChange={(v) => setOnlineTransactionDate(v)}
+                    max={todayYyyyMmDd}
+                    inputClassName="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    ariaLabel="Online transaction date"
+                  />
+                </div>
               </div>
             )}
 
@@ -1157,6 +1174,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                     <DatePickerInput
                       value={offlineDetails.chequeDate}
                       onChange={(v) => setOfflineDetails({ ...offlineDetails, chequeDate: v })}
+                      max={todayYyyyMmDd}
                       inputClassName="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
                       ariaLabel="Cheque date"
                     />
@@ -1180,20 +1198,34 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
 
             {/* Others Transaction Details */}
             {transactionType === 'Others' && (
-              <div className="bg-[var(--card-bg)] rounded-card p-4">
-                <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
-                  Transaction Type * (e.g., RTGS, NEFT, etc.)
-                </label>
-                <input
-                  type="text"
-                  value={othersTransactionType}
-                  onChange={(e) => setOthersTransactionType(e.target.value)}
-                  placeholder="Enter transaction type (e.g., RTGS, NEFT, IMPS, etc.)"
-                  className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
-                />
-                <p className="text-xs text-[var(--dashboard-muted)] mt-2">
-                  Specify the transaction type or payment method used
-                </p>
+              <div className="bg-[var(--card-bg)] rounded-card p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
+                    Transaction Type * (e.g., RTGS, NEFT, etc.)
+                  </label>
+                  <input
+                    type="text"
+                    value={othersTransactionType}
+                    onChange={(e) => setOthersTransactionType(e.target.value)}
+                    placeholder="Enter transaction type (e.g., RTGS, NEFT, IMPS, etc.)"
+                    className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
+                  />
+                  <p className="text-xs text-[var(--dashboard-muted)] mt-2">
+                    Specify the transaction type or payment method used
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-2">
+                    Transaction Date *
+                  </label>
+                  <DatePickerInput
+                    value={othersTransactionDate}
+                    onChange={(v) => setOthersTransactionDate(v)}
+                    max={todayYyyyMmDd}
+                    inputClassName="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg focus:ring-2 focus:ring-[var(--dashboard-primary)] focus:border-transparent"
+                    ariaLabel="Other transaction date"
+                  />
+                </div>
               </div>
             )}
           </div>

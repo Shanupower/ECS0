@@ -133,6 +133,37 @@ export default function DatePickerInput({
   const normalizedMin = useMemo(() => (isValidYyyyMmDd(min) ? min : ''), [min])
   const normalizedMax = useMemo(() => (isValidYyyyMmDd(max) ? max : ''), [max])
 
+  const yearOptions = useMemo(() => {
+    const current = viewYear
+    const parsedMin = normalizedMin ? Number(String(normalizedMin).slice(0, 4)) : null
+    const parsedMax = normalizedMax ? Number(String(normalizedMax).slice(0, 4)) : null
+
+    let start = parsedMin != null ? parsedMin : current - 10
+    let end = parsedMax != null ? parsedMax : current + 10
+
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      start = current - 10
+      end = current + 10
+    }
+
+    if (start > end) {
+      const tmp = start
+      start = end
+      end = tmp
+    }
+
+    // Safety cap (avoid generating thousands of options if dates are huge).
+    const span = end - start
+    if (span > 60) {
+      start = current - 25
+      end = current + 25
+    }
+
+    const options = []
+    for (let y = start; y <= end; y++) options.push(y)
+    return options
+  }, [normalizedMin, normalizedMax, viewYear])
+
   function isDateSelectable(yyyyMmDd) {
     if (!isValidYyyyMmDd(yyyyMmDd)) return false
     if (normalizedMin && compareYyyyMmDd(yyyyMmDd, normalizedMin) < 0) return false
@@ -228,6 +259,13 @@ export default function DatePickerInput({
 
   /** Prevent input blur before click; avoids flaky close/reset and keeps popup aligned while selecting. */
   function onPopupMouseDown(e) {
+    const t = e && e.target
+    const tag = t && t.tagName ? String(t.tagName).toUpperCase() : ''
+
+    // Allow native select interactions (otherwise year dropdown can't be changed).
+    if (tag === 'SELECT' || tag === 'OPTION') return
+    if (t && typeof t.closest === 'function' && t.closest('select')) return
+
     e.preventDefault()
   }
 
@@ -318,9 +356,22 @@ export default function DatePickerInput({
               >
                 ‹
               </button>
-              <div className="text-sm font-semibold text-[var(--text-primary)]">
-                {MONTH_NAMES[viewMonth]} {viewYear}
-              </div>
+            <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <span>{MONTH_NAMES[viewMonth]}</span>
+              <select
+                value={viewYear}
+                onChange={(e) => setViewYear(Number(e.target.value))}
+                disabled={disabledAll}
+                className="px-2 py-1 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--ring)] focus:outline-none"
+                aria-label="Select year"
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
               <button
                 type="button"
                 onClick={() => {

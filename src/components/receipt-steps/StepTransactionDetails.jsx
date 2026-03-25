@@ -17,6 +17,13 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
     e.currentTarget.blur()
   }
   const [stpOriginalAmount, setStpOriginalAmount] = useState('')
+  const todayYyyyMmDd = useMemo(() => new Date().toISOString().split('T')[0], [])
+
+  const getStartDateMax = () => {
+    // Requirement: allow future Start Dates ONLY for MF SIP.
+    if (investmentType === 'SIP') return undefined
+    return todayYyyyMmDd
+  }
 
   useEffect(() => {
     if ((investmentType === 'STP' || investmentType === 'Switch Over') && token && selectedAmc) {
@@ -45,21 +52,16 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
     }
 
     // Set mode based on investment type
-    if (investmentType === 'Lumpsum') {
-      transactionData.mode = 'Lump Sum'
-    } else if (investmentType === 'SIP') {
-      transactionData.mode = 'SIP'
+    if (investmentType === 'SIP') {
       transactionData.sip_frequency = frequency
       transactionData.sip_start_date = startDate
       transactionData.sip_end_date = isPerpetual ? null : endDate
       transactionData.sip_is_perpetual = isPerpetual
     } else if (investmentType === 'SWP') {
-      transactionData.mode = 'SWP'
       transactionData.swp_frequency = frequency
       transactionData.swp_start_date = startDate
       transactionData.swp_amount = amount
     } else if (investmentType === 'STP') {
-      transactionData.mode = 'STP'
       const target = schemes.find(s => s.scheme_code === targetScheme)
       transactionData.stp_target_scheme_code = target?.scheme_code
       transactionData.stp_target_scheme_name = target?.scheme_name
@@ -68,8 +70,6 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       transactionData.stp_amount = amount
       transactionData.stp_original_amount = stpOriginalAmount
     } else if (investmentType === 'Switch Over') {
-      // For switch over, mode is typically 'Lump Sum' unless it's part of a SIP/SWP/STP switch
-      transactionData.mode = 'Lump Sum' // Default, can be overridden if needed
       transactionData.txn_type = 'Switch Over' // Explicitly set transaction type
       const target = schemes.find(s => s.scheme_code === targetScheme)
       transactionData.switch_from_scheme_code = selectedScheme.scheme_code
@@ -154,6 +154,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <DatePickerInput
               value={startDate}
               onChange={(v) => setStartDate(v)}
+              max={getStartDateMax()}
               inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
@@ -212,6 +213,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <DatePickerInput
               value={startDate}
               onChange={(v) => setStartDate(v)}
+              max={getStartDateMax()}
               inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
@@ -318,6 +320,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
             <DatePickerInput
               value={startDate}
               onChange={(v) => setStartDate(v)}
+              max={getStartDateMax()}
               inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>

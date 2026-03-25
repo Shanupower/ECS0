@@ -3,7 +3,22 @@ import Logo from './Logo.jsx'
 import { getCategoryDisplayName } from '../utils/categoryMapping'
 import { normalizeReceiptFields } from '../utils/receiptNormalizer'
 
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '');
+const fmtDate = (value) => {
+  if (!value) return '';
+  const raw = String(value).trim();
+  let date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split('-').map(Number);
+    date = new Date(y, m - 1, d);
+  } else {
+    date = new Date(raw);
+  }
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
 const fmtAmt = (a) => {
   if (a === null || a === undefined || a === '') return '';
   const n = isNaN(Number(a)) ? a : Number(a);
@@ -90,6 +105,10 @@ export default function PrintReceipt({ data = {} }) {
     stp_amount: normalized.stp_amount,
     stp_original_amount: normalized.stp_original_amount,
     
+    // Switch Over fields (MF)
+    switch_from_scheme_name: normalized.switch_from_scheme_name,
+    switch_to_scheme_name: normalized.switch_to_scheme_name,
+    
     // SWP fields
     swp_frequency: normalized.swp_frequency,
     swp_start_date: normalized.swp_start_date,
@@ -149,6 +168,20 @@ export default function PrintReceipt({ data = {} }) {
     insurance_category: normalized.insurance_category,
     insurance_sub_category: normalized.insurance_sub_category,
   }
+
+  const normalizeTxnTypeToDisplayMode = (raw) => {
+    const v = String(raw || '').trim()
+    if (!v) return ''
+    const upper = v.toUpperCase()
+    if (upper === 'SWITCHOVER' || upper === 'SWITCH_OVER') return 'Switch Over'
+    if (v === 'Switch Over') return 'Switch Over'
+    if (v === 'Lumpsum' || v === 'LumpSum' || v === 'Lump Sum') return 'Lump Sum'
+    return v // SIP / SWP / STP
+  }
+
+  const mfModeDisplay = receipt.product_category === 'MF'
+    ? (normalizeTxnTypeToDisplayMode(receipt.txnType) || receipt.mode || '')
+    : ''
   const line = (label, value) => (
     <div className="rec-row">
       <div className="rec-label">{label}</div>
@@ -203,7 +236,6 @@ export default function PrintReceipt({ data = {} }) {
         {receipt.product_category === 'MF' && (
           <>
             <div className="two">
-              {line('Mode', receipt.mode)}
               {line('Period / Installments', [receipt.sip_stp_swp_period, receipt.noOfInstallments ? `(${receipt.noOfInstallments})` : ''].filter(Boolean).join(' '))}
             </div>
             <div className="two">
@@ -304,18 +336,19 @@ export default function PrintReceipt({ data = {} }) {
       </div>
 
       {/* SIP/STP/SWP Specific Details */}
-      {(receipt.mode === 'SIP' || receipt.mode === 'STP' || receipt.mode === 'SWP') && (
+      {(mfModeDisplay === 'SIP' || mfModeDisplay === 'STP' || mfModeDisplay === 'SWP') && (
         <div className="card">
-          <h3>{receipt.mode} Details</h3>
-          {receipt.mode === 'SIP' && (
+          <h3>{mfModeDisplay} Details</h3>
+          {mfModeDisplay === 'SIP' && (
             <>
               {line('Frequency', receipt.sip_frequency)}
               {line('Start Date', fmtDate(receipt.sip_start_date))}
               {line('End Date', receipt.sip_is_perpetual ? 'Perpetual (40 years)' : fmtDate(receipt.sip_end_date))}
             </>
           )}
-          {receipt.mode === 'STP' && (
+          {mfModeDisplay === 'STP' && (
             <>
+              {line('Source Scheme', receipt.schemeName)}
               {line('Target Scheme', receipt.stp_target_scheme_name)}
               {line('Total Original Scheme Amount', fmtAmt(receipt.stp_original_amount))}
               {line('Frequency', receipt.stp_frequency)}
@@ -323,13 +356,21 @@ export default function PrintReceipt({ data = {} }) {
               {line('Transfer Amount', fmtAmt(receipt.stp_amount))}
             </>
           )}
-          {receipt.mode === 'SWP' && (
+          {mfModeDisplay === 'SWP' && (
             <>
               {line('Frequency', receipt.swp_frequency)}
               {line('Start Date', fmtDate(receipt.swp_start_date))}
               {line('Withdrawal Amount', fmtAmt(receipt.swp_amount))}
             </>
           )}
+        </div>
+      )}
+
+      {mfModeDisplay === 'Switch Over' && (
+        <div className="card">
+          <h3>Switch Over Details</h3>
+          {line('Source Scheme', receipt.switch_from_scheme_name || receipt.schemeName)}
+          {line('Target Scheme', receipt.switch_to_scheme_name || receipt.schemeName)}
         </div>
       )}
 
@@ -358,7 +399,7 @@ export default function PrintReceipt({ data = {} }) {
           {line('FDR / Demat / Policy', receipt.fdr_demat_policy)}
           <div className="two">
             {line('Renewal/Maturity Due', fmtDate(receipt.renewalDueDate))}
-            {line('Maturity Amount', fmtAmt(receipt.maturityAmount))}
+            {receipt.product_category !== 'FD' && line('Maturity Amount', fmtAmt(receipt.maturityAmount))}
           </div>
           {line('Renewal Amount', fmtAmt(receipt.renewalAmount))}
         </div>

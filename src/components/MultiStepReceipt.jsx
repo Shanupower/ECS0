@@ -529,12 +529,27 @@ function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdI
   const [collapsed, setCollapsed] = useState(true)
   const rawProduct = productTypeSeed || finalData?.product_category || ''
   const productLabel = PRODUCT_TYPE_LABELS[rawProduct] || rawProduct || ''
+
+  const normalizeTxnTypeToModeDisplay = (raw) => {
+    const v = String(raw || '').trim()
+    if (!v) return ''
+    const upper = v.toUpperCase()
+    if (upper === 'SWITCHOVER' || v === 'Switch Over') return 'Switch Over'
+    if (v === 'Lumpsum' || v === 'LumpSum' || v === 'Lump Sum') return 'Lump Sum'
+    return v // SIP / SWP / STP
+  }
+
+  const modeDisplay =
+    finalData?.product_category === 'MF'
+      ? (normalizeTxnTypeToModeDisplay(finalData?.txn_type || finalData?.txnType) || finalData?.mode || '')
+      : ''
+
   const summary = {
     receipt: receiptNo != null ? String(receiptNo) : (draftId != null ? `#${String(draftId).padStart(7, '0')}` : ''),
     employee: empSeed.employeeName || empSeed.empCode || '',
     investor: investorSeed.investorInfo?.investorName || investorSeed.investorId || '',
     product: productLabel,
-    mode: finalData?.mode || '',
+    mode: modeDisplay,
     issuer: finalData?.issuer_company || finalData?.issuerCompany ||
       fdIssuerSeed?.short_name || ncdBondIssuerSeed?.short_name || insuranceIssuerSeed?.short_name ||
       mfSchemeSeed?.selectedAmc?.amc_name || '',
@@ -576,12 +591,6 @@ function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdI
         <span className={labelClass}>Product</span>
         <span className={valueClass}>{summary.product || '—'}</span>
       </div>
-      {summary.mode && (
-        <div className={rowClass}>
-          <span className={labelClass}>Mode</span>
-          <span className={valueClass}>{summary.mode}</span>
-        </div>
-      )}
       <div className={rowClass}>
         <span className={labelClass}>Issuer</span>
         <span className={`${valueClass} truncate max-w-[75%]`} title={summary.issuer || undefined}>{summary.issuer || '—'}</span>
@@ -1921,15 +1930,6 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const buildMFReceipt = (transactionData) => {
     const base = buildBase()
     
-    // Determine mode from investment type
-    const modeMap = {
-      'Lumpsum': 'Lump Sum',
-      'SIP': 'SIP',
-      'SWP': 'SWP',
-      'STP': 'STP',
-      'Switch Over': 'Lump Sum'
-    }
-    
     return {
       ...base,
       // Product category
@@ -1955,7 +1955,6 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       
       // Investment details
       investment_amount: transactionData.investment_amount || transactionData.investmentAmount || null,
-      mode: transactionData.mode || modeMap[investmentTypeSeed] || 'Lump Sum',
       txn_type: transactionData.txn_type || (investmentTypeSeed === 'Switch Over' ? 'Switch Over' : investmentTypeSeed) || null,
       
       // Folio information
@@ -2059,11 +2058,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       roi_percent: fdData.fd_total_rate_pa || null,
       
       // FD Maturity and payout details
-      fd_maturity_amount: fdData.fd_maturity_amount || null,
-      maturity_amount: fdData.fd_maturity_amount || null,
       fd_maturity_date: fdData.fd_maturity_date || null,
-      fd_periodic_payout: fdData.fd_periodic_payout || null,
-      fd_total_interest: fdData.fd_total_interest || null,
       
       // FD Application details
       fd_application_number: fdData.fd_application_number || null,

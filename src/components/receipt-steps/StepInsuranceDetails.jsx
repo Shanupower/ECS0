@@ -264,6 +264,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   value={dateOfIssue}
                   onChange={(v) => setDateOfIssue(v)}
                   inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  max={new Date().toISOString().split('T')[0]}
                 />
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>
@@ -320,6 +321,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   value={dateOfIssue}
                   onChange={(v) => setDateOfIssue(v)}
                   inputClassName="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  max={new Date().toISOString().split('T')[0]}
                 />
               </div>
               <div className="col" style={{ flex: '1 1 320px' }}>
