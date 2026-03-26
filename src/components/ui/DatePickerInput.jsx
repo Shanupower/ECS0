@@ -109,7 +109,10 @@ export default function DatePickerInput({
   const rootRef = useRef(null)
   const popupRef = useRef(null)
   const inputRef = useRef(null)
+  const yearWheelAccumRef = useRef(0)
+  const yearListRef = useRef(null)
   const [open, setOpen] = useState(false)
+  const [yearMenuOpen, setYearMenuOpen] = useState(false)
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 })
   const [viewYear, setViewYear] = useState(() => {
     const d = yyyyMmDdToDate(value) || new Date()
@@ -254,6 +257,7 @@ export default function DatePickerInput({
       const left = leftCandidate > maxLeft ? maxLeft : leftCandidate
       setPopupPos({ top: rect.bottom + 6, left: Math.max(8, left) })
     }
+    setYearMenuOpen(false)
     setOpen(true)
   }
 
@@ -262,9 +266,9 @@ export default function DatePickerInput({
     const t = e && e.target
     const tag = t && t.tagName ? String(t.tagName).toUpperCase() : ''
 
-    // Allow native select interactions (otherwise year dropdown can't be changed).
+    // Allow year menu interactions.
     if (tag === 'SELECT' || tag === 'OPTION') return
-    if (t && typeof t.closest === 'function' && t.closest('select')) return
+    if (t && typeof t.closest === 'function' && (t.closest('select') || t.closest('[data-year-menu]'))) return
 
     e.preventDefault()
   }
@@ -282,6 +286,53 @@ export default function DatePickerInput({
 
   const monthDays = useMemo(() => getMonthMatrix(viewYear, viewMonth), [viewYear, viewMonth])
   const selectedYyyyMmDd = isValidYyyyMmDd(value) ? value : ''
+
+  const yearBounds = useMemo(() => {
+    if (!Array.isArray(yearOptions) || yearOptions.length === 0) return { minYear: null, maxYear: null }
+    return { minYear: yearOptions[0], maxYear: yearOptions[yearOptions.length - 1] }
+  }, [yearOptions])
+
+  function onYearWheel(e) {
+    if (disabledAll) return
+    if (!open) return
+
+    // Prevent the page from scrolling while the wheel is over the year control.
+    e.preventDefault()
+    e.stopPropagation()
+
+    const deltaY = e.deltaY
+    if (!Number.isFinite(deltaY) || yearBounds.minYear == null || yearBounds.maxYear == null) return
+
+    // Normalize wheel units: pixels (0), lines (1), pages (2).
+    const unitScale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1
+    yearWheelAccumRef.current += deltaY * unitScale
+
+    // Convert accumulated wheel motion into year steps.
+    const threshold = 24
+    const absAccum = Math.abs(yearWheelAccumRef.current)
+    const fullSteps = Math.floor(absAccum / threshold)
+    if (fullSteps <= 0) return
+
+    const direction = Math.sign(yearWheelAccumRef.current)
+    yearWheelAccumRef.current -= direction * fullSteps * threshold
+
+    // Wheel down => earlier year, wheel up => later year.
+    const yearDelta = direction > 0 ? -fullSteps : fullSteps
+    setViewYear((prevYear) => {
+      const nextYear = prevYear + yearDelta
+      if (nextYear < yearBounds.minYear) return yearBounds.minYear
+      if (nextYear > yearBounds.maxYear) return yearBounds.maxYear
+      return nextYear
+    })
+  }
+
+  useEffect(() => {
+    if (!open || !yearMenuOpen || !yearListRef.current) return
+    const selectedEl = yearListRef.current.querySelector(`[data-year-item="${viewYear}"]`)
+    if (selectedEl && typeof selectedEl.scrollIntoView === 'function') {
+      selectedEl.scrollIntoView({ block: 'center' })
+    }
+  }, [open, yearMenuOpen, viewYear])
 
   const inputId = ariaLabel ? `date-${String(ariaLabel).toLowerCase().replace(/\s+/g, '-')}` : undefined
 
@@ -356,21 +407,51 @@ export default function DatePickerInput({
               >
                 ‹
               </button>
-            <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <div
+              className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 relative"
+              onWheel={onYearWheel}
+              data-year-menu
+            >
               <span>{MONTH_NAMES[viewMonth]}</span>
-              <select
-                value={viewYear}
-                onChange={(e) => setViewYear(Number(e.target.value))}
+              <button
+                type="button"
                 disabled={disabledAll}
-                className="px-2 py-1 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--ring)] focus:outline-none"
+                onClick={() => setYearMenuOpen((prev) => !prev)}
+                className="px-2 py-1 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--ring)] focus:outline-none min-w-[76px] text-left"
                 aria-label="Select year"
               >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                <span className="inline-flex w-full items-center justify-between gap-2">
+                  <span>{viewYear}</span>
+                  <span aria-hidden="true">▾</span>
+                </span>
+              </button>
+              {yearMenuOpen ? (
+                <div
+                  ref={yearListRef}
+                  className="absolute z-20 top-9 right-0 max-h-44 w-24 overflow-y-auto rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] shadow-lg"
+                  data-year-menu
+                  onWheel={onYearWheel}
+                >
+                  {yearOptions.map((y) => (
+                    <button
+                      key={y}
+                      type="button"
+                      data-year-menu
+                      data-year-item={y}
+                      onClick={() => {
+                        setViewYear(y)
+                        setYearMenuOpen(false)
+                      }}
+                      className={[
+                        'block w-full px-2 py-1 text-left text-sm',
+                        y === viewYear ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'text-[var(--text-primary)] hover:bg-[var(--card-hover)]',
+                      ].join(' ')}
+                    >
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
               <button
                 type="button"

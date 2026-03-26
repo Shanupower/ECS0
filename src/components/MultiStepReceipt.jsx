@@ -585,7 +585,7 @@ function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdI
       </div>
       <div className={rowClass}>
         <span className={labelClass}>Investor</span>
-        <span className={`${valueClass} truncate max-w-[75%]`} title={summary.investor || undefined}>{summary.investor || '—'}</span>
+        <span className={`${valueClass} max-w-[75%] whitespace-normal break-words`} title={summary.investor || undefined}>{summary.investor || '—'}</span>
       </div>
       <div className={rowClass}>
         <span className={labelClass}>Product</span>
@@ -2058,6 +2058,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       roi_percent: fdData.fd_total_rate_pa || null,
       
       // FD Maturity and payout details
+      fd_maturity_amount: fdData.fd_maturity_amount || null,
       fd_maturity_date: fdData.fd_maturity_date || null,
       
       // FD Application details

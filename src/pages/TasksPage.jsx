@@ -13,6 +13,7 @@ import {
   FiFilter
 } from 'react-icons/fi'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
+import SearchableSelect from '../components/SearchableSelect.jsx'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const statusOptions = [
@@ -243,10 +244,25 @@ export default function TasksPage() {
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
+            <div className="min-w-[260px]">
+              <SearchableSelect
+                options={assignableUsers.map((u) => ({
+                  value: u.id,
+                  label: `${u.name} (${u.emp_code})`
+                }))}
+                value={formData.assignee_id}
+                onChange={(v) => setFormData({ ...formData, assignee_id: v })}
+                placeholder="Assign to..."
+                emptyText="No matching employees"
+              />
+            </div>
+            {/* Keep native select hidden for form compatibility/readability in existing layout */}
             <select
               value={formData.assignee_id}
               onChange={(e) => setFormData({ ...formData, assignee_id: e.target.value })}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+              className="hidden"
+              aria-hidden="true"
+              tabIndex={-1}
             >
               <option value="">Assign to...</option>
               {assignableUsers.map((u) => (

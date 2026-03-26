@@ -25,10 +25,10 @@ import {
   FiList,
   FiMessageCircle,
   FiAlertTriangle,
-  FiDollarSign,
   FiGlobe,
   FiX
 } from 'react-icons/fi'
+import { FaRupeeSign } from 'react-icons/fa'
 
 const ALL_WIDGET_IDS = [
   'kpi_cards', 'overdue_tasks', 'by_category', 'daily_timeline', 'branch_performance',
@@ -494,7 +494,7 @@ export default function DashboardPage() {
             <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--success-muted)]">
-                  <FiDollarSign className="h-5 w-5 text-[var(--success)]" />
+                  <FaRupeeSign className="h-5 w-5 text-[var(--success)]" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-small font-medium text-[var(--text-muted)]">Average ticket</p>

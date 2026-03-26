@@ -56,7 +56,7 @@ export default function TransactionsPage() {
       to: `${y}-12-31`,
       category: params.get('category') || '',
     status: params.get('status') || '',
-    mode: '',
+    txn_type: '',
     emp_code: '',
     branch_code: params.get('branch') || '',
     search: '',
@@ -108,6 +108,30 @@ export default function TransactionsPage() {
     const [year, month, day] = value.split('-').map(Number)
     if (!year || !month || !day) return null
     return new Date(year, month - 1, day)
+  }
+  const getQuickRange = (value) => {
+    const today = new Date()
+    const to = formatDateForInput(today)
+    let from = to
+
+    if (value === 'week') {
+      const d = new Date(today)
+      const day = d.getDay() // 0 = Sunday, 1 = Monday, ...
+      const diffToMonday = day === 0 ? 6 : day - 1
+      d.setDate(d.getDate() - diffToMonday)
+      from = formatDateForInput(d)
+    } else if (value === 'month') {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1)
+      from = formatDateForInput(d)
+    } else if (value === 'quarter') {
+      const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3
+      const d = new Date(today.getFullYear(), quarterStartMonth, 1)
+      from = formatDateForInput(d)
+    } else if (value === 'year') {
+      from = `${today.getFullYear()}-01-01`
+    }
+
+    return { from, to }
   }
 
   const toggleRow = (receiptId) => {
@@ -181,7 +205,7 @@ export default function TransactionsPage() {
     
     setLoadingSummary(true)
     try {
-      const txnType = filters.category === 'MF' ? mapModeDisplayToTxnType(filters.mode) : ''
+      const txnType = filters.category === 'MF' ? filters.txn_type : ''
       const query = {
         from: filters.from,
         to: filters.to,
@@ -214,7 +238,7 @@ export default function TransactionsPage() {
     setError('')
     
     try {
-      const txnType = filters.category === 'MF' ? mapModeDisplayToTxnType(filters.mode) : ''
+      const txnType = filters.category === 'MF' ? filters.txn_type : ''
       // Create a clean query object with all filters
       const query = {
         from: filters.from,
@@ -371,7 +395,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     // Reset to page 1 when any filter changes
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max])
+  }, [filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max])
 
   // Clear URL search params once after reading (dashboard click-filter) so address bar stays clean
   useEffect(() => {
@@ -383,7 +407,7 @@ export default function TransactionsPage() {
     loadReceipts()
     loadSummary()
     loadDrafts()
-  }, [token, filters.from, filters.to, filters.category, filters.status, filters.mode, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
+  }, [token, filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
 
   // Check for success/error messages from receipt creation
   useEffect(() => {
@@ -569,6 +593,12 @@ export default function TransactionsPage() {
       investment_amount: receipt.investment_amount || receipt.fd_deposit_amount || '',
       scheme_name: receipt.scheme_name || receipt.fd_scheme_name || '',
       folio_policy_no: receipt.folio_policy_no || '',
+      insurance_date_of_issue: receipt.insurance_date_of_issue || '',
+      insurance_renewal_date: receipt.insurance_renewal_date || receipt.renewal_due_date || '',
+      insurance_policy_period: receipt.insurance_policy_period || receipt.insurance_policy_term_years || '',
+      fd_maturity_date: receipt.fd_maturity_date || '',
+      bond_issue_date: receipt.bond_issue_date || '',
+      bond_maturity_date: receipt.bond_maturity_date || receipt.renewal_due_date || '',
       txn_type: receipt.product_category === 'MF'
         ? (normalizeMfTxnTypeForEdit(receipt.txn_type) || normalizeMfTxnTypeForEdit(mapModeDisplayToTxnType(receipt.mode)) || '')
         : (receipt.txn_type || ''),
@@ -821,11 +851,12 @@ export default function TransactionsPage() {
   const handleDownloadHistory = async (format = 'csv') => {
     if (!token) return
     try {
-      const txnType = filters.category === 'MF' ? mapModeDisplayToTxnType(filters.mode) : ''
+      const txnType = filters.category === 'MF' ? filters.txn_type : ''
       const query = {
         from: filters.from,
         to: filters.to,
-        branch_code: isAdmin ? (filters.branch_code || user?.branch_code || undefined) : (user?.branch_code || undefined),
+        // Admin exports should include all branches unless a branch is explicitly selected.
+        branch_code: isAdmin ? (filters.branch_code || undefined) : (user?.branch_code || undefined),
         emp_code: isAdmin ? (filters.emp_code || undefined) : undefined,
         status: filters.status || undefined,
         category: filters.category || undefined,
@@ -871,17 +902,20 @@ export default function TransactionsPage() {
           setTimeout(() => window.URL.revokeObjectURL(url), 1000)
         }
       } else if (format === 'pdf') {
-        // PDF summary report - create from current data
-        const pdfContent = generatePDFReport(receipts, summary, filters)
-        const blob = new Blob([pdfContent], { type: 'application/pdf' })
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `transaction_summary_${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+        // Fetch full filtered dataset for report (not just current paginated page)
+        const qs = new URLSearchParams({
+          ...query,
+          format: 'json'
+        }).toString()
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/api/export/transactions?${qs}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+        if (!res.ok) throw new Error('Failed to prepare PDF report')
+        const payload = await res.json()
+        const reportRows = Array.isArray(payload?.items) ? payload.items : []
+        generatePDFReport(reportRows, summary, filters)
       }
     } catch (err) {
       toast.error(err.message || 'Failed to export transaction history')
@@ -889,9 +923,18 @@ export default function TransactionsPage() {
   }
 
   const generatePDFReport = (receipts, summary, filters) => {
-    // Simple PDF generation using browser print API
-    // For a proper PDF, we'd use a library like jsPDF, but for now we'll create a printable HTML report
+    const esc = (v) => String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+
     const reportWindow = window.open('', '_blank')
+    if (!reportWindow) {
+      toast.error('Popup blocked. Please allow popups to export PDF.')
+      return
+    }
     const reportHTML = `
       <!DOCTYPE html>
       <html>
@@ -903,15 +946,16 @@ export default function TransactionsPage() {
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
             th { background-color: #FEF2F2; color: #DC2626; }
-            .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
+            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0; }
             .summary-card { background: #FEF2F2; padding: 15px; border-radius: 8px; }
             .summary-card h3 { margin: 0 0 10px 0; color: #DC2626; }
             .summary-card p { margin: 5px 0; font-size: 18px; font-weight: bold; }
+            .muted { color: #666; font-size: 12px; margin-top: 4px; }
           </style>
         </head>
         <body>
           <h1>Transaction Summary Report</h1>
-          <p><strong>Date Range:</strong> ${filters.from} to ${filters.to}</p>
+          <p><strong>Date Range:</strong> ${esc(filters.from)} to ${esc(filters.to)}</p>
           ${summary ? `
             <div class="summary">
               <div class="summary-card">
@@ -926,6 +970,10 @@ export default function TransactionsPage() {
                 <h3>Average Transaction</h3>
                 <p>${formatCurrency(summary.avg_investment || 0)}</p>
               </div>
+              <div class="summary-card">
+                <h3>Rows In Report</h3>
+                <p>${receipts.length || 0}</p>
+              </div>
             </div>
           ` : ''}
           <table>
@@ -933,26 +981,47 @@ export default function TransactionsPage() {
               <tr>
                 <th>Receipt No</th>
                 <th>Date</th>
+                <th>Branch</th>
+                <th>Employee</th>
                 <th>Investor</th>
+                <th>PAN</th>
                 <th>Category</th>
+                <th>Scheme / Product</th>
+                <th>Folio / Policy</th>
+                <th>Txn Type</th>
+                <th>Mode</th>
                 <th>Amount</th>
+                <th>CC</th>
+                <th>SI</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              ${receipts.slice(0, 100).map(r => `
+              ${receipts.map(r => `
                 <tr>
-                  <td>${r.receipt_no || r.receiptNo || 'N/A'}</td>
-                  <td>${formatDate(r.date)}</td>
-                  <td>${r.investor_name || r.investorName || 'N/A'}</td>
-                  <td>${getCategoryDisplayName(r.product_category)}</td>
-                  <td>${formatCurrency(r.investment_amount || r.fd_deposit_amount || 0)}</td>
-                  <td>${r.status || r.transaction_status || 'Pending'}</td>
+                  <td>${esc(r.receipt_no || r.receiptNo || r.receipt_id || 'N/A')}</td>
+                  <td>${esc(r.date ? formatDate(r.date) : 'N/A')}</td>
+                  <td>${esc(r.branch || '—')}</td>
+                  <td>${esc(r.emp_code || '—')}</td>
+                  <td>${esc(r.investor_name || r.investorName || 'N/A')}</td>
+                  <td>${esc(r.pan || '—')}</td>
+                  <td>${esc(getCategoryDisplayName(r.product_category))}</td>
+                  <td>${esc(r.scheme_name || '—')}</td>
+                  <td>${esc(r.folio_policy_no || '—')}</td>
+                  <td>${esc(r.transaction_type || '—')}</td>
+                  <td>${esc(r.mode || '—')}</td>
+                  <td>${esc(formatCurrency(r.investment_amount || r.fd_deposit_amount || 0))}</td>
+                  <td>${esc(formatCurrency(r.cc || 0))}</td>
+                  <td>${esc(r.si == null ? '—' : formatCurrency(r.si || 0))}</td>
+                  <td>${esc(r.status || r.transaction_status || 'Pending')}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
-          <p style="margin-top: 20px; color: #666; font-size: 12px;">
+          <p class="muted">
+            Includes all transactions matching current filters.
+          </p>
+          <p style="margin-top: 8px; color: #666; font-size: 12px;">
             Generated on ${new Date().toLocaleString('en-IN')}
           </p>
         </body>
@@ -963,7 +1032,6 @@ export default function TransactionsPage() {
     setTimeout(() => {
       reportWindow.print()
     }, 250)
-    return '' // Return empty string as we're using print dialog
   }
 
   const getRowBackgroundColor = (receipt) => {
@@ -1199,7 +1267,7 @@ export default function TransactionsPage() {
             {filters.category && (
               <Chip
                 label={`Category: ${getCategoryDisplayName(filters.category)}`}
-                onClose={() => setFilters(prev => ({ ...prev, category: '', mode: '' }))}
+                onClose={() => setFilters(prev => ({ ...prev, category: '', txn_type: '' }))}
                 selected
               />
             )}
@@ -1261,25 +1329,19 @@ export default function TransactionsPage() {
               const toDate = parseDateInput(filters.to)
               const todayStr = formatDateForInput(today)
               if (filters.from === todayStr && filters.to === todayStr) return 'today'
-              const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7)
-              if (fromDate?.toDateString() === weekAgo.toDateString() && toDate?.toDateString() === today.toDateString()) return 'week'
-              const monthAgo = new Date(today); monthAgo.setMonth(today.getMonth() - 1)
-              if (fromDate?.toDateString() === monthAgo.toDateString() && toDate?.toDateString() === today.toDateString()) return 'month'
-              const quarterAgo = new Date(today); quarterAgo.setMonth(today.getMonth() - 3)
-              if (fromDate?.toDateString() === quarterAgo.toDateString() && toDate?.toDateString() === today.toDateString()) return 'quarter'
+              const weekRange = getQuickRange('week')
+              const monthRange = getQuickRange('month')
+              const quarterRange = getQuickRange('quarter')
+              if (filters.from === weekRange.from && filters.to === weekRange.to) return 'week'
+              if (filters.from === monthRange.from && filters.to === monthRange.to) return 'month'
+              if (filters.from === quarterRange.from && filters.to === quarterRange.to) return 'quarter'
               const yearStart = `${today.getFullYear()}-01-01`
               if (filters.from === yearStart && filters.to === todayStr) return 'year'
               return 'today'
             })()}
             onChange={(value) => {
-              const today = new Date()
-              const toStr = formatDateForInput(today)
-              let from = toStr
-              if (value === 'week') { const d = new Date(today); d.setDate(today.getDate() - 7); from = formatDateForInput(d) }
-              else if (value === 'month') { const d = new Date(today); d.setMonth(today.getMonth() - 1); from = formatDateForInput(d) }
-              else if (value === 'quarter') { const d = new Date(today); d.setMonth(today.getMonth() - 3); from = formatDateForInput(d) }
-              else if (value === 'year') from = `${today.getFullYear()}-01-01`
-              setFilters(prev => ({ ...prev, from, to: toStr }))
+              const range = getQuickRange(value)
+              setFilters(prev => ({ ...prev, from: range.from, to: range.to }))
             }}
           />
         </div>
@@ -1330,7 +1392,7 @@ export default function TransactionsPage() {
             <label className="block text-label text-[var(--text-secondary)] mb-2">Category</label>
             <select
               value={filters.category}
-              onChange={e => setFilters(prev => ({ ...prev, category: e.target.value, mode: e.target.value !== 'MF' ? '' : prev.mode }))}
+              onChange={e => setFilters(prev => ({ ...prev, category: e.target.value, txn_type: e.target.value !== 'MF' ? '' : prev.txn_type }))}
               className="w-full p-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
             >
               <option value="">All Categories</option>
@@ -1342,17 +1404,17 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* Mode Filter - Only show when MF category is selected */}
+        {/* Transaction Type Filter - Only show when MF category is selected */}
         {filters.category === 'MF' && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Mode</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-2">Transaction Type</label>
             <select
-              value={filters.mode}
-              onChange={e => setFilters(prev => ({ ...prev, mode: e.target.value }))}
+              value={filters.txn_type}
+              onChange={e => setFilters(prev => ({ ...prev, txn_type: e.target.value }))}
               className="w-full sm:w-auto sm:min-w-[200px] p-3 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
             >
-              <option value="">All Modes</option>
-              <option value="Lump Sum">Lump Sum</option>
+              <option value="">All Transaction Types</option>
+              <option value="Lumpsum">Lump Sum</option>
               <option value="SIP">SIP</option>
               <option value="SWP">SWP</option>
               <option value="STP">STP</option>
@@ -1565,7 +1627,16 @@ export default function TransactionsPage() {
                       <div className="pt-2 border-t border-gray-200 dark:border-dark-700">
                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Documents ({receipt.media_count})</p>
                         <button
-                          onClick={() => handleViewDocument(receipt._key || receipt.id, 'all')}
+                          onClick={() => {
+                            const receiptId = receipt._key || receipt.id
+                            const firstFile = Array.isArray(receipt.media_files) ? receipt.media_files[0] : null
+                            if (receiptId && firstFile?.id) {
+                              handleViewDocument(receiptId, firstFile.id, firstFile.filename || firstFile.original_name)
+                              return
+                            }
+                            // Fallback for legacy rows where list has media_count but media list isn't loaded.
+                            window.open(`/receipts/${receiptId}`, '_blank')
+                          }}
                           className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60"
                         >
                           <FiFile className="w-3.5 h-3.5 mr-1.5" />
@@ -2341,7 +2412,7 @@ export default function TransactionsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Scheme Name
+                      {editData.txn_type === 'STP' ? 'Source Scheme' : 'Scheme Name'}
                     </label>
                     <input
                       type="text"
@@ -2382,6 +2453,80 @@ export default function TransactionsPage() {
                       </>
                     )}
                   </div>
+                  {selectedReceipt?.product_category === 'INS' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Date of Issue
+                        </label>
+                        <DatePickerInput
+                          value={editData.insurance_date_of_issue || ''}
+                          onChange={(v) => setEditData({ ...editData, insurance_date_of_issue: v })}
+                          inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Renewal Date
+                        </label>
+                        <DatePickerInput
+                          value={editData.insurance_renewal_date || ''}
+                          onChange={(v) => setEditData({ ...editData, insurance_renewal_date: v })}
+                          inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Policy Period (Years)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={editData.insurance_policy_period || ''}
+                          onChange={(e) => setEditData({ ...editData, insurance_policy_period: e.target.value })}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {selectedReceipt?.product_category === 'FD' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        FD Maturity Date
+                      </label>
+                      <DatePickerInput
+                        value={editData.fd_maturity_date || ''}
+                        onChange={(v) => setEditData({ ...editData, fd_maturity_date: v })}
+                        inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      />
+                    </div>
+                  )}
+                  {selectedReceipt?.product_category === 'BOND' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Bond Issue Date
+                        </label>
+                        <DatePickerInput
+                          value={editData.bond_issue_date || ''}
+                          onChange={(v) => setEditData({ ...editData, bond_issue_date: v })}
+                          inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Bond Maturity Date
+                        </label>
+                        <DatePickerInput
+                          value={editData.bond_maturity_date || ''}
+                          onChange={(v) => setEditData({ ...editData, bond_maturity_date: v })}
+                          inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                        />
+                      </div>
+                    </>
+                  )}
                   {(editData.txn_type === 'Switch Over' || editData.switch_from_scheme_name || editData.switch_to_scheme_name) && (
                     <>
                       <div>
@@ -2410,17 +2555,6 @@ export default function TransactionsPage() {
                   )}
                   {(editData.txn_type === 'STP' || editData.stp_target_scheme_name) && (
                     <>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                          STP from (scheme)
-                        </label>
-                        <input
-                          type="text"
-                          value={editData.scheme_name || ''}
-                          onChange={(e) => setEditData({ ...editData, scheme_name: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-                        />
-                      </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                           STP to (scheme)

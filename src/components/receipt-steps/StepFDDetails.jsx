@@ -21,6 +21,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
   const [lockedInterestRatePa, setLockedInterestRatePa] = useState(null)
   const [effectiveYieldPa, setEffectiveYieldPa] = useState(null)
   const [maturityDate, setMaturityDate] = useState(null)
+  const [maturityAmount, setMaturityAmount] = useState(null)
   
   const [rateCalculation, setRateCalculation] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -144,6 +145,37 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
     }
   }, [bookingDate, tenureMonths])
 
+  useEffect(() => {
+    const principal = parseFloat(principalAmount)
+    const months = parseInt(tenureMonths, 10)
+    if (!Number.isFinite(principal) || principal <= 0 || !Number.isFinite(months) || months <= 0) {
+      setMaturityAmount(null)
+      return
+    }
+    const years = months / 12
+    // Cumulative: use effective annualized yield if available; fallback to total rate.
+    if (fullScheme?.is_cumulative) {
+      const annualYield = Number.isFinite(Number(effectiveYieldPa))
+        ? Number(effectiveYieldPa)
+        : Number(lockedInterestRatePa)
+      if (!Number.isFinite(annualYield)) {
+        setMaturityAmount(null)
+        return
+      }
+      const amount = principal * Math.pow(1 + (annualYield / 100), years)
+      setMaturityAmount(Math.round(amount * 100) / 100)
+      return
+    }
+    // Non-cumulative: simple accrual estimate for stored maturity amount.
+    const annualRate = Number(lockedInterestRatePa)
+    if (!Number.isFinite(annualRate)) {
+      setMaturityAmount(null)
+      return
+    }
+    const amount = principal + (principal * (annualRate / 100) * years)
+    setMaturityAmount(Math.round(amount * 100) / 100)
+  }, [principalAmount, tenureMonths, effectiveYieldPa, lockedInterestRatePa, fullScheme?.is_cumulative])
+
   const calculateRate = async () => {
     const schemeToUse = fullScheme || scheme
     if (!tenureMonths || !payoutFrequency || !token || !schemeToUse?.scheme_id) {
@@ -209,6 +241,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       fd_booking_date: bookingDate,
       fd_locked_interest_rate_pa: lockedInterestRatePa,
       fd_effective_yield_pa: effectiveYieldPa,
+      fd_maturity_amount: maturityAmount,
       fd_maturity_date: maturityDate,
       fd_base_rate_pa: rateCalculation?.base_rate_pa,
       fd_senior_citizen_bonus: rateCalculation?.bonuses?.senior_citizen,
@@ -592,7 +625,32 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           </div>
         </div>
 
-        {/* Expected returns / maturity amount intentionally hidden for FD */}
+        {/* Interest / maturity summary */}
+        {(lockedInterestRatePa != null || maturityAmount != null || maturityDate) && (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Interest & Maturity</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">Interest rate (p.a.)</span>
+                <div className="font-semibold text-gray-900 dark:text-white">
+                  {lockedInterestRatePa != null ? `${Number(lockedInterestRatePa).toFixed(2)}%` : '—'}
+                </div>
+              </div>
+              {effectiveYieldPa != null && (
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Effective yield (p.a.)</span>
+                  <div className="font-semibold text-gray-900 dark:text-white">
+                    {`${Number(effectiveYieldPa).toFixed(2)}%`}
+                  </div>
+                </div>
+              )}
+              <div>
+                <span className="text-gray-600 dark:text-gray-400">Maturity date</span>
+                <div className="font-semibold text-gray-900 dark:text-white">{maturityDate || '—'}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* TDS */}
         {scheme.tds_applicable && (

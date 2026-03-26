@@ -84,20 +84,24 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
 
   const simpleForm = isSimpleInsuranceForm(product)
 
-  // Renewal date on file = (Date of issue + policy period years) - 1 day
+  // Renewal date on file = (Date of issue + coverage years) - 1 day
+  // coverage years come from:
+  // - General/Health: Policy Period (years)
+  // - Life/other: Term (years)
   useEffect(() => {
     if (!dateOfIssue) {
       setRenewalDate('')
       return
     }
 
-    if (simpleForm && policyPeriod) {
-      setRenewalDate(computeRenewalDate(dateOfIssue, policyPeriod))
+    const coverageYears = simpleForm ? policyPeriod : term
+    if (coverageYears) {
+      setRenewalDate(computeRenewalDate(dateOfIssue, coverageYears))
     } else {
       // Fallback: if policy period isn't available, keep the older simpler rule.
       setRenewalDate(dayBeforeDateOfIssue(dateOfIssue))
     }
-  }, [dateOfIssue, policyPeriod, simpleForm])
+  }, [dateOfIssue, policyPeriod, term, simpleForm])
 
   const handleNext = () => {
     setValidationError('')
