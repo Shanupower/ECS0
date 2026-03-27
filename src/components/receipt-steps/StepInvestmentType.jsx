@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
-export default function StepInvestmentType({ onBack, onNext, productType, hasExistingFolio }) {
+export default function StepInvestmentType({ onBack, onNext, productType, hasExistingFolio, amcCategory = 'MF' }) {
   const [investmentType, setInvestmentType] = useState('')
 
   const allInvestmentTypes = [
@@ -41,10 +41,25 @@ export default function StepInvestmentType({ onBack, onNext, productType, hasExi
     }
   ]
 
-  // Filter investment types based on folio status
-  const investmentTypes = hasExistingFolio === false 
-    ? allInvestmentTypes.filter(t => t.value === 'Lumpsum' || t.value === 'SIP')
-    : allInvestmentTypes
+  const allowedByCategory = useMemo(() => {
+    if (amcCategory === 'SIF') {
+      // SIF: SIP only when investor has an existing folio
+      return hasExistingFolio === false ? ['Lumpsum'] : ['Lumpsum', 'SIP']
+    }
+    if (amcCategory === 'PMS' || amcCategory === 'AIF' || amcCategory === 'GIFT_CITY_FUNDS') return ['Lumpsum']
+    return null // MF default behavior unchanged
+  }, [amcCategory, hasExistingFolio])
+
+  // Category restrictions first, folio rules second (only when unrestricted category)
+  const investmentTypes = useMemo(() => {
+    let list = allInvestmentTypes
+    if (allowedByCategory) {
+      list = list.filter(t => allowedByCategory.includes(t.value))
+    } else if (hasExistingFolio === false) {
+      list = list.filter(t => t.value === 'Lumpsum' || t.value === 'SIP')
+    }
+    return list
+  }, [allInvestmentTypes, allowedByCategory, hasExistingFolio])
 
   return (
     <div className="receipt-step-card py-2">

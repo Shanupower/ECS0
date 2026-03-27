@@ -4,6 +4,12 @@ import { Button } from '../ui'
 import { formatMinInvestment } from '../../data/mf_amc_categories'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
+const getAllowedMfTxnTypesByCategory = (amcCategory) => {
+  if (amcCategory === 'SIF') return ['Lumpsum', 'SIP']
+  if (amcCategory === 'PMS' || amcCategory === 'AIF' || amcCategory === 'GIFT_CITY_FUNDS') return ['Lumpsum']
+  return ['Lumpsum', 'SIP', 'SWP', 'STP', 'Switch Over']
+}
+
 // Support both single (legacy) and array of documents
 function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '', isSaving, saveError, saveSuccess, supportingDocument, setSupportingDocument, supportingDocuments, setSupportingDocuments }) {
   const docs = supportingDocuments != null ? supportingDocuments : (supportingDocument ? [supportingDocument] : [])
@@ -22,6 +28,10 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
   const [othersTransactionDate, setOthersTransactionDate] = useState('')
   const [validationError, setValidationError] = useState('')
   const [lastDocMeta, setLastDocMeta] = useState(null)
+  const mfCat = data?.mf_amc_category || 'MF'
+  const allowedMfTxnTypes = getAllowedMfTxnTypesByCategory(mfCat)
+  const mfTxnTypeRaw = data?.txn_type || data?.transaction_type || ''
+  const mfTxnTypeSafe = allowedMfTxnTypes.includes(mfTxnTypeRaw) ? mfTxnTypeRaw : allowedMfTxnTypes[0]
 
   useEffect(() => {
     try {
@@ -149,6 +159,10 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
       // Validate Mutual Fund required fields from data
       if (!data.scheme_name) {
         setValidationError('Scheme name is required for Mutual Funds')
+        return
+      }
+      if (!allowedMfTxnTypes.includes(data.txn_type || data.transaction_type || '')) {
+        setValidationError(`Only ${allowedMfTxnTypes.join(', ')} is allowed for ${mfCat}`)
         return
       }
       // Data is normalized, so use investment_amount
@@ -543,7 +557,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                 <div className="text-body font-semibold text-[var(--text-primary)]">{getProductTypeLabel(data.product_category)}</div>
               </div>
               
-              {data.transaction_type && (
+              {data.transaction_type && data.product_category !== 'MF' && (
                 <div className="bg-[var(--card-bg)] rounded-card p-4">
                   <div className="text-helper text-[var(--text-muted)]">Transaction Type</div>
                   <div className="text-body font-semibold text-[var(--text-primary)]">{data.transaction_type}</div>
@@ -552,7 +566,9 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               
               <div className="bg-[var(--card-bg)] rounded-card p-4">
                 <div className="text-helper text-[var(--text-muted)]">Transaction</div>
-                <div className="text-body font-semibold text-[var(--text-primary)]">{data.txn_type || 'Fresh'}</div>
+                <div className="text-body font-semibold text-[var(--text-primary)]">
+                  {data.product_category === 'MF' ? (mfTxnTypeSafe || 'Fresh') : (data.txn_type || data.transaction_type || 'Fresh')}
+                </div>
               </div>
               
               {data.investment_amount && (
@@ -945,11 +961,11 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
             )}
             
             {/* Transaction Details (MF only - SIP, SWP, STP, Switch) */}
-            {data.product_category === 'MF' && data.transaction_type && (
+            {data.product_category === 'MF' && ['SIP', 'SWP', 'STP', 'Switch Over'].includes(mfTxnTypeSafe) && (
               <div className="mt-4 p-4 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-300 dark:border-green-800">
                 <h4 className="text-body font-semibold text-[var(--text-primary)] mb-3 flex items-center">
                   <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
-                  Transaction Details: {data.transaction_type}
+                  Transaction Details: {mfTxnTypeSafe}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {data.sip_frequency && (

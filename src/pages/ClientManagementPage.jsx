@@ -265,7 +265,34 @@ export default function ClientManagementPage() {
       }
 
       const data = await api.listCustomers(token, query)
-      setCustomers(data.items || [])
+      const normalizedSearch = search.trim().toLowerCase()
+      const items = (data.items || []).map((customer) => {
+        // Fallback in UI so matched minor names still show even if backend response
+        // does not yet include matched_minor_names (e.g. stale server process).
+        const fallbackMatchedMinorNames = normalizedSearch
+          ? (Array.isArray(customer?.minors) ? customer.minors : [])
+              .filter((minor) => {
+                const name = String(minor?.name || '').toLowerCase()
+                const investorId = String(minor?.investor_id || '').toLowerCase()
+                const pan = String(minor?.pan || '').toLowerCase()
+                return (
+                  name.includes(normalizedSearch) ||
+                  investorId.includes(normalizedSearch) ||
+                  pan.includes(normalizedSearch)
+                )
+              })
+              .map((minor) => minor?.name)
+              .filter(Boolean)
+          : []
+
+        return {
+          ...customer,
+          matched_minor_names: Array.isArray(customer?.matched_minor_names)
+            ? customer.matched_minor_names
+            : fallbackMatchedMinorNames
+        }
+      })
+      setCustomers(items)
       setTotalPages(Math.ceil(data.total / pageSize))
       setTotalCustomers(data.total)
       setCurrentPage(page)
@@ -858,6 +885,11 @@ export default function ClientManagementPage() {
                         <div className="mt-1 text-xs text-[var(--text-muted)]">
                           ID: {customer.investor_id}
                         </div>
+                        {customer.matched_minor_names?.length > 0 && (
+                          <div className="mt-1 text-xs text-[var(--dashboard-primary)]">
+                            Minor match: {customer.matched_minor_names.join(', ')}
+                          </div>
+                        )}
                         <div className="mt-2 space-y-1">
                           <div className="text-xs text-[var(--text-muted)]">
                             <span className="font-medium">Mobile:</span> {customer.mobile || 'N/A'}
@@ -934,6 +966,11 @@ export default function ClientManagementPage() {
                           <div className="text-xs text-[var(--text-muted)]">
                             ID: {customer.investor_id}
                           </div>
+                          {customer.matched_minor_names?.length > 0 && (
+                            <div className="text-xs text-[var(--dashboard-primary)]">
+                              Minor match: {customer.matched_minor_names.join(', ')}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 lg:px-6 py-3 lg:py-4">

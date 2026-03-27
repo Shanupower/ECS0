@@ -3,7 +3,7 @@ import { api } from '../../api'
 import SearchableSelect from '../SearchableSelect.jsx'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
-export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, token }) {
+export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, selectedAmcCategory, minInvestment, token }) {
   const [amount, setAmount] = useState('')
   const [frequency, setFrequency] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -12,12 +12,25 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
   const [schemes, setSchemes] = useState([])
   const [targetScheme, setTargetScheme] = useState('')
   const [loading, setLoading] = useState(false)
+  const [validationError, setValidationError] = useState('')
 
   const blockWheelChangeNumber = (e) => {
     e.currentTarget.blur()
   }
   const [stpOriginalAmount, setStpOriginalAmount] = useState('')
   const todayYyyyMmDd = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const amountNumber = useMemo(() => {
+    const n = Number(amount)
+    return Number.isFinite(n) ? n : NaN
+  }, [amount])
+  const minInvestmentValue = useMemo(() => {
+    const n = Number(minInvestment)
+    return Number.isFinite(n) ? n : null
+  }, [minInvestment])
+  const skipMinValidation = useMemo(
+    () => (selectedAmcCategory?.id || selectedAmc?.amc_category || 'MF') === 'SIF' && investmentType === 'SIP',
+    [selectedAmcCategory, selectedAmc, investmentType]
+  )
 
   const getStartDateMax = () => {
     // Requirement: allow future Start Dates ONLY for MF SIP.
@@ -46,6 +59,9 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
   }
 
   const handleNext = () => {
+    setValidationError('')
+    if (!canProceed()) return
+
     const transactionData = { 
       investment_amount: amount,
       investmentAmount: amount // Also add camelCase for validation compatibility
@@ -85,12 +101,31 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
 
   const canProceed = () => {
     if (!amount) return false
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) return false
+    if (!skipMinValidation && minInvestmentValue != null && amountNumber < minInvestmentValue) return false
     if (investmentType === 'SIP' && (!amount || !frequency || !startDate || (!isPerpetual && !endDate))) return false
     if (investmentType === 'SWP' && (!frequency || !startDate)) return false
     if (investmentType === 'STP' && (!targetScheme || !frequency || !startDate || !stpOriginalAmount)) return false
     if (investmentType === 'Switch Over' && (!targetScheme)) return false
     return true
   }
+
+  useEffect(() => {
+    if (!amount) {
+      setValidationError('')
+      return
+    }
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+      setValidationError('Amount must be a positive number')
+      return
+    }
+    if (!skipMinValidation && minInvestmentValue != null && amountNumber < minInvestmentValue) {
+      const cat = selectedAmcCategory?.id || selectedAmc?.amc_category || 'MF'
+      setValidationError(`Amount must be at least ₹${minInvestmentValue.toLocaleString('en-IN')} for ${cat}`)
+      return
+    }
+    setValidationError('')
+  }, [amount, amountNumber, minInvestmentValue, skipMinValidation, selectedAmcCategory, selectedAmc])
 
   return (
     <div>
@@ -419,6 +454,11 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       )}
 
       <div className="actions" style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {validationError && (
+          <div className="w-full mb-2 text-sm text-red-600 dark:text-red-400 text-center">
+            {validationError}
+          </div>
+        )}
         <button onClick={onBack} className="appearance-none border border-gray-200 dark:border-gray-700 rounded-full px-4 py-2.5 sm:px-5 sm:py-3 bg-white/85 dark:bg-gray-800/85 font-bold text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm sm:text-base">
           Back
         </button>

@@ -264,6 +264,8 @@ export const api={
   health:()=>req('/health'),
   
   // MF Schemes endpoints
+  getCategoryMinimums:()=>req('/api/schemes/category-minimums'),
+  updateCategoryMinimums:(t,minimums)=>req('/api/schemes/category-minimums',{method:'PUT',token:t,json:{minimums}}),
   listAMCs:(t)=>req('/api/schemes/amcs',{token:t}),
   getSchemesByAMC:(t,amc_code,amc_category)=>{
     const qs = amc_category ? `?amc_category=${encodeURIComponent(amc_category)}` : ''

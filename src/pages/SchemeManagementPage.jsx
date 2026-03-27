@@ -14,7 +14,7 @@ import {
   FiUpload
 } from 'react-icons/fi'
 import bondCategories from '../data/bond_categories.json'
-import { MF_AMC_CATEGORIES, formatMinInvestment } from '../data/mf_amc_categories'
+import { MF_AMC_CATEGORIES, formatMinInvestment, mergeCategoryMinimums } from '../data/mf_amc_categories'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 /** Life insurance subcategory options for scheme management */
@@ -32,6 +32,7 @@ const LIFE_SUBCATEGORIES = [
 ]
 
 export default function SchemeManagementPage() {
+  const SIMPLE_SCHEME_CATEGORIES = ['SIF', 'PMS', 'AIF', 'GIFT_CITY_FUNDS']
   const { token, user } = useAuth()
   const [activeTab, setActiveTab] = useState('MF')
   const [amcs, setAmcs] = useState([])
@@ -89,6 +90,31 @@ export default function SchemeManagementPage() {
     selectedInsuranceIssuer,
     selectedInsuranceProduct
   ])
+
+  const loadCategoryMinimumsState = async () => {
+    try {
+      const data = await api.getCategoryMinimums()
+      const m = data?.minimums && typeof data.minimums === 'object' ? data.minimums : {}
+      setCategoryMinimums(m)
+      setCategoryMinsDirty(false)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleSaveGlobalCategoryMins = async () => {
+    if (!token || !categoryMinimums) return
+    setSavingCategoryMins(true)
+    try {
+      await api.updateCategoryMinimums(token, categoryMinimums)
+      await loadCategoryMinimumsState()
+      alert('Global category minimums saved.')
+    } catch (e) {
+      alert('Failed to save: ' + (e.message || String(e)))
+    } finally {
+      setSavingCategoryMins(false)
+    }
+  }
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importFile, setImportFile] = useState(null)
@@ -117,10 +143,19 @@ export default function SchemeManagementPage() {
   const [amcFormData, setAmcFormData] = useState({
     amc_name: '',
     amc_code: '',
-    categories: ['MF'],
+    amc_category: 'MF',
     min_investment: ''
   })
-  const [selectedAmcCategory, setSelectedAmcCategory] = useState(null)
+  /** Regulatory category filter on AMC master list (MF / SIF / …) */
+  const [amcRegulatoryFilter, setAmcRegulatoryFilter] = useState(null)
+  /** Fund category filter (scheme.category) on schemes table */
+  const [schemeFundCategoryFilter, setSchemeFundCategoryFilter] = useState('all')
+  /** all | nfo_only | no_nfo */
+  const [schemeNfoFilter, setSchemeNfoFilter] = useState('all')
+  const [categoryMinimums, setCategoryMinimums] = useState(null)
+  const [categoryMinsDirty, setCategoryMinsDirty] = useState(false)
+  const [savingCategoryMins, setSavingCategoryMins] = useState(false)
+  const [showCategoryMinimumsPanel, setShowCategoryMinimumsPanel] = useState(false)
   const [schemeFormData, setSchemeFormData] = useState({
     base_name: '',
     scheme_code: '',
@@ -325,6 +360,7 @@ export default function SchemeManagementPage() {
     
     if (activeTab === 'MF') {
       loadAMCs()
+      loadCategoryMinimumsState()
     } else if (activeTab === 'FD') {
       loadFDIssuers()
     } else if (activeTab === 'NCDBond') {
@@ -338,8 +374,9 @@ export default function SchemeManagementPage() {
 
   useEffect(() => {
     if (selectedAmc) {
-      setSelectedAmcCategory(null)
-      loadSchemes(selectedAmc.amc_code, null)
+      setSchemeFundCategoryFilter('all')
+      setSchemeNfoFilter('all')
+      loadSchemes(selectedAmc.amc_code)
     }
   }, [selectedAmc, token])
 
@@ -514,7 +551,7 @@ useEffect(() => {
       if (activeTab === 'MF') {
         result = await api.importSchemesExcel(token, importFile)
         if (result.updated > 0 && selectedAmc) {
-          await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
+          await loadSchemes(selectedAmc.amc_code)
         }
       } else if (activeTab === 'FD') {
         result = await api.importFDSchemesExcel(token, importFile)
@@ -579,14 +616,14 @@ useEffect(() => {
     }
   }
 
-  const loadSchemes = async (amc_code, amc_category = null) => {
+  const loadSchemes = async (amc_code) => {
     if (!token || !amc_code) return
-    
+
     setLoading(true)
     setError('')
-    
+
     try {
-      const result = await api.getSchemesByAMC(token, amc_code, amc_category || undefined)
+      const result = await api.getSchemesByAMC(token, amc_code)
       const list = Array.isArray(result) ? result : (result?.schemes ?? [])
       setSchemes(list)
     } catch (err) {
@@ -604,9 +641,7 @@ useEffect(() => {
       const payload = {
         amc_name: trimmedData.amc_name,
         amc_code: trimmedData.amc_code,
-        categories: Array.isArray(trimmedData.categories) && trimmedData.categories.length > 0
-          ? trimmedData.categories
-          : ['MF'],
+        amc_category: trimmedData.amc_category || 'MF',
         min_investment: trimmedData.min_investment !== '' && trimmedData.min_investment != null ? Number(trimmedData.min_investment) : null
       }
       await api.createAMC(token, payload)
@@ -625,9 +660,7 @@ useEffect(() => {
       const trimmedData = trimFormData(amcFormData)
       const payload = {
         amc_name: trimmedData.amc_name,
-        categories: Array.isArray(trimmedData.categories) && trimmedData.categories.length > 0
-          ? trimmedData.categories
-          : [editingAMC?.amc_category || 'MF'],
+        amc_category: trimmedData.amc_category || editingAMC?.amc_category || 'MF',
         min_investment: trimmedData.min_investment !== '' && trimmedData.min_investment != null ? Number(trimmedData.min_investment) : null
       }
       await api.updateAMC(token, editingAMC.amc_code, payload)
@@ -675,7 +708,7 @@ useEffect(() => {
     
     setLoadingPreview(true)
     try {
-      const schemeCategory = selectedAmcCategory ?? selectedAmc?.categories?.[0] ?? selectedAmc?.amc_category ?? 'MF'
+      const schemeCategory = selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
       const previewData = {
         amc_code: selectedAmc.amc_code,
         amc_name: selectedAmc.amc_name,
@@ -733,7 +766,7 @@ useEffect(() => {
     
     setLoadingPreview(true)
     try {
-      const schemeCategory = selectedAmcCategory ?? selectedAmc?.categories?.[0] ?? selectedAmc?.amc_category ?? 'MF'
+      const schemeCategory = selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
       const commitData = trimFormData({
         amc_code: selectedAmc.amc_code,
         amc_name: selectedAmc.amc_name,
@@ -768,7 +801,7 @@ useEffect(() => {
       
       alert(message)
       
-      await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
+      await loadSchemes(selectedAmc.amc_code)
       setShowSchemeForm(false)
       setShowVariantPreview(false)
       resetSchemeForm()
@@ -781,16 +814,56 @@ useEffect(() => {
   
   const handleCreateScheme = async (e) => {
     e.preventDefault()
-    
-    // Use variant preview flow
-    handlePreviewVariants()
+    const selectedCategory = selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
+    const isSimpleCreate = isSimpleSelectedAmcCategory
+
+    if (!isSimpleCreate) {
+      // MF keeps variant preview flow
+      handlePreviewVariants()
+      return
+    }
+
+    try {
+      if (!selectedAmc) {
+        alert('Please select an AMC first')
+        return
+      }
+      if (!schemeFormData.base_name || !schemeFormData.base_name.trim()) {
+        alert('Please enter a scheme name')
+        return
+      }
+      const chosenOption = ''
+      const payload = trimFormData({
+        scheme_code: '', // backend generates code for simple non-variant categories
+        scheme_name: schemeFormData.base_name,
+        base_name: schemeFormData.base_name,
+        amc_code: selectedAmc.amc_code,
+        amc_name: selectedAmc.amc_name,
+        amc_category: selectedCategory,
+        plan: 'REGULAR',
+        option: chosenOption,
+        type: 'OPEN_ENDED',
+        category: '',
+        sub_category: '',
+        is_nfo: !!schemeFormData.is_nfo,
+        nfo_validity: schemeFormData.is_nfo ? schemeFormData.nfo_validity : null,
+        cc: schemeFormData.cc !== undefined ? schemeFormData.cc : null,
+        si: schemeFormData.si !== undefined ? schemeFormData.si : null
+      })
+      await api.createScheme(token, payload)
+      await loadSchemes(selectedAmc.amc_code)
+      setShowSchemeForm(false)
+      resetSchemeForm()
+    } catch (err) {
+      alert('Failed to create scheme: ' + err.message)
+    }
   }
 
   const handleUpdateScheme = async (e) => {
     e.preventDefault()
     
     try {
-      const schemeCategory = selectedAmcCategory ?? selectedAmc?.categories?.[0] ?? selectedAmc?.amc_category ?? 'MF'
+      const schemeCategory = selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
       const trimmedData = trimFormData({
         ...schemeFormData,
         amc_category: schemeCategory,
@@ -798,7 +871,7 @@ useEffect(() => {
         si: schemeFormData.si !== undefined ? schemeFormData.si : null
       })
       await api.updateScheme(token, editingScheme.scheme_code, trimmedData)
-      await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
+      await loadSchemes(selectedAmc.amc_code)
       setEditingScheme(null)
       resetSchemeForm()
     } catch (err) {
@@ -811,14 +884,14 @@ useEffect(() => {
     
     try {
       await api.deleteScheme(token, scheme_code)
-      await loadSchemes(selectedAmc.amc_code, selectedAmcCategory)
+      await loadSchemes(selectedAmc.amc_code)
     } catch (err) {
       alert('Failed to delete scheme: ' + err.message)
     }
   }
 
   const resetAMCForm = () => {
-    setAmcFormData({ amc_name: '', amc_code: '', categories: ['MF'], min_investment: '' })
+    setAmcFormData({ amc_name: '', amc_code: '', amc_category: 'MF', min_investment: '' })
   }
 
   const resetSchemeForm = () => {
@@ -843,13 +916,14 @@ useEffect(() => {
 
   const openAMCEdit = (amc) => {
     setEditingAMC(amc)
-    const categories = amc.categories && Array.isArray(amc.categories) && amc.categories.length > 0
-      ? amc.categories
-      : [amc.amc_category || 'MF']
+    const ac =
+      (amc.amc_category && MF_AMC_CATEGORIES.some((x) => x.id === amc.amc_category) && amc.amc_category) ||
+      (Array.isArray(amc.categories) && amc.categories.find((c) => MF_AMC_CATEGORIES.some((x) => x.id === c))) ||
+      'MF'
     setAmcFormData({
       amc_name: amc.amc_name,
       amc_code: amc.amc_code,
-      categories,
+      amc_category: ac,
       min_investment: amc.min_investment != null ? amc.min_investment : ''
     })
   }
@@ -1802,10 +1876,20 @@ useEffect(() => {
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
-  // Filter AMCs based on search query
+  // Filter AMCs: regulatory category (toolbar) then search
   const filteredAmcs = useMemo(() => {
-    if (!normalizedSearchQuery) return amcs
-    return amcs.filter((amc) => {
+    let list = amcs
+    if (amcRegulatoryFilter) {
+      list = list.filter((amc) => {
+        const cat =
+          (amc?.amc_category && String(amc.amc_category)) ||
+          (Array.isArray(amc?.categories) && amc.categories.length ? amc.categories[0] : null) ||
+          'MF'
+        return cat === amcRegulatoryFilter
+      })
+    }
+    if (!normalizedSearchQuery) return list
+    return list.filter((amc) => {
       const name = String(amc?.amc_name ?? '').toLowerCase()
       const code = String(amc?.amc_code ?? '').toLowerCase()
       const categories = Array.isArray(amc?.categories) ? String(amc.categories.join(' ')).toLowerCase() : ''
@@ -1817,22 +1901,36 @@ useEffect(() => {
         fallbackCategory.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, amcs])
+  }, [normalizedSearchQuery, amcs, amcRegulatoryFilter])
 
-  // Filter schemes (MF detail view) based on search query
+  const schemeFundCategoryOptions = useMemo(() => {
+    const set = new Set()
+    schemes.forEach((s) => {
+      if (s?.category && String(s.category).trim()) set.add(String(s.category).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [schemes])
+
+  // Filter schemes: fund category + NFO toolbar, then name/code search
   const filteredSchemes = useMemo(() => {
-    if (!normalizedSearchQuery) return schemes
-    return schemes.filter((scheme) => {
+    let list = schemes
+    if (schemeFundCategoryFilter && schemeFundCategoryFilter !== 'all') {
+      list = list.filter((s) => (s.category || '') === schemeFundCategoryFilter)
+    }
+    if (schemeNfoFilter === 'nfo_only') list = list.filter((s) => s.is_nfo === true)
+    if (schemeNfoFilter === 'no_nfo') list = list.filter((s) => !s.is_nfo)
+    if (!normalizedSearchQuery) return list
+    return list.filter((scheme) => {
       const schemeName = String(scheme?.scheme_name ?? '').toLowerCase()
       const schemeCode = String(scheme?.scheme_code ?? '').toLowerCase()
-      const category = String(scheme?.category ?? '').toLowerCase()
+      const disp = String(scheme?.display_name ?? '').toLowerCase()
       return (
         schemeName.includes(normalizedSearchQuery) ||
         schemeCode.includes(normalizedSearchQuery) ||
-        category.includes(normalizedSearchQuery)
+        disp.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, schemes])
+  }, [normalizedSearchQuery, schemes, schemeFundCategoryFilter, schemeNfoFilter])
 
   // Filter FD issuers (FD master list) based on search query
   const filteredFdIssuers = useMemo(() => {
@@ -2262,6 +2360,16 @@ useEffect(() => {
       return combined.includes(normalizedSearchQuery)
     })
   }, [normalizedSearchQuery, miscServicesScheme])
+
+  const isSimpleSelectedAmcCategory = useMemo(() => {
+    const cat = selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
+    return SIMPLE_SCHEME_CATEGORIES.includes(cat)
+  }, [selectedAmc])
+
+  const isSimpleEditingSchemeCategory = useMemo(() => {
+    const cat = editingScheme?.amc_category ?? selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
+    return SIMPLE_SCHEME_CATEGORIES.includes(cat)
+  }, [editingScheme, selectedAmc])
 
   if (!isAdmin) {
     return (
@@ -4550,33 +4658,36 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Category filter (when AMC has multiple categories) */}
-        {(selectedAmc?.categories?.length > 1) && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-[var(--text-secondary)]">Filter by category:</span>
-            <button
-              onClick={() => {
-                setSelectedAmcCategory(null)
-                loadSchemes(selectedAmc.amc_code, null)
-              }}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedAmcCategory === null ? 'bg-[var(--accent)] text-white' : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'}`}
+        {/* Scheme filters (above table) */}
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Fund category</span>
+            <select
+              value={schemeFundCategoryFilter}
+              onChange={(e) => setSchemeFundCategoryFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
             >
-              All
-            </button>
-            {selectedAmc.categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => {
-                  setSelectedAmcCategory(cat)
-                  loadSchemes(selectedAmc.amc_code, cat)
-                }}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedAmcCategory === cat ? 'bg-[var(--accent)] text-white' : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'}`}
-              >
-                {cat}
-              </button>
-            ))}
+              <option value="all">All</option>
+              {schemeFundCategoryOptions.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">NFO</span>
+            <select
+              value={schemeNfoFilter}
+              onChange={(e) => setSchemeNfoFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All schemes</option>
+              <option value="nfo_only">NFO only</option>
+              <option value="no_nfo">Exclude NFO</option>
+            </select>
+          </div>
+        </div>
 
         {/* Search */}
         <div className="mb-6">
@@ -4584,7 +4695,7 @@ useEffect(() => {
             <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
             <input
               type="text"
-              placeholder="Search schemes..."
+              placeholder="Search schemes by name or code…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
@@ -4652,7 +4763,12 @@ useEffect(() => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                       {scheme.amc_category || 'MF'}
                       {(() => {
-                        const minInv = scheme.min_investment != null ? scheme.min_investment : MF_AMC_CATEGORIES.find(c => c.id === (scheme.amc_category || 'MF'))?.minInvestment
+                        const cat = scheme.amc_category || 'MF'
+                        const mergedList = mergeCategoryMinimums(categoryMinimums || {})
+                        const minInv =
+                          scheme.min_investment != null
+                            ? scheme.min_investment
+                            : mergedList.find((x) => x.id === cat)?.minInvestment
                         return minInv != null ? ` (${formatMinInvestment(minInv)})` : ''
                       })()}
                     </td>
@@ -4773,77 +4889,112 @@ useEffect(() => {
                       />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    {!isSimpleEditingSchemeCategory && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Category <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              required
+                              value={schemeFormData.category}
+                              onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            >
+                              <option value="Equity">Equity</option>
+                              <option value="Debt">Debt</option>
+                              <option value="Hybrid">Hybrid</option>
+                              <option value="Commodity">Commodity</option>
+                              <option value="ETF">ETF</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Sub Category
+                            </label>
+                            <input
+                              type="text"
+                              value={schemeFormData.sub_category}
+                              onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Plan
+                            </label>
+                            <input
+                              type="text"
+                              value={schemeFormData.plans[0] || ''}
+                              readOnly
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Option
+                            </label>
+                            <input
+                              type="text"
+                              value={schemeFormData.options[0] || ''}
+                              readOnly
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Type
+                          </label>
+                          <select
+                            value={schemeFormData.type}
+                            onChange={(e) => setSchemeFormData({ ...schemeFormData, type: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value="OPEN_ENDED">Open Ended</option>
+                            <option value="CLOSE_ENDED">Close Ended</option>
+                            <option value="INTERVAL">Interval</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {isSimpleEditingSchemeCategory && (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Category <span className="text-red-500">*</span>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={!!schemeFormData.is_nfo}
+                            onChange={(e) => setSchemeFormData({ ...schemeFormData, is_nfo: e.target.checked, nfo_validity: e.target.checked ? schemeFormData.nfo_validity : '' })}
+                            className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            This is an NFO (New Fund Offering)
+                          </span>
                         </label>
-                        <select
-                          required
-                          value={schemeFormData.category}
-                          onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        >
-                          <option value="Equity">Equity</option>
-                          <option value="Debt">Debt</option>
-                          <option value="Hybrid">Hybrid</option>
-                          <option value="Commodity">Commodity</option>
-                          <option value="ETF">ETF</option>
-                          <option value="Other">Other</option>
-                        </select>
                       </div>
+                    )}
+
+                    {isSimpleEditingSchemeCategory && schemeFormData.is_nfo && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Sub Category
+                          NFO Validity Date <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="text"
-                          value={schemeFormData.sub_category}
-                          onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        <DatePickerInput
+                          required={schemeFormData.is_nfo}
+                          value={schemeFormData.nfo_validity}
+                          onChange={(v) => setSchemeFormData({ ...schemeFormData, nfo_validity: v })}
+                          inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          ariaLabel="NFO validity date"
                         />
                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Plan
-                        </label>
-                        <input
-                          type="text"
-                          value={schemeFormData.plans[0] || ''}
-                          readOnly
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Option
-                        </label>
-                        <input
-                          type="text"
-                          value={schemeFormData.options[0] || ''}
-                          readOnly
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Type
-                      </label>
-                      <select
-                        value={schemeFormData.type}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, type: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="OPEN_ENDED">Open Ended</option>
-                        <option value="CLOSE_ENDED">Close Ended</option>
-                        <option value="INTERVAL">Interval</option>
-                      </select>
-                    </div>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -4916,111 +5067,149 @@ useEffect(() => {
                       </p>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Category <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          required
-                          value={schemeFormData.category}
-                          onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        >
-                          <option value="Equity">Equity</option>
-                          <option value="Debt">Debt</option>
-                          <option value="Hybrid">Hybrid</option>
-                          <option value="Commodity">Commodity</option>
-                          <option value="ETF">ETF</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Sub Category <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={schemeFormData.sub_category}
-                          onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          placeholder="e.g., Flexi Cap, Large Cap"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Type <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        required
-                        value={schemeFormData.type}
-                        onChange={(e) => setSchemeFormData({ ...schemeFormData, type: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      >
-                        <option value="OPEN_ENDED">Open Ended</option>
-                        <option value="CLOSE_ENDED">Close Ended</option>
-                        <option value="INTERVAL">Interval</option>
-                      </select>
-                    </div>
-                    
-                    {/* Plan Multi-Select */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Plan (Multi-Select) <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex flex-wrap gap-3">
-                        {['REGULAR', 'DIRECT'].map(plan => (
-                          <label key={plan} className="flex items-center space-x-2 cursor-pointer">
+                    {!isSimpleSelectedAmcCategory && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Category <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              required
+                              value={schemeFormData.category}
+                              onChange={(e) => setSchemeFormData({ ...schemeFormData, category: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            >
+                              <option value="Equity">Equity</option>
+                              <option value="Debt">Debt</option>
+                              <option value="Hybrid">Hybrid</option>
+                              <option value="Commodity">Commodity</option>
+                              <option value="ETF">ETF</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Sub Category <span className="text-red-500">*</span>
+                            </label>
                             <input
-                              type="checkbox"
-                              checked={schemeFormData.plans.includes(plan)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSchemeFormData({ ...schemeFormData, plans: [...schemeFormData.plans, plan] })
-                                } else {
-                                  setSchemeFormData({ ...schemeFormData, plans: schemeFormData.plans.filter(p => p !== plan) })
-                                }
-                              }}
-                              className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                              type="text"
+                              required
+                              value={schemeFormData.sub_category}
+                              onChange={(e) => setSchemeFormData({ ...schemeFormData, sub_category: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              placeholder="e.g., Flexi Cap, Large Cap"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">
-                              {plan === 'REGULAR' ? 'Regular' : 'Direct'}
-                            </span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Type <span className="text-red-500">*</span>
                           </label>
-                        ))}
-                      </div>
-                    </div>
+                          <select
+                            required
+                            value={schemeFormData.type}
+                            onChange={(e) => setSchemeFormData({ ...schemeFormData, type: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value="OPEN_ENDED">Open Ended</option>
+                            <option value="CLOSE_ENDED">Close Ended</option>
+                            <option value="INTERVAL">Interval</option>
+                          </select>
+                        </div>
+                        
+                        {/* Plan Multi-Select */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Plan (Multi-Select) <span className="text-red-500">*</span>
+                          </label>
+                          <div className="flex flex-wrap gap-3">
+                            {['REGULAR', 'DIRECT'].map(plan => (
+                              <label key={plan} className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={schemeFormData.plans.includes(plan)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSchemeFormData({ ...schemeFormData, plans: [...schemeFormData.plans, plan] })
+                                    } else {
+                                      setSchemeFormData({ ...schemeFormData, plans: schemeFormData.plans.filter(p => p !== plan) })
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                  {plan === 'REGULAR' ? 'Regular' : 'Direct'}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
                     
-                    {/* Option Multi-Select */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Option (Multi-Select) <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex flex-wrap gap-3">
-                        {['GROWTH', 'IDCW_PAYOUT', 'IDCW_REINVEST'].map(option => (
-                          <label key={option} className="flex items-center space-x-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={schemeFormData.options.includes(option)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSchemeFormData({ ...schemeFormData, options: [...schemeFormData.options, option] })
-                                } else {
-                                  setSchemeFormData({ ...schemeFormData, options: schemeFormData.options.filter(o => o !== option) })
-                                }
-                              }}
-                              className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-                            />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">
-                              {option === 'GROWTH' ? 'Growth' : option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 'IDCW – Reinvestment'}
-                            </span>
-                          </label>
-                        ))}
+                    {!isSimpleSelectedAmcCategory && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Option (Multi-Select) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex flex-wrap gap-3">
+                          {['GROWTH', 'IDCW_PAYOUT', 'IDCW_REINVEST'].map(option => (
+                            <label key={option} className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={schemeFormData.options.includes(option)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSchemeFormData({ ...schemeFormData, options: [...schemeFormData.options, option] })
+                                  } else {
+                                    setSchemeFormData({ ...schemeFormData, options: schemeFormData.options.filter(o => o !== option) })
+                                  }
+                                }}
+                                className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                              />
+                              <span className="text-sm text-gray-700 dark:text-gray-300">
+                                {option === 'GROWTH' ? 'Growth' : option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 'IDCW – Reinvestment'}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {isSimpleSelectedAmcCategory && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            CC (%) <span className="text-gray-500">(Commission Credit)</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={schemeFormData.cc || 0}
+                            onChange={(e) => setSchemeFormData({ ...schemeFormData, cc: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            SI (%) <span className="text-gray-500">(Service Income)</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={schemeFormData.si || 0}
+                            onChange={(e) => setSchemeFormData({ ...schemeFormData, si: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
                     
                     <div>
                       <label className="flex items-center space-x-2">
@@ -5070,10 +5259,10 @@ useEffect(() => {
                       </button>
                       <button
                         type="submit"
-                        disabled={loadingPreview || schemeFormData.plans.length === 0 || schemeFormData.options.length === 0}
+                        disabled={loadingPreview || (!isSimpleSelectedAmcCategory && schemeFormData.plans.length === 0) || (!isSimpleSelectedAmcCategory && schemeFormData.options.length === 0)}
                         className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {loadingPreview ? 'Loading...' : 'Preview Variants'}
+                        {loadingPreview ? 'Loading...' : (isSimpleSelectedAmcCategory ? 'Create Scheme' : 'Preview Variants')}
                       </button>
                     </div>
                   </form>
@@ -5453,37 +5642,26 @@ useEffect(() => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                    Categories (MF, SIF, PMS, AIF, Gift City)
+                    AMC category <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex flex-wrap gap-3 py-2">
-                    {MF_AMC_CATEGORIES.map((c) => {
-                      const checked = (amcFormData.categories || []).includes(c.id)
-                      return (
-                        <label key={c.id} className="inline-flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              const next = e.target.checked
-                                ? [...(amcFormData.categories || []), c.id].filter((x, i, a) => a.indexOf(x) === i)
-                                : (amcFormData.categories || []).filter((x) => x !== c.id)
-                              if (next.length === 0) return
-                              setAmcFormData({ ...amcFormData, categories: next })
-                            }}
-                            className="rounded border-[var(--stroke)] text-[var(--accent)] focus:ring-[var(--accent)]"
-                          />
-                          <span className="text-sm text-[var(--text-primary)]">
-                            {c.label}{c.minInvestment != null ? ` – ${formatMinInvestment(c.minInvestment)}` : ''}
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Select all categories this AMC operates in.</p>
+                  <select
+                    required
+                    value={amcFormData.amc_category || 'MF'}
+                    onChange={(e) => setAmcFormData({ ...amcFormData, amc_category: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                  >
+                    {mergeCategoryMinimums(categoryMinimums || {}).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                        {c.minInvestment != null ? ` – default min ${formatMinInvestment(c.minInvestment)}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">One category per AMC. Minimum shown is the global default.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                    Min Investment (optional, default per category)
+                    Override global minimum (optional)
                   </label>
                   <input
                     type="number"
@@ -5727,6 +5905,98 @@ useEffect(() => {
         </div>
       )}
 
+      {activeTab === 'MF' && !selectedAmc && (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-[var(--text-secondary)]">AMC category</span>
+            <button
+              type="button"
+              onClick={() => setAmcRegulatoryFilter(null)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                amcRegulatoryFilter === null
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'
+              }`}
+            >
+              All
+            </button>
+            {MF_AMC_CATEGORIES.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setAmcRegulatoryFilter(c.id)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                  amcRegulatoryFilter === c.id
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {categoryMinimums && (
+            <div className="mb-6 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)]">
+              <button
+                type="button"
+                onClick={() => setShowCategoryMinimumsPanel((v) => !v)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left"
+              >
+                <span className="text-sm font-semibold text-[var(--text-primary)]">
+                  Global minimum investment (by AMC category)
+                </span>
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {showCategoryMinimumsPanel ? 'Hide' : 'Show'}
+                </span>
+              </button>
+              {showCategoryMinimumsPanel && (
+                <div className="px-4 pb-4">
+                  <p className="text-xs text-[var(--text-muted)] mb-3">
+                    Default for all AMCs in that category unless an AMC sets an override. Empty = no minimum.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                    {MF_AMC_CATEGORIES.map((c) => (
+                      <label key={c.id} className="block text-sm">
+                        <span className="text-[var(--text-secondary)]">{c.label}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={10000}
+                          className="mt-1 w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                          value={
+                            categoryMinimums[c.id] === null || categoryMinimums[c.id] === undefined
+                              ? ''
+                              : String(categoryMinimums[c.id])
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setCategoryMinimums((prev) => ({
+                              ...(prev || {}),
+                              [c.id]: v === '' ? null : Number(v)
+                            }))
+                            setCategoryMinsDirty(true)
+                          }}
+                          placeholder="—"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={savingCategoryMins || !categoryMinsDirty}
+                    onClick={handleSaveGlobalCategoryMins}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {savingCategoryMins ? 'Saving…' : 'Save global minimums'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       {/* Conditional Table */}
       {activeTab === 'MF' ? (
         <div className="rounded-lg shadow overflow-hidden border border-[var(--stroke)] bg-[var(--card-bg)]">
@@ -5741,7 +6011,7 @@ useEffect(() => {
                   AMC Code
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                  Categories
+                  Category
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">
                   Schemes
@@ -5768,7 +6038,9 @@ useEffect(() => {
                 </tr>
               ) : (
                 filteredAmcs.map((amc, idx) => {
-                  const catList = amc.categories && Array.isArray(amc.categories) && amc.categories.length > 0 ? amc.categories : [amc.amc_category || 'MF']
+                  const catSingle =
+                    (amc.amc_category && MF_AMC_CATEGORIES.some((x) => x.id === amc.amc_category) && amc.amc_category) ||
+                    (Array.isArray(amc.categories) && amc.categories.length ? amc.categories[0] : 'MF')
                   return (
                   <tr 
                     key={amc.amc_code || idx} 
@@ -5784,13 +6056,9 @@ useEffect(() => {
                       {amc.amc_code}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {catList.map((c) => (
-                          <span key={c} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[var(--accent-muted)] text-[var(--accent)]">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[var(--accent-muted)] text-[var(--accent)]">
+                        {catSingle}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button

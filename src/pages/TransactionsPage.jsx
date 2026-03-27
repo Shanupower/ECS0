@@ -32,13 +32,13 @@ import {
   FiXCircle,
   FiBarChart,
   FiFileText,
-  FiDollarSign,
   FiActivity,
   FiTrendingUp,
   FiSave,
   FiUpload,
   FiUploadCloud
 } from 'react-icons/fi'
+import { FaRupeeSign } from 'react-icons/fa'
 
 export default function TransactionsPage() {
   const { token, user } = useAuth()
@@ -1183,7 +1183,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
               <div className="w-12 h-12 bg-[var(--success-muted)] rounded-card flex items-center justify-center">
-                <FiDollarSign className="w-6 h-6 text-[var(--success)]" />
+                <FaRupeeSign className="w-6 h-6 text-[var(--success)]" />
               </div>
             </div>
           </Card>

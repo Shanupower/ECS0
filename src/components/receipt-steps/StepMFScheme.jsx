@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { api } from '../../api'
 import SearchableSelect from '../SearchableSelect.jsx'
-import { MF_AMC_CATEGORIES, formatMinInvestment } from '../../data/mf_amc_categories'
+import { mergeCategoryMinimums, getAmcCategoryById, formatMinInvestment } from '../../data/mf_amc_categories'
+
+const SIMPLE_SCHEME_CATEGORIES = ['SIF', 'PMS', 'AIF', 'GIFT_CITY_FUNDS']
 
 export default function StepMFScheme({ onBack, onNext, token, initialAmcCategoryId = 'MF' }) {
+  const [categoryMinimumsMap, setCategoryMinimumsMap] = useState(null)
+  const enrichedCategories = useMemo(
+    () => mergeCategoryMinimums(categoryMinimumsMap || {}),
+    [categoryMinimumsMap]
+  )
   const [selectedAmcCategory, setSelectedAmcCategory] = useState(() =>
-    MF_AMC_CATEGORIES.find(c => c.id === initialAmcCategoryId) || MF_AMC_CATEGORIES[0]
+    getAmcCategoryById(initialAmcCategoryId, mergeCategoryMinimums({}))
   )
   const [amcs, setAmcs] = useState([])
   const [schemes, setSchemes] = useState([])
@@ -14,6 +21,27 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
   const [hasExistingFolio, setHasExistingFolio] = useState(null)
   const [folioNumber, setFolioNumber] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await api.getCategoryMinimums()
+        const m = data?.minimums && typeof data.minimums === 'object' ? data.minimums : {}
+        if (!cancelled) setCategoryMinimumsMap(m)
+      } catch (e) {
+        console.error(e)
+        if (!cancelled) setCategoryMinimumsMap({})
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    setSelectedAmcCategory((prev) =>
+      getAmcCategoryById(prev?.id || initialAmcCategoryId, enrichedCategories)
+    )
+  }, [enrichedCategories, initialAmcCategoryId])
 
   useEffect(() => {
     loadAMCs()
@@ -42,7 +70,7 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
     if (!token || !amc_code) return
     setLoading(true)
     try {
-      const result = await api.getSchemesByAMC(token, amc_code, selectedAmcCategory?.id || 'MF')
+      const result = await api.getSchemesByAMC(token, amc_code)
       setSchemes(Array.isArray(result) ? result : [])
     } catch (error) {
       console.error('Failed to load schemes:', error)
@@ -51,26 +79,37 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
     }
   }
 
-  // Format AMCs for SearchableSelect
-  const amcOptions = useMemo(() => {
-    return amcs.map(amc => ({
-      label: amc.amc_name,
-      value: amc.amc_code
-    }))
-  }, [amcs])
+  const amcMatchesCategory = (amc, catId) => {
+    const ac =
+      (amc?.amc_category && String(amc.amc_category)) ||
+      (Array.isArray(amc?.categories) && amc.categories.length ? amc.categories[0] : null) ||
+      'MF'
+    return ac === catId
+  }
 
-  // Format schemes for SearchableSelect
+  const amcOptions = useMemo(() => {
+    const catId = selectedAmcCategory?.id || 'MF'
+    return amcs
+      .filter((amc) => amcMatchesCategory(amc, catId))
+      .map((amc) => ({
+        label: amc.amc_name,
+        value: amc.amc_code
+      }))
+  }, [amcs, selectedAmcCategory?.id])
+
   const schemeOptions = useMemo(() => {
-    return schemes.map(scheme => ({
+    return schemes.map((scheme) => ({
       label: `${scheme.display_name || scheme.scheme_name}${scheme.is_nfo ? ' [NFO]' : ''}`,
       value: scheme.scheme_code,
-      scheme: scheme // Store full scheme object
+      scheme
     }))
   }, [schemes])
 
+  const isSimpleSelectedCategory = SIMPLE_SCHEME_CATEGORIES.includes(selectedAmcCategory?.id || 'MF')
+
   const handleNext = () => {
     if (!selectedScheme || hasExistingFolio === null) return
-    
+
     onNext({
       selectedAmcCategory,
       selectedAmc,
@@ -86,13 +125,12 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Choose the AMC category, then AMC and Scheme, and indicate if you have an existing folio</p>
       
       <div className="space-y-6">
-        {/* AMC Category selector (MF / SIF / PMS / AIF / GIFT CITY FUNDS) */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             AMC Category <span className="text-red-500">*</span>
           </label>
           <div className="flex flex-wrap gap-2">
-            {MF_AMC_CATEGORIES.map((cat) => {
+            {enrichedCategories.map((cat) => {
               const isSelected = selectedAmcCategory?.id === cat.id
               return (
                 <button
@@ -105,7 +143,7 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
                   }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isSelected
-                      ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2 dark:ring-offset-gray-900'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                   }`}
                 >
@@ -116,7 +154,6 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
           </div>
         </div>
 
-        {/* AMC Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Select AMC (Asset Management Company) <span className="text-red-500">*</span>
@@ -125,7 +162,7 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
             options={amcOptions}
             value={selectedAmc?.amc_code || ''}
             onChange={(amcCode) => {
-              const amc = amcs.find(a => a.amc_code === amcCode)
+              const amc = amcs.find((a) => a.amc_code === amcCode)
               setSelectedAmc(amc || null)
               setSelectedScheme(null)
             }}
@@ -135,7 +172,6 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
           />
         </div>
 
-        {/* Scheme Selection */}
         {selectedAmc && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -145,7 +181,7 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
               options={schemeOptions}
               value={selectedScheme?.scheme_code || ''}
               onChange={(schemeCode) => {
-                const scheme = schemes.find(s => s.scheme_code === schemeCode)
+                const scheme = schemes.find((s) => s.scheme_code === schemeCode)
                 setSelectedScheme(scheme || null)
               }}
               placeholder="Search for a scheme..."
@@ -157,71 +193,72 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
                 {selectedScheme.is_nfo && (
                   <div className="mb-3">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
-                      🆕 NFO - New Fund Offer
+                      NFO - New Fund Offer
                     </span>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {(selectedAmcCategory?.id && selectedAmcCategory.id !== 'MF') && (
+                {!isSimpleSelectedCategory && (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {(selectedAmcCategory?.id && selectedAmcCategory.id !== 'MF') && (
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">AMC Category:</span>
+                        <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedAmcCategory.label} ({formatMinInvestment(selectedAmcCategory.minInvestment)} min)</span>
+                      </div>
+                    )}
                     <div>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">AMC Category:</span>
-                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedAmcCategory.label} ({formatMinInvestment(selectedAmcCategory.minInvestment)} min)</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Category:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.category}</span>
                     </div>
-                  )}
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Category:</span>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.category}</span>
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Sub-Category:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.sub_category}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Plan:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.plan}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Option:</span>
+                      <span className="ml-2">
+                        {selectedScheme.option ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            selectedScheme.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                            selectedScheme.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                            'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
+                          }`}>
+                            {selectedScheme.option === 'GROWTH' ? 'Growth' : 
+                             selectedScheme.option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
+                             selectedScheme.option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
+                             selectedScheme.option}
+                          </span>
+                        ) : (
+                          <span className="text-gray-600 dark:text-gray-400">-</span>
+                        )}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Type:</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.type}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">CC %</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">
+                        {selectedScheme.cc !== undefined ? `${Number(selectedScheme.cc).toFixed(2)} %` : '0.00 %'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">SI %</span>
+                      <span className="ml-2 text-gray-600 dark:text-gray-400">
+                        {selectedScheme.si !== undefined ? `${Number(selectedScheme.si).toFixed(2)} %` : '0.00 %'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Sub-Category:</span>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.sub_category}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Plan:</span>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.plan}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Option:</span>
-                    <span className="ml-2">
-                      {selectedScheme.option ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          selectedScheme.option === 'GROWTH' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                          selectedScheme.option === 'IDCW_PAYOUT' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
-                          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300'
-                        }`}>
-                          {selectedScheme.option === 'GROWTH' ? 'Growth' : 
-                           selectedScheme.option === 'IDCW_PAYOUT' ? 'IDCW – Payout' : 
-                           selectedScheme.option === 'IDCW_REINVEST' ? 'IDCW – Reinvestment' : 
-                           selectedScheme.option}
-                        </span>
-                      ) : (
-                        <span className="text-gray-600 dark:text-gray-400">-</span>
-                      )}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Type:</span>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedScheme.type}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">CC %</span>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">
-                      {selectedScheme.cc !== undefined ? `${Number(selectedScheme.cc).toFixed(2)} %` : '0.00 %'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">SI %</span>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">
-                      {selectedScheme.si !== undefined ? `${Number(selectedScheme.si).toFixed(2)} %` : '0.00 %'}
-                    </span>
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Folio Number Question */}
         {selectedScheme && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -285,4 +322,3 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
     </div>
   )
 }
-

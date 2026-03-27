@@ -26,7 +26,7 @@ import StepProductType from './receipt-steps/StepProductType.jsx'
 import StepProduct from './receipt-steps/StepProduct.jsx'
 import StepFinal from './receipt-steps/StepFinal.jsx'
 import DatePickerInput from './ui/DatePickerInput.jsx'
-import { getAmcCategoryById } from '../data/mf_amc_categories'
+import { getAmcCategoryById, mergeCategoryMinimums } from '../data/mf_amc_categories'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
 // import empData from '../data/empdata.json' // Removed - using backend API instead
@@ -525,6 +525,12 @@ function StepHeader({ step, productType }) {
 
 const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
 
+function getAllowedMfTxnTypesByCategory(amcCategory) {
+  if (amcCategory === 'SIF') return ['Lumpsum', 'SIP']
+  if (amcCategory === 'PMS' || amcCategory === 'AIF' || amcCategory === 'GIFT_CITY_FUNDS') return ['Lumpsum']
+  return ['Lumpsum', 'SIP', 'SWP', 'STP', 'Switch Over']
+}
+
 function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdIssuerSeed, fdSchemeSeed, ncdBondIssuerSeed, ncdBondSchemeSeed, insuranceIssuerSeed, insuranceProductSeed, finalData, receiptNo = null, draftId = null }) {
   const [collapsed, setCollapsed] = useState(true)
   const rawProduct = productTypeSeed || finalData?.product_category || ''
@@ -541,7 +547,12 @@ function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdI
 
   const modeDisplay =
     finalData?.product_category === 'MF'
-      ? (normalizeTxnTypeToModeDisplay(finalData?.txn_type || finalData?.txnType) || finalData?.mode || '')
+      ? (() => {
+          const cat = finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id || 'MF'
+          const requested = normalizeTxnTypeToModeDisplay(finalData?.txn_type || finalData?.txnType) || finalData?.mode || ''
+          const allowed = getAllowedMfTxnTypesByCategory(cat)
+          return allowed.includes(requested) ? requested : (allowed[0] || '')
+        })()
       : ''
 
   const summary = {
@@ -1746,7 +1757,31 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
     setEmpSeed(draftData.empSeed || empSeed)
     setInvestorSeed(draftData.investorSeed || investorSeed)
     setProductTypeSeed(draftData.productTypeSeed || '')
-    setMfSchemeSeed(draftData.mfSchemeSeed ? { ...draftData.mfSchemeSeed, selectedAmcCategory: draftData.mfSchemeSeed.selectedAmcCategory || getAmcCategoryById('MF') } : null)
+    setMfSchemeSeed(
+      draftData.mfSchemeSeed
+        ? {
+            ...draftData.mfSchemeSeed,
+            selectedAmcCategory: getAmcCategoryById(
+              draftData.mfSchemeSeed.selectedAmcCategory?.id || 'MF',
+              mergeCategoryMinimums({})
+            )
+          }
+        : null
+    )
+    ;(async () => {
+      try {
+        const data = await api.getCategoryMinimums()
+        const m = data?.minimums && typeof data.minimums === 'object' ? data.minimums : {}
+        const enriched = mergeCategoryMinimums(m)
+        setMfSchemeSeed((prev) => {
+          if (!prev?.selectedAmcCategory?.id) return prev
+          return {
+            ...prev,
+            selectedAmcCategory: getAmcCategoryById(prev.selectedAmcCategory.id, enriched)
+          }
+        })
+      } catch (_) { /* keep draft category without refreshed mins */ }
+    })()
     setInvestmentTypeSeed(draftData.investmentTypeSeed || '')
     setFdIssuerSeed(draftData.fdIssuerSeed || null)
     setFdSchemeSeed(draftData.fdSchemeSeed || null)
@@ -1929,6 +1964,10 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
    */
   const buildMFReceipt = (transactionData) => {
     const base = buildBase()
+    const mfCategory = mfSchemeSeed.selectedAmcCategory?.id || 'MF'
+    const requestedTxnType = transactionData.txn_type || (investmentTypeSeed === 'Switch Over' ? 'Switch Over' : investmentTypeSeed) || null
+    const allowedTxnTypes = getAllowedMfTxnTypesByCategory(mfCategory)
+    const safeTxnType = allowedTxnTypes.includes(requestedTxnType) ? requestedTxnType : allowedTxnTypes[0]
     
     return {
       ...base,
@@ -1950,12 +1989,15 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       scheme_is_nfo: mfSchemeSeed.selectedScheme.is_nfo || false,
       
       // MF AMC category (SIF, PMS, AIF, GIFT CITY FUNDS; default MF)
-      mf_amc_category: mfSchemeSeed.selectedAmcCategory?.id || 'MF',
-      mf_amc_category_min_investment: mfSchemeSeed.selectedAmcCategory?.minInvestment ?? null,
+      mf_amc_category: mfCategory,
+      mf_amc_category_min_investment:
+        mfSchemeSeed.selectedScheme?.min_investment != null && mfSchemeSeed.selectedScheme?.min_investment !== ''
+          ? Number(mfSchemeSeed.selectedScheme.min_investment)
+          : mfSchemeSeed.selectedAmcCategory?.minInvestment ?? null,
       
       // Investment details
       investment_amount: transactionData.investment_amount || transactionData.investmentAmount || null,
-      txn_type: transactionData.txn_type || (investmentTypeSeed === 'Switch Over' ? 'Switch Over' : investmentTypeSeed) || null,
+      txn_type: safeTxnType,
       
       // Folio information
       has_existing_folio: mfSchemeSeed.hasExistingFolio || false,
@@ -1963,7 +2005,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       folio_policy_no: mfSchemeSeed.folioNumber || null,
       
       // SIP fields (if applicable)
-      ...(investmentTypeSeed === 'SIP' && {
+      ...(safeTxnType === 'SIP' && {
         sip_frequency: transactionData.sip_frequency || null,
         sip_start_date: transactionData.sip_start_date || null,
         sip_end_date: transactionData.sip_end_date || null,
@@ -1971,14 +2013,14 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       }),
       
       // SWP fields (if applicable)
-      ...(investmentTypeSeed === 'SWP' && {
+      ...(safeTxnType === 'SWP' && {
         swp_frequency: transactionData.swp_frequency || null,
         swp_start_date: transactionData.swp_start_date || null,
         swp_amount: transactionData.swp_amount || null
       }),
       
       // STP fields (if applicable)
-      ...(investmentTypeSeed === 'STP' && {
+      ...(safeTxnType === 'STP' && {
         stp_target_scheme_code: transactionData.stp_target_scheme_code || null,
         stp_target_scheme_name: transactionData.stp_target_scheme_name || null,
         stp_frequency: transactionData.stp_frequency || null,
@@ -1988,7 +2030,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       }),
       
       // Switch Over fields (if applicable)
-      ...(investmentTypeSeed === 'Switch Over' && {
+      ...(safeTxnType === 'Switch Over' && {
         switch_from_scheme_code: transactionData.switch_from_scheme_code || null,
         switch_from_scheme_name: transactionData.switch_from_scheme_name || null,
         switch_to_scheme_code: transactionData.switch_to_scheme_code || null,
@@ -2611,12 +2653,18 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           usePreset={usePreset}
           onTogglePreset={setUsePreset}
           presetsByType={receiptPresets}
-          onNext={type => { 
+          onNext={async (type) => { 
             setProductTypeSeed(type)
             const preset = receiptPresets[type]
             if (usePreset && preset) {
               if (preset.productType === 'MF') {
-                const mfAmcCat = getAmcCategoryById(preset.mf_amc_category || 'MF')
+                let mins = {}
+                try {
+                  const data = await api.getCategoryMinimums()
+                  mins = data?.minimums && typeof data.minimums === 'object' ? data.minimums : {}
+                } catch (_) { /* use empty → mergeCategoryMinimums fills nulls */ }
+                const enriched = mergeCategoryMinimums(mins)
+                const mfAmcCat = getAmcCategoryById(preset.mf_amc_category || 'MF', enriched)
                 setMfSchemeSeed({
                   selectedAmcCategory: mfAmcCat,
                   selectedAmc: { amc_code: preset.amc_code, amc_name: preset.amc_name },
@@ -2854,11 +2902,18 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepInvestmentType
           onBack={() => setStep(4)}
           onNext={type => { 
+            const mfCat = mfSchemeSeed?.selectedAmcCategory?.id || 'MF'
+            const allowed = getAllowedMfTxnTypesByCategory(mfCat)
+            if (!allowed.includes(type)) {
+              alert(`"${type}" is not allowed for ${mfCat}.`)
+              return
+            }
             setInvestmentTypeSeed(type)
             setStep(6) // Next: Transaction-specific details
           }}
           productType={productTypeSeed}
           hasExistingFolio={mfSchemeSeed.hasExistingFolio}
+          amcCategory={mfSchemeSeed?.selectedAmcCategory?.id || 'MF'}
         />
       )}
 
@@ -2866,6 +2921,14 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepTransactionDetails
           onBack={() => setStep(5)}
           onNext={transactionData => {
+            const mfCat = mfSchemeSeed?.selectedAmcCategory?.id || 'MF'
+            const allowed = getAllowedMfTxnTypesByCategory(mfCat)
+            const effectiveTxnType = transactionData.txn_type || investmentTypeSeed
+            if (!allowed.includes(effectiveTxnType)) {
+              alert(`"${effectiveTxnType}" is not allowed for ${mfCat}.`)
+              setStep(5)
+              return
+            }
             // Build clean MF receipt structure
             const cleanReceipt = buildMFReceipt(transactionData)
             setFinalData(cleanReceipt)
@@ -2874,6 +2937,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           investmentType={investmentTypeSeed}
           selectedScheme={mfSchemeSeed.selectedScheme}
           selectedAmc={mfSchemeSeed.selectedAmc}
+          selectedAmcCategory={mfSchemeSeed.selectedAmcCategory}
+          minInvestment={mfSchemeSeed?.selectedScheme?.min_investment ?? mfSchemeSeed?.selectedAmcCategory?.minInvestment ?? null}
           token={token}
         />
       )}

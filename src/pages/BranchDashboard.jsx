@@ -20,13 +20,13 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiX,
-  FiDollarSign,
   FiPercent,
   FiClock,
   FiMail,
   FiPhone,
   FiHome
 } from 'react-icons/fi'
+import { FaRupeeSign } from 'react-icons/fa'
 
 // Modern gradient color palette with better contrast
 const COLORS = [
@@ -1177,7 +1177,7 @@ export default function BranchDashboard() {
                             <div className="p-5 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="text-sm font-medium text-[var(--text-secondary)]">Total Investments</div>
-                                <FiDollarSign className="w-5 h-5 text-[var(--success)]" />
+                                <FaRupeeSign className="w-5 h-5 text-[var(--success)]" />
                               </div>
                               <div className="text-2xl font-bold text-[var(--text-primary)]">
                                 {formatCurrency(detailedBranchStats.statistics?.total_investments || 0)}

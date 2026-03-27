@@ -889,6 +889,11 @@ export default function CustomerManagementPage() {
                         <div className="mt-1 text-xs text-[var(--dashboard-muted)]">
                           ID: {customer.investor_id}
                         </div>
+                        {customer.matched_minor_names?.length > 0 && (
+                          <div className="mt-1 text-xs text-[var(--dashboard-primary)]">
+                            Minor match: {customer.matched_minor_names.join(', ')}
+                          </div>
+                        )}
                         <div className="mt-2 space-y-1">
                           <div className="text-xs text-[var(--dashboard-muted)]">
                             <span className="font-medium">Mobile:</span> {customer.mobile || 'N/A'}
@@ -981,6 +986,11 @@ export default function CustomerManagementPage() {
                           <div className="text-xs text-[var(--dashboard-muted)]">
                             ID: {customer.investor_id}
                           </div>
+                          {customer.matched_minor_names?.length > 0 && (
+                            <div className="text-xs text-[var(--dashboard-primary)]">
+                              Minor match: {customer.matched_minor_names.join(', ')}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 lg:px-6 py-3 lg:py-4">

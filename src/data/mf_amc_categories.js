@@ -1,20 +1,40 @@
 /**
- * MF AMC Categories with minimum investment amounts.
- * Used in receipt creation and Scheme Management.
- * All existing schemes default to "MF".
+ * MF AMC category ids and labels (minimums come from API: GET /api/schemes/category-minimums).
  */
 export const MF_AMC_CATEGORIES = [
-  { id: 'MF', label: 'MF', minInvestment: null },
-  { id: 'SIF', label: 'SIF', minInvestment: 10_00_000 },           // 10 lakhs
-  { id: 'PMS', label: 'PMS', minInvestment: 50_00_000 },           // 50 Lakhs
-  { id: 'AIF', label: 'AIF', minInvestment: 1_00_00_000 },        // 1 Cr
-  { id: 'GIFT_CITY_FUNDS', label: 'GIFT CITY FUNDS', minInvestment: 10_00_00_000 }  // 10 Cr
+  { id: 'MF', label: 'MF' },
+  { id: 'SIF', label: 'SIF' },
+  { id: 'PMS', label: 'PMS' },
+  { id: 'AIF', label: 'AIF' },
+  { id: 'GIFT_CITY_FUNDS', label: 'GIFT CITY FUNDS' }
 ]
 
-export const VALID_AMC_CATEGORY_IDS = MF_AMC_CATEGORIES.map(c => c.id)
+export const VALID_AMC_CATEGORY_IDS = MF_AMC_CATEGORIES.map((c) => c.id)
 
-export function getAmcCategoryById(id) {
-  return MF_AMC_CATEGORIES.find(c => c.id === id) || MF_AMC_CATEGORIES[0]
+/**
+ * @param {Record<string, number|null|undefined>|null|undefined} apiMinimums
+ * @returns {Array<{ id: string, label: string, minInvestment: number|null }>}
+ */
+export function mergeCategoryMinimums(apiMinimums) {
+  const m = apiMinimums && typeof apiMinimums === 'object' ? apiMinimums : {}
+  return MF_AMC_CATEGORIES.map((c) => ({
+    ...c,
+    minInvestment:
+      m[c.id] !== undefined && m[c.id] !== null && m[c.id] !== ''
+        ? Number(m[c.id])
+        : null
+  }))
+}
+
+/**
+ * @param {string} id
+ * @param {Array<{ id: string, label: string, minInvestment?: number|null }>} [enrichedList] from mergeCategoryMinimums()
+ */
+export function getAmcCategoryById(id, enrichedList) {
+  const list =
+    enrichedList ||
+    MF_AMC_CATEGORIES.map((c) => ({ ...c, minInvestment: null }))
+  return list.find((c) => c.id === id) || list[0]
 }
 
 export function formatMinInvestment(minInvestment) {
