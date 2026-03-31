@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 
-export default function StepFDScheme({ onBack, onNext, token, issuer }) {
+export default function StepFDScheme({ onBack, onNext, token, issuer, initialSchemeId = '', recentSchemes = [] }) {
   const [schemes, setSchemes] = useState([])
   const [selectedScheme, setSelectedScheme] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -13,11 +13,16 @@ export default function StepFDScheme({ onBack, onNext, token, issuer }) {
     }
   }, [issuer])
 
+  useEffect(() => {
+    if (!initialSchemeId || !schemes.length) return
+    const scheme = schemes.find(s => s.scheme_id === initialSchemeId)
+    if (scheme) setSelectedScheme(scheme)
+  }, [initialSchemeId, schemes])
+
   const loadSchemes = async () => {
     const issuer_key = issuer?._key || issuer?.issuer_key
     if (!token || !issuer_key) return
     setLoading(true)
-    // Reset selection when loading new schemes
     setSelectedScheme(null)
     try {
       const result = await api.getFDSchemesByIssuer(token, issuer_key)

@@ -84,7 +84,17 @@ export function normalizeReceiptFields(receipt) {
   }
   normalized.pan = getValue('investor.pan', 'pan') ?? receipt.investor?.pan ?? null
   normalized.email = getValue('investor.email', 'email') ?? receipt.investor?.email ?? null
-  normalized.mobile = getValue('investor.mobile', 'mobile', 'investor_mobile') ?? receipt.investor?.mobile ?? null
+  // Client contact number (legacy receipts sometimes stored it under `phone`)
+  normalized.mobile = getValue(
+    'investor.mobile',
+    'mobile',
+    'investor_mobile',
+    'phone',
+    'phone_number',
+    'phoneNumber',
+    'client_phone',
+    'clientPhone'
+  ) ?? receipt.investor?.mobile ?? null
 
   // Product category (from structured.product or flat)
   normalized.product_category = getValue('product.category', 'product_category', 'productCategory', 'productType')

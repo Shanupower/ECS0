@@ -40,24 +40,24 @@ const TXN_TYPES = [
   { value: 'Renewal', label: 'Renewal' }
 ]
 
-export default function StepInsuranceDetails({ onBack, onNext, token, issuer, product }) {
-  const [txnType, setTxnType] = useState('Fresh')
-  const [oldRenewalPolicyNo, setOldRenewalPolicyNo] = useState('')
-  const [premiumAmount, setPremiumAmount] = useState('')
-  const [policyNo, setPolicyNo] = useState('')
-  const [policyPeriod, setPolicyPeriod] = useState('')
-  const [dateOfIssue, setDateOfIssue] = useState('')
-  const [renewalDate, setRenewalDate] = useState('')
-  const [sumAssured, setSumAssured] = useState('')
-  const [term, setTerm] = useState('')
-  const [premiumPayTerm, setPremiumPayTerm] = useState('')
-  const [premiumPaymentTermType, setPremiumPaymentTermType] = useState('') // '' | 'Single Premium' | 'Limited Pay' | '5' | '10' | '12' | '15' | '20' | '25' | '30' | 'Other'
-  const [premiumPayTermOther, setPremiumPayTermOther] = useState('') // when type === 'Other'
-  const [paymentSchedule, setPaymentSchedule] = useState('')
+export default function StepInsuranceDetails({ onBack, onNext, token, issuer, product, initialData }) {
+  const [txnType, setTxnType] = useState(initialData?.txnType || 'Fresh')
+  const [oldRenewalPolicyNo, setOldRenewalPolicyNo] = useState(initialData?.oldRenewalPolicyNo || '')
+  const [premiumAmount, setPremiumAmount] = useState(initialData?.premiumAmount || '')
+  const [policyNo, setPolicyNo] = useState(initialData?.policyNo || '')
+  const [policyPeriod, setPolicyPeriod] = useState(initialData?.policyPeriod || '')
+  const [dateOfIssue, setDateOfIssue] = useState(initialData?.dateOfIssue || '')
+  const [renewalDate, setRenewalDate] = useState(initialData?.renewalDate || '')
+  const [sumAssured, setSumAssured] = useState(initialData?.sumAssured || '')
+  const [term, setTerm] = useState(initialData?.term || '')
+  const [premiumPayTerm, setPremiumPayTerm] = useState(initialData?.premiumPayTerm || '')
+  const [premiumPaymentTermType, setPremiumPaymentTermType] = useState(initialData?.premiumPaymentTermType || '')
+  const [premiumPayTermOther, setPremiumPayTermOther] = useState(initialData?.premiumPayTermOther || '')
+  const [paymentSchedule, setPaymentSchedule] = useState(initialData?.paymentSchedule || '')
 
   const [ridersLoading, setRidersLoading] = useState(false)
   const [riders, setRiders] = useState([])
-  const [selectedRiders, setSelectedRiders] = useState([])
+  const [selectedRiders, setSelectedRiders] = useState(initialData?.selectedRiders || [])
   const [validationError, setValidationError] = useState('')
 
   useEffect(() => {
@@ -203,6 +203,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
       instrumentNo: policyNo || `INS-${Date.now()}`
     }
 
+    normalized._formState = { txnType, oldRenewalPolicyNo, premiumAmount, policyNo, policyPeriod, dateOfIssue, renewalDate, sumAssured, term, premiumPayTerm, premiumPaymentTermType, premiumPayTermOther, paymentSchedule, selectedRiders }
     onNext(normalized)
   }
 

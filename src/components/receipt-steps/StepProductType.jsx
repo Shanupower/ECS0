@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { FiCheck, FiTrendingUp, FiShield, FiPieChart, FiAward, FiTool } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 
-function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true, onTogglePreset = null }) {
-  const [productType, setProductType] = useState('')
+function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true, onTogglePreset = null, initialType = '' }) {
+  const [productType, setProductType] = useState(initialType)
 
   const productTypes = [
     { value: 'MF', label: 'Mutual Funds', Icon: FiTrendingUp, enabled: true },

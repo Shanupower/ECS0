@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 
-export default function StepMiscDetails({ onBack, onNext, token }) {
-  const [serviceName, setServiceName] = useState('')
-  const [servicePrice, setServicePrice] = useState('')
+export default function StepMiscDetails({ onBack, onNext, token, initialData }) {
+  const [serviceName, setServiceName] = useState(initialData?.serviceName || '')
+  const [servicePrice, setServicePrice] = useState(initialData?.servicePrice || '')
   const [cc, setCc] = useState(0)
   const [si, setSi] = useState(0)
   const [ccPercent, setCcPercent] = useState(0)
@@ -65,7 +65,8 @@ export default function StepMiscDetails({ onBack, onNext, token }) {
       service_price: parseFloat(servicePrice),
       cc,
       si,
-      investment_amount: parseFloat(servicePrice)
+      investment_amount: parseFloat(servicePrice),
+      _formState: { serviceName: serviceName.trim(), servicePrice }
     })
   }
 

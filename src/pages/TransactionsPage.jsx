@@ -248,6 +248,7 @@ export default function TransactionsPage() {
         txn_type: txnType || undefined,
         search: filters.search || undefined,
         branch_code: filters.branch_code || undefined,
+        emp_code: filters.emp_code || undefined,
         sort: filters.sort || 'created_at:desc',
         page: pagination.page,
         size: filters.size || 20
@@ -589,16 +590,28 @@ export default function TransactionsPage() {
     }
     setEditData({
       // Core fields
-      date: receipt.date || '',
+      date: coerceToYyyyMmDd(receipt.date),
       investment_amount: receipt.investment_amount || receipt.fd_deposit_amount || '',
-      scheme_name: receipt.scheme_name || receipt.fd_scheme_name || '',
-      folio_policy_no: receipt.folio_policy_no || '',
-      insurance_date_of_issue: receipt.insurance_date_of_issue || '',
-      insurance_renewal_date: receipt.insurance_renewal_date || receipt.renewal_due_date || '',
+      // For INS receipts, the frontend modal fields still use the generic names
+      // `scheme_name` and `folio_policy_no`, so we must fall back to
+      // `insurance_*` values from the receipt normalizer.
+      scheme_name:
+        receipt.scheme_name ||
+        receipt.fd_scheme_name ||
+        receipt.insurance_product_name ||
+        receipt.bond_scheme_name ||
+        '',
+      folio_policy_no:
+        receipt.folio_policy_no ||
+        receipt.insurance_policy_number ||
+        receipt.bond_application_number ||
+        '',
+      insurance_date_of_issue: coerceToYyyyMmDd(receipt.insurance_date_of_issue),
+      insurance_renewal_date: coerceToYyyyMmDd(receipt.insurance_renewal_date || receipt.renewal_due_date),
       insurance_policy_period: receipt.insurance_policy_period || receipt.insurance_policy_term_years || '',
-      fd_maturity_date: receipt.fd_maturity_date || '',
-      bond_issue_date: receipt.bond_issue_date || '',
-      bond_maturity_date: receipt.bond_maturity_date || receipt.renewal_due_date || '',
+      fd_maturity_date: coerceToYyyyMmDd(receipt.fd_maturity_date),
+      bond_issue_date: coerceToYyyyMmDd(receipt.bond_issue_date),
+      bond_maturity_date: coerceToYyyyMmDd(receipt.bond_maturity_date || receipt.renewal_due_date),
       txn_type: receipt.product_category === 'MF'
         ? (normalizeMfTxnTypeForEdit(receipt.txn_type) || normalizeMfTxnTypeForEdit(mapModeDisplayToTxnType(receipt.mode)) || '')
         : (receipt.txn_type || ''),
@@ -608,10 +621,10 @@ export default function TransactionsPage() {
       entry_mode: receipt.entry_mode || '',
       transaction_channel: receipt.channel || receipt.transaction_channel || '',
       transaction_reference_no: receipt.reference_no || receipt.transaction_reference_no || '',
-      txn_date: receipt.txn_date || receipt.date || '',
+      txn_date: coerceToYyyyMmDd(receipt.txn_date || receipt.date),
       instrument_type: receipt.instrument_type || '',
       instrument_no: receipt.instrument_no || '',
-      instrument_date: receipt.instrument_date || '',
+      instrument_date: coerceToYyyyMmDd(receipt.instrument_date),
       bank_name: receipt.bank_name || '',
       bank_branch: receipt.bank_branch || '',
       transaction_notes: receipt.notes || '',
@@ -718,6 +731,35 @@ export default function TransactionsPage() {
 
   const formatDate = (dateString) => {
     return formatDateDisplay(dateString)
+  }
+
+  // Coerce backend date/timestamp strings to `YYYY-MM-DD` for `DatePickerInput`.
+  // DatePickerInput only accepts values matching `/^\d{4}-\d{2}-\d{2}$/`.
+  const coerceToYyyyMmDd = (value) => {
+    if (value == null) return ''
+    const raw = String(value).trim()
+    if (!raw) return ''
+
+    // Already `YYYY-MM-DD` (or ISO starting with it).
+    const isoPrefix = raw.match(/^(\d{4}-\d{2}-\d{2})/)
+    if (isoPrefix) return isoPrefix[1]
+
+    // `DD-MM-YYYY` or `DD/MM/YYYY`
+    const dmy = raw.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/)
+    if (dmy) {
+      const dd = dmy[1]
+      const mm = dmy[2]
+      const yyyy = dmy[3]
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    // Anything else parseable by JS Date.
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) return ''
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
   // Helper function to check if this is a switch over transaction
@@ -857,7 +899,11 @@ export default function TransactionsPage() {
         to: filters.to,
         // Admin exports should include all branches unless a branch is explicitly selected.
         branch_code: isAdmin ? (filters.branch_code || undefined) : (user?.branch_code || undefined),
-        emp_code: isAdmin ? (filters.emp_code || undefined) : undefined,
+        emp_code: isAdmin
+          ? (filters.emp_code || undefined)
+          : (user?.role === 'branch' || user?.role === 'manager')
+            ? (filters.emp_code || undefined)
+            : undefined,
         status: filters.status || undefined,
         category: filters.category || undefined,
         txn_type: txnType || undefined,
@@ -2006,7 +2052,7 @@ export default function TransactionsPage() {
                               <div className="flex flex-col gap-2 flex-1 min-w-0">
                                 <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Documents</div>
                                 {receipt.media_files && receipt.media_files.length > 0 ? (
-                                  <div className="flex flex-wrap items-center gap-2">
+                                  <div className="flex items-center gap-2">
                                     {receipt.media_files.map((file, idx) => (
                                       <button
                                         key={idx}

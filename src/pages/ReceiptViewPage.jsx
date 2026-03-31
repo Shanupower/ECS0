@@ -744,12 +744,12 @@ export default function ReceiptViewPage() {
                 </div>
               )}
 
-              {/* FD Details */}
-              {transformedReceipt.fd_issuer_name && (
+              {/* FD / Govt FD Details */}
+              {transformedReceipt.fd_issuer_name && (transformedReceipt.product_category === 'FD' || transformedReceipt.product_category === 'GOVT_FD') && (
                 <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
                     <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-                    Fixed Deposit Details
+                    {transformedReceipt.product_category === 'GOVT_FD' ? 'Government Schemes' : 'Fixed Deposit Details'}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {transformedReceipt.fd_issuer_name && (
@@ -798,7 +798,9 @@ export default function ReceiptViewPage() {
                     )}
                     {transformedReceipt.fd_application_number && (
                       <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Application/FD Number</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {transformedReceipt.product_category === 'GOVT_FD' ? 'Application/Scheme Number' : 'Application/FD Number'}
+                        </div>
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.fd_application_number}</div>
                       </div>
                     )}

@@ -5,7 +5,7 @@ import { mergeCategoryMinimums, getAmcCategoryById, formatMinInvestment } from '
 
 const SIMPLE_SCHEME_CATEGORIES = ['SIF', 'PMS', 'AIF', 'GIFT_CITY_FUNDS']
 
-export default function StepMFScheme({ onBack, onNext, token, initialAmcCategoryId = 'MF' }) {
+export default function StepMFScheme({ onBack, onNext, token, initialAmcCategoryId = 'MF', initialAmcCode = '', initialSchemeCode = '', initialHasExistingFolio, initialFolioNumber = '' }) {
   const [categoryMinimumsMap, setCategoryMinimumsMap] = useState(null)
   const enrichedCategories = useMemo(
     () => mergeCategoryMinimums(categoryMinimumsMap || {}),
@@ -18,9 +18,11 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
   const [schemes, setSchemes] = useState([])
   const [selectedAmc, setSelectedAmc] = useState(null)
   const [selectedScheme, setSelectedScheme] = useState(null)
-  const [hasExistingFolio, setHasExistingFolio] = useState(null)
-  const [folioNumber, setFolioNumber] = useState('')
+  const [hasExistingFolio, setHasExistingFolio] = useState(initialHasExistingFolio ?? null)
+  const [folioNumber, setFolioNumber] = useState(initialFolioNumber)
   const [loading, setLoading] = useState(false)
+  const [initialAmcApplied, setInitialAmcApplied] = useState(false)
+  const [initialSchemeApplied, setInitialSchemeApplied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -78,6 +80,26 @@ export default function StepMFScheme({ onBack, onNext, token, initialAmcCategory
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!initialAmcApplied && initialAmcCode && amcs.length > 0) {
+      const amc = amcs.find(a => a.amc_code === initialAmcCode)
+      if (amc) {
+        setSelectedAmc(amc)
+        setInitialAmcApplied(true)
+      }
+    }
+  }, [initialAmcCode, amcs, initialAmcApplied])
+
+  useEffect(() => {
+    if (!initialSchemeApplied && initialSchemeCode && schemes.length > 0) {
+      const scheme = schemes.find(s => s.scheme_code === initialSchemeCode)
+      if (scheme) {
+        setSelectedScheme(scheme)
+        setInitialSchemeApplied(true)
+      }
+    }
+  }, [initialSchemeCode, schemes, initialSchemeApplied])
 
   const amcMatchesCategory = (amc, catId) => {
     const ac =

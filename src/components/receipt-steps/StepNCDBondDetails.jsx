@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
-export default function StepNCDBondDetails({ onBack, onNext, token, issuer, scheme }) {
-  const [transactionType, setTransactionType] = useState('Purchase') // Purchase or Redemption
-  const [numberOfUnits, setNumberOfUnits] = useState('')
-  const [investmentAmount, setInvestmentAmount] = useState('')
+export default function StepNCDBondDetails({ onBack, onNext, token, issuer, scheme, initialData }) {
   const todayYyyyMmDd = new Date().toISOString().split('T')[0]
-  const [transactionDate, setTransactionDate] = useState(todayYyyyMmDd)
-  const [applicationNumber, setApplicationNumber] = useState('')
-  const [form15g15h, setForm15g15h] = useState(false)
+  const [transactionType, setTransactionType] = useState(initialData?.transactionType || 'Purchase')
+  const [numberOfUnits, setNumberOfUnits] = useState(initialData?.numberOfUnits || '')
+  const [investmentAmount, setInvestmentAmount] = useState(initialData?.investmentAmount || '')
+  const [transactionDate, setTransactionDate] = useState(initialData?.transactionDate || todayYyyyMmDd)
+  const [applicationNumber, setApplicationNumber] = useState(initialData?.applicationNumber || '')
+  const [form15g15h, setForm15g15h] = useState(initialData?.form15g15h || false)
 
   // Determine if it's NCD or Bond based on issuer type
   const isNCD = issuer?.type === 'NCD' || issuer?.type?.toUpperCase() === 'NCD'
@@ -54,6 +54,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
       bond_application_number: applicationNumber,
       bond_form_15g_15h: form15g15h
     }
+    bondData._formState = { transactionType, numberOfUnits, investmentAmount, transactionDate, applicationNumber, form15g15h }
     onNext(bondData)
   }
 

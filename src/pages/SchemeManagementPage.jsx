@@ -79,8 +79,18 @@ export default function SchemeManagementPage() {
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   useEffect(() => {
-    // Prevent cross-screen filtering: reset the search when we navigate between tabs/drill-down views.
     setSearchQuery('')
+    setFdIssuerTypeFilter('all')
+    setFdSchemeStatusFilter('all')
+    setFdSchemeTypeFilter('all')
+    setNcdBondIssuerTypeFilter('all')
+    setNcdBondCategoryFilter('all')
+    setNcdBondStatusFilter('all')
+    setNcdBondInstrumentTypeFilter('all')
+    setInsuranceIssuerTypeFilter('all')
+    setInsuranceCategoryFilter('all')
+    setInsuranceSubCategoryFilter('all')
+    setInsuranceStatusFilter('all')
   }, [
     activeTab,
     selectedAmc,
@@ -152,6 +162,29 @@ export default function SchemeManagementPage() {
   const [schemeFundCategoryFilter, setSchemeFundCategoryFilter] = useState('all')
   /** all | nfo_only | no_nfo */
   const [schemeNfoFilter, setSchemeNfoFilter] = useState('all')
+
+  // FD issuer filters
+  const [fdIssuerTypeFilter, setFdIssuerTypeFilter] = useState('all')
+
+  // FD scheme filters
+  const [fdSchemeStatusFilter, setFdSchemeStatusFilter] = useState('all')
+  const [fdSchemeTypeFilter, setFdSchemeTypeFilter] = useState('all')
+
+  // NCD/Bond issuer filters
+  const [ncdBondIssuerTypeFilter, setNcdBondIssuerTypeFilter] = useState('all')
+
+  // NCD/Bond scheme filters
+  const [ncdBondCategoryFilter, setNcdBondCategoryFilter] = useState('all')
+  const [ncdBondStatusFilter, setNcdBondStatusFilter] = useState('all')
+  const [ncdBondInstrumentTypeFilter, setNcdBondInstrumentTypeFilter] = useState('all')
+
+  // Insurance issuer filters
+  const [insuranceIssuerTypeFilter, setInsuranceIssuerTypeFilter] = useState('all')
+
+  // Insurance product filters
+  const [insuranceCategoryFilter, setInsuranceCategoryFilter] = useState('all')
+  const [insuranceSubCategoryFilter, setInsuranceSubCategoryFilter] = useState('all')
+  const [insuranceStatusFilter, setInsuranceStatusFilter] = useState('all')
   const [categoryMinimums, setCategoryMinimums] = useState(null)
   const [categoryMinsDirty, setCategoryMinsDirty] = useState(false)
   const [savingCategoryMins, setSavingCategoryMins] = useState(false)
@@ -1932,10 +1965,84 @@ useEffect(() => {
     })
   }, [normalizedSearchQuery, schemes, schemeFundCategoryFilter, schemeNfoFilter])
 
-  // Filter FD issuers (FD master list) based on search query
+  // FD issuer type options
+  const fdIssuerTypeOptions = useMemo(() => {
+    const set = new Set()
+    fdIssuers.forEach((i) => {
+      if (i?.type && String(i.type).trim()) set.add(String(i.type).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [fdIssuers])
+
+  // NCD/Bond issuer type options
+  const ncdBondIssuerTypeOptions = useMemo(() => {
+    const set = new Set()
+    ncdBondIssuers.forEach((i) => {
+      if (i?.type && String(i.type).trim()) set.add(String(i.type).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [ncdBondIssuers])
+
+  // Insurance issuer type options
+  const insuranceIssuerTypeOptions = useMemo(() => {
+    const set = new Set()
+    insuranceIssuers.forEach((i) => {
+      if (i?.type && String(i.type).trim()) set.add(String(i.type).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [insuranceIssuers])
+
+  // FD scheme filter options (derived from loaded data)
+  const fdSchemeTypeOptions = useMemo(() => {
+    const set = new Set()
+    fdSchemes.forEach((s) => {
+      set.add(s?.is_cumulative ? 'Cumulative' : 'Non-Cumulative')
+    })
+    return Array.from(set).sort()
+  }, [fdSchemes])
+
+  // NCD/Bond scheme filter options
+  const ncdBondCategoryOptions = useMemo(() => {
+    const set = new Set()
+    ncdBondSchemes.forEach((s) => {
+      if (s?.category && String(s.category).trim()) set.add(String(s.category).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [ncdBondSchemes])
+
+  const ncdBondInstrumentTypeOptions = useMemo(() => {
+    const set = new Set()
+    ncdBondSchemes.forEach((s) => {
+      if (s?.instrument_type && String(s.instrument_type).trim()) set.add(String(s.instrument_type).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [ncdBondSchemes])
+
+  // Insurance product filter options
+  const insuranceCategoryOptions = useMemo(() => {
+    const set = new Set()
+    insuranceProducts.forEach((p) => {
+      if (p?.category && String(p.category).trim()) set.add(String(p.category).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [insuranceProducts])
+
+  const insuranceSubCategoryOptions = useMemo(() => {
+    const set = new Set()
+    insuranceProducts.forEach((p) => {
+      if (p?.sub_category && String(p.sub_category).trim()) set.add(String(p.sub_category).trim())
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [insuranceProducts])
+
+  // Filter FD issuers: type dropdown, then text search
   const filteredFdIssuers = useMemo(() => {
-    if (!normalizedSearchQuery) return fdIssuers
-    return fdIssuers.filter((issuer) => {
+    let list = fdIssuers
+    if (fdIssuerTypeFilter && fdIssuerTypeFilter !== 'all') {
+      list = list.filter((i) => (i.type || '') === fdIssuerTypeFilter)
+    }
+    if (!normalizedSearchQuery) return list
+    return list.filter((issuer) => {
       const shortName = String(issuer?.short_name ?? '').toLowerCase()
       const legalName = String(issuer?.legal_name ?? '').toLowerCase()
       const type = String(issuer?.type ?? '').toLowerCase()
@@ -1949,12 +2056,17 @@ useEffect(() => {
         credit.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, fdIssuers])
+  }, [normalizedSearchQuery, fdIssuers, fdIssuerTypeFilter])
 
-  // Filter FD schemes (FD issuer detail view) based on search query
+  // Filter FD schemes: status + type dropdowns, then text search
   const filteredFdSchemes = useMemo(() => {
-    if (!normalizedSearchQuery) return fdSchemes
-    return fdSchemes.filter((scheme) => {
+    let list = fdSchemes
+    if (fdSchemeStatusFilter === 'active') list = list.filter((s) => s.is_active !== false)
+    if (fdSchemeStatusFilter === 'inactive') list = list.filter((s) => s.is_active === false)
+    if (fdSchemeTypeFilter === 'Cumulative') list = list.filter((s) => s.is_cumulative === true)
+    if (fdSchemeTypeFilter === 'Non-Cumulative') list = list.filter((s) => !s.is_cumulative)
+    if (!normalizedSearchQuery) return list
+    return list.filter((scheme) => {
       const schemeName = String(scheme?.scheme_name ?? '').toLowerCase()
       const schemeId = String(scheme?.scheme_id ?? '').toLowerCase()
       const description = String(scheme?.description_short ?? '').toLowerCase()
@@ -1970,7 +2082,7 @@ useEffect(() => {
         status.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, fdSchemes])
+  }, [normalizedSearchQuery, fdSchemes, fdSchemeStatusFilter, fdSchemeTypeFilter])
 
   // Filter FD rate slabs (FD slab detail view) based on search query
   const filteredFdRateSlabs = useMemo(() => {
@@ -2231,9 +2343,14 @@ useEffect(() => {
     loadInsuranceRiders(issuerKey, productId)
   }, [selectedInsuranceProduct, selectedInsuranceIssuer, token])
 
+  // Filter NCD/Bond issuers: type dropdown, then text search
   const filteredNcdBondIssuers = useMemo(() => {
-    if (!normalizedSearchQuery) return ncdBondIssuers
-    return ncdBondIssuers.filter((issuer) => {
+    let list = ncdBondIssuers
+    if (ncdBondIssuerTypeFilter && ncdBondIssuerTypeFilter !== 'all') {
+      list = list.filter((i) => (i.type || '') === ncdBondIssuerTypeFilter)
+    }
+    if (!normalizedSearchQuery) return list
+    return list.filter((issuer) => {
       const shortName = String(issuer?.short_name ?? '').toLowerCase()
       const legalName = String(issuer?.legal_name ?? '').toLowerCase()
       const type = String(issuer?.type ?? '').toLowerCase()
@@ -2247,11 +2364,21 @@ useEffect(() => {
         credit.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, ncdBondIssuers])
+  }, [normalizedSearchQuery, ncdBondIssuers, ncdBondIssuerTypeFilter])
 
+  // Filter NCD/Bond schemes: category + instrument type + status dropdowns, then text search
   const filteredNcdBondSchemes = useMemo(() => {
-    if (!normalizedSearchQuery) return ncdBondSchemes
-    return ncdBondSchemes.filter((scheme) => {
+    let list = ncdBondSchemes
+    if (ncdBondCategoryFilter && ncdBondCategoryFilter !== 'all') {
+      list = list.filter((s) => (s.category || '') === ncdBondCategoryFilter)
+    }
+    if (ncdBondInstrumentTypeFilter && ncdBondInstrumentTypeFilter !== 'all') {
+      list = list.filter((s) => (s.instrument_type || '') === ncdBondInstrumentTypeFilter)
+    }
+    if (ncdBondStatusFilter === 'active') list = list.filter((s) => s.is_active !== false)
+    if (ncdBondStatusFilter === 'inactive') list = list.filter((s) => s.is_active === false)
+    if (!normalizedSearchQuery) return list
+    return list.filter((scheme) => {
       const schemeName = String(scheme?.scheme_name ?? '').toLowerCase()
       const schemeId = String(scheme?.scheme_id ?? '').toLowerCase()
       const isin = String(scheme?.isin ?? '').toLowerCase()
@@ -2276,11 +2403,16 @@ useEffect(() => {
         status.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, ncdBondSchemes])
+  }, [normalizedSearchQuery, ncdBondSchemes, ncdBondCategoryFilter, ncdBondInstrumentTypeFilter, ncdBondStatusFilter])
 
+  // Filter Insurance issuers: type dropdown, then text search
   const filteredInsuranceIssuers = useMemo(() => {
-    if (!normalizedSearchQuery) return insuranceIssuers
-    return insuranceIssuers.filter((issuer) => {
+    let list = insuranceIssuers
+    if (insuranceIssuerTypeFilter && insuranceIssuerTypeFilter !== 'all') {
+      list = list.filter((i) => (i.type || '') === insuranceIssuerTypeFilter)
+    }
+    if (!normalizedSearchQuery) return list
+    return list.filter((issuer) => {
       const shortName = String(issuer?.short_name ?? '').toLowerCase()
       const legalName = String(issuer?.legal_name ?? '').toLowerCase()
       const type = String(issuer?.type ?? '').toLowerCase()
@@ -2290,11 +2422,21 @@ useEffect(() => {
         type.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, insuranceIssuers])
+  }, [normalizedSearchQuery, insuranceIssuers, insuranceIssuerTypeFilter])
 
+  // Filter Insurance products: category + sub_category + status dropdowns, then text search
   const filteredInsuranceProducts = useMemo(() => {
-    if (!normalizedSearchQuery) return insuranceProducts
-    return insuranceProducts.filter((product) => {
+    let list = insuranceProducts
+    if (insuranceCategoryFilter && insuranceCategoryFilter !== 'all') {
+      list = list.filter((p) => (p.category || '') === insuranceCategoryFilter)
+    }
+    if (insuranceSubCategoryFilter && insuranceSubCategoryFilter !== 'all') {
+      list = list.filter((p) => (p.sub_category || '') === insuranceSubCategoryFilter)
+    }
+    if (insuranceStatusFilter === 'active') list = list.filter((p) => p.is_active !== false)
+    if (insuranceStatusFilter === 'inactive') list = list.filter((p) => p.is_active === false)
+    if (!normalizedSearchQuery) return list
+    return list.filter((product) => {
       const name = String(product?.product_name ?? '').toLowerCase()
       const id = String(product?.product_id ?? '').toLowerCase()
       const category = String(product?.category ?? '').toLowerCase()
@@ -2310,7 +2452,7 @@ useEffect(() => {
         status.includes(normalizedSearchQuery)
       )
     })
-  }, [normalizedSearchQuery, insuranceProducts])
+  }, [normalizedSearchQuery, insuranceProducts, insuranceCategoryFilter, insuranceSubCategoryFilter, insuranceStatusFilter])
 
   const filteredInsuranceRiders = useMemo(() => {
     if (!normalizedSearchQuery) return insuranceRiders
@@ -2430,6 +2572,50 @@ useEffect(() => {
                 Add Scheme
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* NCD/Bond Scheme filters */}
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Category</span>
+            <select
+              value={ncdBondCategoryFilter}
+              onChange={(e) => setNcdBondCategoryFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              {ncdBondCategoryOptions.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          {ncdBondInstrumentTypeOptions.length > 1 && (
+            <div>
+              <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Instrument type</span>
+              <select
+                value={ncdBondInstrumentTypeFilter}
+                onChange={(e) => setNcdBondInstrumentTypeFilter(e.target.value)}
+                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              >
+                <option value="all">All</option>
+                {ncdBondInstrumentTypeOptions.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Status</span>
+            <select
+              value={ncdBondStatusFilter}
+              onChange={(e) => setNcdBondStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
         </div>
 
@@ -3689,6 +3875,50 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Insurance Product filters */}
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Category</span>
+            <select
+              value={insuranceCategoryFilter}
+              onChange={(e) => setInsuranceCategoryFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              {insuranceCategoryOptions.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          {insuranceSubCategoryOptions.length > 0 && (
+            <div>
+              <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Sub category</span>
+              <select
+                value={insuranceSubCategoryFilter}
+                onChange={(e) => setInsuranceSubCategoryFilter(e.target.value)}
+                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              >
+                <option value="all">All</option>
+                {insuranceSubCategoryOptions.map((sub) => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Status</span>
+            <select
+              value={insuranceStatusFilter}
+              onChange={(e) => setInsuranceStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
         {/* Search */}
         <div className="mb-6">
           <div className="relative">
@@ -4165,6 +4395,35 @@ useEffect(() => {
                 Add Scheme
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* FD Scheme filters */}
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Type</span>
+            <select
+              value={fdSchemeTypeFilter}
+              onChange={(e) => setFdSchemeTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              {fdSchemeTypeOptions.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Status</span>
+            <select
+              value={fdSchemeStatusFilter}
+              onChange={(e) => setFdSchemeStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
         </div>
 
@@ -5905,6 +6164,63 @@ useEffect(() => {
         </div>
       )}
 
+      {/* FD Issuer filters (master list) */}
+      {activeTab === 'FD' && !selectedFdIssuer && fdIssuerTypeOptions.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Issuer type</span>
+            <select
+              value={fdIssuerTypeFilter}
+              onChange={(e) => setFdIssuerTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              {fdIssuerTypeOptions.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* NCD/Bond Issuer filters (master list) */}
+      {activeTab === 'NCDBond' && !selectedNcdBondIssuer && ncdBondIssuerTypeOptions.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Issuer type</span>
+            <select
+              value={ncdBondIssuerTypeFilter}
+              onChange={(e) => setNcdBondIssuerTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              {ncdBondIssuerTypeOptions.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Insurance Issuer filters (master list) */}
+      {activeTab === 'Insurance' && !selectedInsuranceIssuer && insuranceIssuerTypeOptions.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Issuer type</span>
+            <select
+              value={insuranceIssuerTypeFilter}
+              onChange={(e) => setInsuranceIssuerTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+            >
+              <option value="all">All</option>
+              {insuranceIssuerTypeOptions.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'MF' && !selectedAmc && (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -5914,7 +6230,7 @@ useEffect(() => {
               onClick={() => setAmcRegulatoryFilter(null)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
                 amcRegulatoryFilter === null
-                  ? 'bg-[var(--accent)] text-white'
+                  ? 'bg-[var(--accent)] text-black dark:text-white'
                   : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'
               }`}
             >
@@ -5927,7 +6243,7 @@ useEffect(() => {
                 onClick={() => setAmcRegulatoryFilter(c.id)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
                   amcRegulatoryFilter === c.id
-                    ? 'bg-[var(--accent)] text-white'
+                    ? 'bg-[var(--accent)] text-black dark:text-white'
                     : 'bg-[var(--card-hover)] text-[var(--text-secondary)] hover:bg-[var(--stroke)]'
                 }`}
               >

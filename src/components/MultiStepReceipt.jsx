@@ -68,6 +68,7 @@ async function loadInvestorsFromAPI(token) {
       const transformedInvestors = investors.map(customer => ({
         investorId: customer.investor_id,
         investorName: customer.name || customer.investor_name || 'Unknown',
+        mobile: customer.mobile || '',
         investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
         pinCode: customer.pin || customer.pin_code || '',
         pan: customer.pan || '',
@@ -110,6 +111,7 @@ async function loadInvestorsFromAPIPaginated(token, page = 1, limit = 50) {
       const transformedInvestors = investors.map(customer => ({
         investorId: customer.investor_id,
         investorName: customer.name || customer.investor_name || 'Unknown',
+        mobile: customer.mobile || '',
         investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
         pinCode: customer.pin || customer.pin_code || '',
         pan: customer.pan || '',
@@ -215,6 +217,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
           return {
             investorId,
             investorName,
+            mobile: customer.mobile || '',
             investorAddress: `${customer.address1 || ''} ${customer.address2 || ''} ${customer.address3 || ''}`.trim() || customer.investor_address || '',
             pinCode: customer.pin || customer.pin_code || '',
             pan,
@@ -257,6 +260,7 @@ async function searchInvestorsFromAPI(token, query, limit = 50, page = 1) {
             pinCode: useSameAddress && parent ? (parent.pin || minor.pin || '') : (minor.pin || ''),
             pan: minor.pan || '',
             email: '',
+            mobile: (parent && parent.mobile) || minor.mobile || '',
             isMinor: true,
             parentName: parent ? (parent.name || minor.parent_name || '') : (minor.parent_name || ''),
             parentInvestorId: parent ? parent.investor_id : minor.parent_investor_id
@@ -885,7 +889,8 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         investorAddress: customer.investorAddress || '',
         pinCode: customer.pinCode || '',
         pan: customer.pan || '',
-        email: customer.email || ''
+        email: customer.email || '',
+        mobile: customer.mobile || ''
       })
       setSelectedMajorWithMinors(null)
       return
@@ -904,7 +909,8 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         investorAddress: `${fullCustomerData.address1 || ''} ${fullCustomerData.address2 || ''} ${fullCustomerData.address3 || ''}`.trim() || fullCustomerData.investor_address || '',
         pinCode: fullCustomerData.pin || fullCustomerData.pin_code || '',
         pan: fullCustomerData.pan || '',
-        email: fullCustomerData.email || ''
+        email: fullCustomerData.email || '',
+        mobile: fullCustomerData.mobile != null && fullCustomerData.mobile !== '' ? String(fullCustomerData.mobile) : ''
       }
       
       console.log('Transformed selected customer:', transformedCustomer)
@@ -977,7 +983,8 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         investorAddress: `${newCustomer.address1 || ''} ${newCustomer.address2 || ''} ${newCustomer.address3 || ''}`.trim(),
         pinCode: newCustomer.pin || '',
         pan: newCustomer.pan || '',
-        email: newCustomer.email || ''
+        email: newCustomer.email || '',
+        mobile: newCustomer.mobile || ''
       }
       
       // Select the newly created customer
@@ -1574,7 +1581,8 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                     investorAddress: `${selectedMajorWithMinors.address1 || ''} ${selectedMajorWithMinors.address2 || ''} ${selectedMajorWithMinors.address3 || ''}`.trim() || '—',
                     pinCode: selectedMajorWithMinors.pin || '',
                     pan: selectedMajorWithMinors.pan || '',
-                    email: selectedMajorWithMinors.email || ''
+                    email: selectedMajorWithMinors.email || '',
+                    mobile: selectedMajorWithMinors.mobile != null && selectedMajorWithMinors.mobile !== '' ? String(selectedMajorWithMinors.mobile) : ''
                   })
                 }}
                 className="text-caption font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
@@ -1620,6 +1628,11 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   const [ncdBondSchemeSeed, setNcdBondSchemeSeed] = useState(null)
   const [insuranceIssuerSeed, setInsuranceIssuerSeed] = useState(null)
   const [insuranceProductSeed, setInsuranceProductSeed] = useState(null)
+  const [transactionDetailsSeed, setTransactionDetailsSeed] = useState(null)
+  const [fdDetailsSeed, setFdDetailsSeed] = useState(null)
+  const [bondDetailsSeed, setBondDetailsSeed] = useState(null)
+  const [insuranceDetailsSeed, setInsuranceDetailsSeed] = useState(null)
+  const [miscDetailsSeed, setMiscDetailsSeed] = useState(null)
   const [finalData, setFinalData] = useState(null)
   const [supportingDocuments, setSupportingDocuments] = useState([])
   const [isSaving, setIsSaving] = useState(false)
@@ -1941,7 +1954,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       investor_address: '',
       pin_code: '',
       pan: '',
-      email: ''
+      email: '',
+      mobile: ''
     }
     
     // Populate investor info if available
@@ -1951,6 +1965,9 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       base.pin_code = investorSeed.investorInfo.pinCode || ''
       base.pan = investorSeed.investorInfo.pan || ''
       base.email = investorSeed.investorInfo.email || ''
+      base.mobile = investorSeed.investorInfo.mobile != null && investorSeed.investorInfo.mobile !== ''
+        ? String(investorSeed.investorInfo.mobile).replace(/\D/g, '')
+        : ''
     }
     
     return base
@@ -2653,7 +2670,16 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           usePreset={usePreset}
           onTogglePreset={setUsePreset}
           presetsByType={receiptPresets}
+          initialType={productTypeSeed}
           onNext={async (type) => { 
+            if (type !== productTypeSeed) {
+              setTransactionDetailsSeed(null)
+              setFdDetailsSeed(null)
+              setBondDetailsSeed(null)
+              setInsuranceDetailsSeed(null)
+              setMiscDetailsSeed(null)
+              setFinalData(null)
+            }
             setProductTypeSeed(type)
             const preset = receiptPresets[type]
             if (usePreset && preset) {
@@ -2756,6 +2782,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepFDDetails
           onBack={() => setStep(5)}
           onNext={(fdData) => {
+            setFdDetailsSeed(fdData._formState || null)
             const cleanReceipt = buildFDReceipt(fdData)
             setFinalData(cleanReceipt)
             setStep(7)
@@ -2764,6 +2791,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           issuer={fdIssuerSeed}
           scheme={fdSchemeSeed}
           isGovtScheme={productTypeSeed === 'GOVT_FD'}
+          initialData={fdDetailsSeed}
         />
       )}
 
@@ -2799,6 +2827,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepNCDBondDetails
           onBack={() => setStep(5)}
           onNext={(bondData) => {
+            setBondDetailsSeed(bondData._formState || null)
             const cleanReceipt = buildNCDBondReceipt(bondData)
             setFinalData(cleanReceipt)
             setStep(7)
@@ -2806,6 +2835,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           token={token}
           issuer={ncdBondIssuerSeed}
           scheme={ncdBondSchemeSeed}
+          initialData={bondDetailsSeed}
         />
       )}
 
@@ -2843,11 +2873,13 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepInsuranceDetails
           onBack={() => setStep(5)}
           onNext={(normalized) => {
+            setInsuranceDetailsSeed(normalized._formState || null)
+            const { _formState, ...cleanNormalized } = normalized
             const base = buildBase()
-            const insuranceAmount = normalized?.investment_amount ?? normalized?.investmentAmount ?? null
+            const insuranceAmount = cleanNormalized?.investment_amount ?? cleanNormalized?.investmentAmount ?? null
             const merged = {
               ...base,
-              ...normalized,
+              ...cleanNormalized,
               product_category: 'INS',
               investment_amount: insuranceAmount
             }
@@ -2857,6 +2889,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           token={token}
           issuer={insuranceIssuerSeed}
           product={insuranceProductSeed}
+          initialData={insuranceDetailsSeed}
         />
       )}
 
@@ -2864,10 +2897,12 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         <StepMiscDetails
           onBack={() => setStep(3)}
           onNext={(miscData) => {
+            setMiscDetailsSeed(miscData._formState || null)
+            const { _formState, ...cleanMiscData } = miscData
             const base = buildBase()
             const merged = {
               ...base,
-              ...miscData,
+              ...cleanMiscData,
               product_category: 'MISC',
               service_name: miscData.service_name,
               service_price: miscData.service_price,
@@ -2879,6 +2914,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
             setStep(5)
           }}
           token={token}
+          initialData={miscDetailsSeed}
         />
       )}
 
@@ -2887,12 +2923,14 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           onBack={() => setStep(3)}
           onNext={mfData => { 
             setMfSchemeSeed(mfData)
-            setStep(5) // Next: Investment Type selection
+            setStep(5)
           }}
           token={token}
           initialAmcCategoryId={mfSchemeSeed?.selectedAmcCategory?.id || receiptPresets.MF?.mf_amc_category || 'MF'}
           initialAmcCode={mfSchemeSeed?.selectedAmc?.amc_code || receiptPresets.MF?.amc_code || ''}
           initialSchemeCode={mfSchemeSeed?.selectedScheme?.scheme_code || receiptPresets.MF?.scheme_code || ''}
+          initialHasExistingFolio={mfSchemeSeed?.hasExistingFolio}
+          initialFolioNumber={mfSchemeSeed?.folioNumber || ''}
           recentAmcs={recentIssuersByType.MF}
           recentSchemes={recentSchemesByType.MF}
         />
@@ -2909,11 +2947,12 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
               return
             }
             setInvestmentTypeSeed(type)
-            setStep(6) // Next: Transaction-specific details
+            setStep(6)
           }}
           productType={productTypeSeed}
           hasExistingFolio={mfSchemeSeed.hasExistingFolio}
           amcCategory={mfSchemeSeed?.selectedAmcCategory?.id || 'MF'}
+          initialType={investmentTypeSeed}
         />
       )}
 
@@ -2929,7 +2968,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
               setStep(5)
               return
             }
-            // Build clean MF receipt structure
+            setTransactionDetailsSeed(transactionData._formState || null)
             const cleanReceipt = buildMFReceipt(transactionData)
             setFinalData(cleanReceipt)
             setStep(7)
@@ -2940,6 +2979,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
           selectedAmcCategory={mfSchemeSeed.selectedAmcCategory}
           minInvestment={mfSchemeSeed?.selectedScheme?.min_investment ?? mfSchemeSeed?.selectedAmcCategory?.minInvestment ?? null}
           token={token}
+          initialData={transactionDetailsSeed}
         />
       )}
 

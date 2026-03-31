@@ -38,8 +38,11 @@ const ALL_WIDGET_IDS = [
 /* Chart colors: vibrant, no black or dark gray (works in light and dark mode) */
 const CHART_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0d9488', '#e11d48', '#0284c7', '#65a30d', '#ca8a04', '#db2777']
 
-/* Donut chart: teal/green family (Dribbble-style, no black) */
-const DONUT_COLORS = ['#2dd4bf', '#14b8a6', '#0d9488', '#0f766e', '#5eead4', '#99f6e4', '#134e4a', '#115e59']
+/* Donut: spaced hues so adjacent slices are easy to tell apart (light + dark UI) */
+const DONUT_COLORS = [
+  '#2563eb', '#ea580c', '#7c3aed', '#16a34a', '#dc2626', '#0891b2',
+  '#ca8a04', '#c026d3', '#4f46e5', '#65a30d', '#db2777', '#0f766e'
+]
 
 const WIDGET_LABELS = {
   kpi_cards: 'KPI cards',
@@ -71,7 +74,11 @@ export default function DashboardPage() {
   const [topEmployees, setTopEmployees] = useState([])
   const [leadsSnapshot, setLeadsSnapshot] = useState([])
   const [issuesSnapshot, setIssuesSnapshot] = useState([])
+  const [issuesSnapshotTotal, setIssuesSnapshotTotal] = useState(0)
   const [investorLocations, setInvestorLocations] = useState(null)
+  // Used by the "Target vs actual" widget to keep the denominator (branch target)
+  // consistent with the numerator (branch-level CC) when admins view "Personal".
+  const [targetBranchActualCc, setTargetBranchActualCc] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCustomizeModal, setShowCustomizeModal] = useState(false)
@@ -82,7 +89,11 @@ export default function DashboardPage() {
     to: `${currentYear}-12-31`
   })
   const [includePending, setIncludePending] = useState(true)
-  const [viewMode, setViewMode] = useState('personal')
+  const [viewMode, setViewMode] = useState(() => {
+    // Branch managers should default to branch view (matches existing backend behavior).
+    if (user?.role === 'manager' || user?.role === 'branch') return 'branch'
+    return 'personal'
+  })
   const [overdueTasks, setOverdueTasks] = useState([])
   const formatDateForInput = (date) => {
     const year = date.getFullYear()
@@ -92,16 +103,27 @@ export default function DashboardPage() {
   }
 
   const isAdmin = user?.role === 'admin'
+  const isEmployee = user?.role === 'employee'
+  const isBranchManager = user?.role === 'manager' || user?.role === 'branch'
   const effectiveWidgetIds = (user?.dashboard_widgets != null && Array.isArray(user.dashboard_widgets))
     ? user.dashboard_widgets
     : ALL_WIDGET_IDS
   const showWidget = (id) => effectiveWidgetIds.includes(id)
+
+  useEffect(() => {
+    // Keep viewMode aligned with role defaults on role load (avoid stale initial state).
+    if (isAdmin) return
+    if (isBranchManager) setViewMode('branch')
+    else if (isEmployee) setViewMode('personal')
+  }, [isAdmin, isEmployee, isBranchManager])
 
   const loadDashboardData = async () => {
     if (!token) return
     
     setLoading(true)
     setError('')
+    setTargetBranchActualCc(null)
+    setIssuesSnapshotTotal(0)
     
     try {
       // Determine query params based on view mode for admins
@@ -125,11 +147,29 @@ export default function DashboardPage() {
           // All branches view
           queryParams.viewMode = 'all'
         }
+      } else {
+        // Employees/managers: toggle affects what backend uses for receipts filtering.
+        queryParams.viewMode = viewMode
       }
       
       // Load summary statistics from backend
       const summaryData = await api.statsSummary(token, queryParams)
       setSummary(summaryData)
+
+      // For "Target vs actual", branch_target is branch-level, but in Admin "Personal"
+      // view we filter actuals to a single employee. Fetch branch-level actuals so
+      // the progress bar reflects the same scope as the target.
+      if (viewMode === 'personal') {
+        try {
+          // Branch target is the denominator; use branch-level actuals even when "personal" view is selected.
+          const branchSummaryData = await api.statsSummary(token, { ...queryParams, viewMode: 'branch' })
+          setTargetBranchActualCc(branchSummaryData?.collection_credit_earned ?? null)
+        } catch (e) {
+          // If the extra fetch fails, fall back to the original numerator.
+          console.warn('Failed to fetch branch actual CC for Target vs actual:', e)
+          setTargetBranchActualCc(null)
+        }
+      }
       
       // Load category statistics
       const categoryData = await api.statsByCategory(token, queryParams)
@@ -169,9 +209,18 @@ export default function DashboardPage() {
         setLeadsSnapshot(leads.items || leads.data || leads || [])
       } catch { setLeadsSnapshot([]) }
       try {
-        const issues = await api.listMyIssues(token, { status: 'open', limit: '20' })
-        setIssuesSnapshot(issues.items || issues.data || issues || [])
-      } catch { setIssuesSnapshot([]) }
+        // Backend expects `size` (not `limit`) and admin can view ALL issues via `/api/issues`.
+        const issuesRes = isAdmin
+          ? await api.listIssues(token, { status: 'open', page: '1', size: '200', sort: 'created_at:desc' })
+          : await api.listMyIssues(token, { status: 'open', page: '1', size: '200', sort: 'created_at:desc' })
+
+        const items = issuesRes?.items || issuesRes?.data || issuesRes || []
+        setIssuesSnapshot(items)
+        setIssuesSnapshotTotal(Number(issuesRes?.total ?? (Array.isArray(items) ? items.length : 0)) || 0)
+      } catch {
+        setIssuesSnapshot([])
+        setIssuesSnapshotTotal(0)
+      }
       try {
         const loc = await api.getInvestorLocations(token, { from: dateRange.from, to: dateRange.to, includePending: includePending ? '1' : '0' })
         setInvestorLocations(loc?.byState ? loc : null)
@@ -204,6 +253,16 @@ export default function DashboardPage() {
     }).format(amount || 0)
   }
 
+  // Make sure backend numbers (or numeric strings) are safely converted for calculations.
+  // This prevents `NaN%` progress bars when values arrive as formatted strings.
+  const toSafeNumber = (v) => {
+    if (v == null) return 0
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+    const s = String(v).replace(/,/g, '').trim()
+    const n = Number(s)
+    return Number.isFinite(n) ? n : 0
+  }
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN', { 
       month: 'short', 
@@ -228,8 +287,25 @@ export default function DashboardPage() {
     rawCategory: r.category
   }))
 
-  const isEmployee = user?.role === 'employee'
   const navigate = useNavigate()
+
+  const usesBranchActualForTarget = viewMode === 'personal' && targetBranchActualCc != null
+  const targetActualCc = usesBranchActualForTarget
+    ? targetBranchActualCc
+    : (summary?.collection_credit_earned || 0)
+  const targetActualCcLabel = usesBranchActualForTarget
+    ? 'Actual CC (branch):'
+    : 'Actual CC (selected scope):'
+
+  const targetNum = toSafeNumber(summary?.branch_target)
+  const actualNum = toSafeNumber(targetActualCc)
+  const targetProgressPct = targetNum > 0
+    ? (actualNum >= targetNum
+        ? 100
+        : Math.min(100, Math.max(0, (actualNum / targetNum) * 100)))
+    : 0
+
+  // (intentionally no debug logging; target vs actual is visible via the bar itself)
 
   const datePresets = [
     { label: 'This month', getValue: () => {
@@ -250,11 +326,16 @@ export default function DashboardPage() {
     }},
   ]
 
-  const viewModeOptions = [
-    { value: 'personal', label: 'Personal' },
-    { value: 'branch', label: 'Branch' },
-    { value: 'all', label: 'All Branches' },
-  ]
+  const viewModeOptions = isAdmin
+    ? [
+        { value: 'personal', label: 'Personal' },
+        { value: 'branch', label: 'Branch' },
+        { value: 'all', label: 'All Branches' },
+      ]
+    : [
+        { value: 'personal', label: 'Personal' },
+        { value: 'branch', label: 'Your branch' },
+      ]
 
   return (
     <div className="space-y-6">
@@ -425,7 +506,7 @@ export default function DashboardPage() {
               <span className="text-small font-medium text-[var(--text-primary)]">Include Pending</span>
             </label>
           </div>
-          {isAdmin && (
+          {(isAdmin || isEmployee || isBranchManager) && (
             <div className="flex items-center gap-3 pt-2 border-t border-[var(--stroke)]">
               <span className="text-label text-[var(--text-secondary)]">View</span>
               <SegmentedControl
@@ -479,13 +560,21 @@ export default function DashboardPage() {
                 </div>
                 <div className="h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] to-blue-400 transition-all duration-500 ease-out"
+                    className="h-full rounded-full transition-all duration-500 ease-out"
                     style={{
-                      width: `${Math.min(100, ((summary.collection_credit_earned || 0) / (summary.branch_target || 1)) * 100)}%`,
+                      width: `${targetProgressPct}%`,
+                      // Force solid fill so we can isolate any gradient/background issues.
+                      // Use literal color to bypass any CSS variable/theming issues.
+                      backgroundColor: 'var(--accent, #0071e3)',
+                      backgroundImage: 'none',
+                      opacity: 1,
+                      display: 'block',
+                      height: '100%',
+                      minHeight: '10px'
                     }}
                   />
                 </div>
-                <div className="text-helper mt-1">Actual CC (selected scope): {formatCurrency(summary.collection_credit_earned || 0)}</div>
+                <div className="text-helper mt-1">{targetActualCcLabel} {formatCurrency(targetActualCc || 0)}</div>
               </div>
             </Card>
           )}
@@ -515,7 +604,9 @@ export default function DashboardPage() {
                   <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Receipts</div>
                   <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{summary.total_receipts ?? 0}</div>
                   <div className="text-helper mt-1">
-                    {isAdmin ? (viewMode === 'personal' ? 'Personal' : viewMode === 'branch' ? 'Your branch' : 'All branches') : 'Your branch'}
+                    {isAdmin
+                      ? (viewMode === 'personal' ? 'Personal' : viewMode === 'branch' ? 'Your branch' : 'All branches')
+                      : (viewMode === 'personal' ? 'Personal' : 'Your branch')}
                   </div>
                 </div>
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-card flex items-center justify-center">
@@ -616,7 +707,19 @@ export default function DashboardPage() {
               <div className="flex flex-wrap gap-2">
                 {(Object.entries(summary.status_counts || {})).map(([status, count]) => (
                   <div key={status} className="flex items-center gap-1.5 rounded-lg bg-[var(--card-hover)]/60 px-2.5 py-1.5">
-                    <span className={`h-2 w-2 rounded-full ${status === 'Completed' ? 'bg-[var(--success)]' : status === 'Pending' ? 'bg-[var(--warn)]' : 'bg-amber-400'}`} />
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        status === 'Completed'
+                          ? 'bg-[var(--success)]'
+                          : status === 'Pending'
+                            ? 'bg-[var(--warn)]'
+                            : (status === 'Failed' || status === 'Rejected')
+                              ? 'bg-[var(--error)]'
+                              : status === 'Cancelled'
+                                ? 'bg-amber-400'
+                                : 'bg-amber-400'
+                      }`}
+                    />
                     <span className="text-xs font-medium text-[var(--text-primary)]">{status}</span>
                     <span className="text-xs text-[var(--text-muted)]">{count}</span>
                   </div>
@@ -649,9 +752,14 @@ export default function DashboardPage() {
                   </div>
                   <h3 className="text-base font-semibold text-[var(--text-primary)]">Open issues</h3>
                 </div>
-                <Link to="/issues" className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]">View all</Link>
+                <Link
+                  to={isAdmin ? '/issues?status=open' : '/my-issues?status=open'}
+                  className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+                >
+                  View all
+                </Link>
               </div>
-              <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{Array.isArray(issuesSnapshot) ? issuesSnapshot.length : 0}</p>
+              <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{issuesSnapshotTotal}</p>
             </Card>
           )}
 
@@ -686,7 +794,13 @@ export default function DashboardPage() {
                 <BarChart data={monthlyCcSi} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
                   <YAxis stroke="var(--text-muted)" tick={{ fontSize: 10 }} width={36} tickFormatter={v => `₹${(v / 1e5).toFixed(0)}L`} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} labelFormatter={l => `Month: ${l}`} contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '8px' }} />
+                  <Tooltip
+                    formatter={(v) => formatCurrency(v)}
+                    labelFormatter={l => `Month: ${l}`}
+                    contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '8px' }}
+                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
+                    itemStyle={{ color: 'var(--text-primary)' }}
+                  />
                   <Bar dataKey="cc" fill="#2563eb" name="CC" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="si" fill="#059669" name="SI" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -800,7 +914,8 @@ export default function DashboardPage() {
                       formatter={(value) => [formatCurrency(value), 'Amount']}
                       labelFormatter={(label) => `Category: ${label}`}
                       contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '12px', boxShadow: 'var(--shadow-card)', padding: '12px 16px' }}
-                      labelStyle={{ color: 'var(--text)', fontWeight: 600 }}
+                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
+                      itemStyle={{ color: 'var(--text-primary)' }}
                       cursor={{ fill: 'rgba(37, 99, 235, 0.08)' }}
                     />
                     <Bar dataKey="amount" fill="url(#colorCategory)" radius={[8, 8, 0, 0]} maxBarSize={60} onClick={(payload) => payload?.rawCategory != null && navigate(`/transactions?category=${encodeURIComponent(payload.rawCategory)}`)} cursor="pointer" />
@@ -829,7 +944,15 @@ export default function DashboardPage() {
               if (cx == null || cy == null) return null
               return (
                 <g>
-                  <text x={cx} y={cy - 12} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 13, fill: 'var(--text-muted)' }}>Total</text>
+                <text
+                  x={cx}
+                  y={cy - 12}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  style={{ fontSize: 13, fill: 'var(--text-primary)' }}
+                >
+                  Total
+                </text>
                   <text x={cx} y={cy + 12} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 20, fontWeight: 700, fill: 'var(--text-primary)' }}>{formatDonutCenter(donutTotal)}</text>
                 </g>
               )
@@ -866,7 +989,8 @@ export default function DashboardPage() {
                             return [`${formatCurrency(value)} · ${pct}%`, name]
                           }}
                           contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '12px', padding: '10px 14px' }}
-                          labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
+                          labelStyle={{ color: 'var(--text-primary)', marginBottom: 4, fontWeight: 600 }}
+                          itemStyle={{ color: 'var(--text-primary)' }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -878,7 +1002,7 @@ export default function DashboardPage() {
                         <li key={d.category} className="flex items-center gap-2.5">
                           <span className="h-3 w-3 rounded-sm flex-shrink-0" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }} />
                           <span className="text-sm font-medium text-[var(--text-primary)] truncate">{d.category}</span>
-                          <span className="text-sm text-[var(--text-muted)] flex-shrink-0">{pct}%</span>
+                          <span className="text-sm text-[var(--text-primary)] font-semibold flex-shrink-0">{pct}%</span>
                         </li>
                       )
                     })}
@@ -917,7 +1041,8 @@ export default function DashboardPage() {
                       formatter={(value) => [formatCurrency(value), 'Amount']}
                       labelFormatter={(label) => `Date: ${formatDate(label)}`}
                       contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '12px', boxShadow: 'var(--shadow-card)', padding: '12px 16px' }}
-                      labelStyle={{ color: 'var(--text)', fontWeight: 600 }}
+                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
+                      itemStyle={{ color: 'var(--text-primary)' }}
                       cursor={{ stroke: 'var(--dashboard-primary)' }}
                     />
                     <Line

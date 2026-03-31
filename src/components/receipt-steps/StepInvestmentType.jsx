@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 
-export default function StepInvestmentType({ onBack, onNext, productType, hasExistingFolio, amcCategory = 'MF' }) {
-  const [investmentType, setInvestmentType] = useState('')
+export default function StepInvestmentType({ onBack, onNext, productType, hasExistingFolio, amcCategory = 'MF', initialType = '' }) {
+  const [investmentType, setInvestmentType] = useState(initialType)
 
   const allInvestmentTypes = [
     { 

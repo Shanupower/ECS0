@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 
-export default function StepNCDBondIssuer({ onBack, onNext, token }) {
+export default function StepNCDBondIssuer({ onBack, onNext, token, initialIssuerKey = '', recentIssuers = [] }) {
   const [issuers, setIssuers] = useState([])
   const [selectedIssuer, setSelectedIssuer] = useState(null)
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState('all') // 'all' | 'NCD' | 'Bond' etc.
+  const [typeFilter, setTypeFilter] = useState('all')
 
   useEffect(() => {
     loadIssuers()
   }, [token])
+
+  useEffect(() => {
+    if (!initialIssuerKey || !issuers.length) return
+    const issuer = issuers.find(i => i._key === initialIssuerKey || i.issuer_key === initialIssuerKey)
+    if (issuer) setSelectedIssuer(issuer)
+  }, [initialIssuerKey, issuers])
 
   const loadIssuers = async () => {
     if (!token) return

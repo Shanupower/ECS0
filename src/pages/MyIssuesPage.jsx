@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 
@@ -105,18 +105,33 @@ const statusColors = {
   closed: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
 }
 
+const ISSUE_STATUS_QUERY_VALUES = ['all', 'open', 'in_progress', 'resolved', 'closed']
+
+function statusFromSearchParams(searchParams) {
+  const s = searchParams.get('status')
+  return s && ISSUE_STATUS_QUERY_VALUES.includes(s) ? s : null
+}
+
 export default function MyIssuesPage() {
-  const { token, user } = useAuth()
+  const { token } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [issues, setIssues] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState(() => statusFromSearchParams(searchParams) || 'all')
   const [selectedIssue, setSelectedIssue] = useState(null)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [pageSize] = useState(20)
+
+  useEffect(() => {
+    const fromUrl = statusFromSearchParams(searchParams)
+    if (!fromUrl) return
+    setStatusFilter((prev) => (prev === fromUrl ? prev : fromUrl))
+    setPage(1)
+  }, [searchParams])
 
   useEffect(() => {
     if (!token) return

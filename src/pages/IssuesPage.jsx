@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 
@@ -112,16 +112,24 @@ const statusColors = {
   closed: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
 }
 
+const ISSUE_STATUS_QUERY_VALUES = ['all', 'open', 'in_progress', 'resolved', 'closed']
+
+function statusFromSearchParams(searchParams) {
+  const s = searchParams.get('status')
+  return s && ISSUE_STATUS_QUERY_VALUES.includes(s) ? s : null
+}
+
 export default function IssuesPage() {
   const { token, user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [issues, setIssues] = useState([])
   const [allIssues, setAllIssues] = useState([]) // For stats calculation
   const [loading, setLoading] = useState(true)
   const [statsLoading, setStatsLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState(() => statusFromSearchParams(searchParams) || 'all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [submitterFilter, setSubmitterFilter] = useState('')
   const [selectedIssue, setSelectedIssue] = useState(null)
@@ -134,6 +142,14 @@ export default function IssuesPage() {
   const [viewMode, setViewMode] = useState('grid') // 'grid' or 'list'
 
   const isAdmin = user?.role === 'admin'
+
+  useEffect(() => {
+    if (!isAdmin) return
+    const fromUrl = statusFromSearchParams(searchParams)
+    if (!fromUrl) return
+    setStatusFilter((prev) => (prev === fromUrl ? prev : fromUrl))
+    setPage(1)
+  }, [isAdmin, searchParams])
 
   useEffect(() => {
     if (!isAdmin) return

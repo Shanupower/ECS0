@@ -2,20 +2,20 @@ import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
-export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false }) {
-  const [principalAmount, setPrincipalAmount] = useState('')
-  const [tenureMonths, setTenureMonths] = useState('')
-  const [payoutFrequency, setPayoutFrequency] = useState('')
+export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false, initialData }) {
   const todayYyyyMmDd = new Date().toISOString().split('T')[0]
-  const [bookingDate, setBookingDate] = useState(todayYyyyMmDd)
-  const [seniorCitizen, setSeniorCitizen] = useState(false)
-  const [women, setWomen] = useState(false)
-  const [renewal, setRenewal] = useState(false)
-  const [form15g15h, setForm15g15h] = useState(false)
-  const [applicationNumber, setApplicationNumber] = useState('')
-  const [fdTransactionType, setFdTransactionType] = useState('Fresh') // Fresh or Renewal
-  const [renewalInvestmentType, setRenewalInvestmentType] = useState('same') // same, increased, decreased
-  const [renewalAdditionalAmount, setRenewalAdditionalAmount] = useState('') // Additional amount for increased/decreased
+  const [principalAmount, setPrincipalAmount] = useState(initialData?.principalAmount || '')
+  const [tenureMonths, setTenureMonths] = useState(initialData?.tenureMonths || '')
+  const [payoutFrequency, setPayoutFrequency] = useState(initialData?.payoutFrequency || '')
+  const [bookingDate, setBookingDate] = useState(initialData?.bookingDate || todayYyyyMmDd)
+  const [seniorCitizen, setSeniorCitizen] = useState(initialData?.seniorCitizen || false)
+  const [women, setWomen] = useState(initialData?.women || false)
+  const [renewal, setRenewal] = useState(initialData?.renewal || false)
+  const [form15g15h, setForm15g15h] = useState(initialData?.form15g15h || false)
+  const [applicationNumber, setApplicationNumber] = useState(initialData?.applicationNumber || '')
+  const [fdTransactionType, setFdTransactionType] = useState(initialData?.fdTransactionType || 'Fresh')
+  const [renewalInvestmentType, setRenewalInvestmentType] = useState(initialData?.renewalInvestmentType || 'same')
+  const [renewalAdditionalAmount, setRenewalAdditionalAmount] = useState(initialData?.renewalAdditionalAmount || '')
   
   // Auto-computed fields
   const [lockedInterestRatePa, setLockedInterestRatePa] = useState(null)
@@ -254,6 +254,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       fd_renewal_investment_type: fdTransactionType === 'Renewal' ? renewalInvestmentType : null,
       fd_renewal_additional_amount: fdTransactionType === 'Renewal' && renewalAdditionalAmount ? parseFloat(renewalAdditionalAmount) : null
     }
+    fdData._formState = { principalAmount, tenureMonths, payoutFrequency, bookingDate, seniorCitizen, women, renewal, form15g15h, applicationNumber, fdTransactionType, renewalInvestmentType, renewalAdditionalAmount }
     onNext(fdData)
   }
 

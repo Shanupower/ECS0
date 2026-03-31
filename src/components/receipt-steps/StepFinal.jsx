@@ -797,11 +797,11 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               </>
             )}
             
-            {data.product_category === 'MF' && !data.transaction_type && data.fd_issuer_name && (
+            {(data.product_category === 'FD' || data.product_category === 'GOVT_FD') && !data.transaction_type && data.fd_issuer_name && (
                 <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
                   <h4 className="text-body font-semibold text-[var(--text-primary)] mb-3 flex items-center">
                     <span className="w-2 h-2 bg-purple-600 rounded-full mr-2"></span>
-                    Fixed Deposit Details
+                    {data.product_category === 'GOVT_FD' ? 'Government Schemes' : 'Fixed Deposit Details'}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {data.fd_issuer_name && (
@@ -849,7 +849,9 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                     )}
                     {data.fd_application_number && (
                       <div className="bg-[var(--card-bg)] rounded-card p-4">
-                        <div className="text-helper text-[var(--text-muted)]">Application/FD Number</div>
+                        <div className="text-helper text-[var(--text-muted)]">
+                          {data.product_category === 'GOVT_FD' ? 'Application/Scheme Number' : 'Application/FD Number'}
+                        </div>
                         <div className="font-semibold text-[var(--text-primary)]">{data.fd_application_number}</div>
                       </div>
                     )}

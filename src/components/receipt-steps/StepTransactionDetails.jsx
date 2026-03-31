@@ -3,21 +3,21 @@ import { api } from '../../api'
 import SearchableSelect from '../SearchableSelect.jsx'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
-export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, selectedAmcCategory, minInvestment, token }) {
-  const [amount, setAmount] = useState('')
-  const [frequency, setFrequency] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [isPerpetual, setIsPerpetual] = useState(false)
+export default function StepTransactionDetails({ onBack, onNext, investmentType, selectedScheme, selectedAmc, selectedAmcCategory, minInvestment, token, initialData }) {
+  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [frequency, setFrequency] = useState(initialData?.frequency || '')
+  const [startDate, setStartDate] = useState(initialData?.startDate || '')
+  const [endDate, setEndDate] = useState(initialData?.endDate || '')
+  const [isPerpetual, setIsPerpetual] = useState(initialData?.isPerpetual || false)
   const [schemes, setSchemes] = useState([])
-  const [targetScheme, setTargetScheme] = useState('')
+  const [targetScheme, setTargetScheme] = useState(initialData?.targetScheme || '')
   const [loading, setLoading] = useState(false)
   const [validationError, setValidationError] = useState('')
 
   const blockWheelChangeNumber = (e) => {
     e.currentTarget.blur()
   }
-  const [stpOriginalAmount, setStpOriginalAmount] = useState('')
+  const [stpOriginalAmount, setStpOriginalAmount] = useState(initialData?.stpOriginalAmount || '')
   const todayYyyyMmDd = useMemo(() => new Date().toISOString().split('T')[0], [])
   const amountNumber = useMemo(() => {
     const n = Number(amount)
@@ -33,8 +33,8 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
   )
 
   const getStartDateMax = () => {
-    // Requirement: allow future Start Dates ONLY for MF SIP.
-    if (investmentType === 'SIP') return undefined
+    // Requirement: allow future Start Dates for MF SIP and STP.
+    if (investmentType === 'SIP' || investmentType === 'STP') return undefined
     return todayYyyyMmDd
   }
 
@@ -96,6 +96,7 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
       transactionData.switch_value = amount
     }
 
+    transactionData._formState = { amount, frequency, startDate, endDate, isPerpetual, targetScheme, stpOriginalAmount }
     onNext(transactionData)
   }
 
@@ -270,6 +271,11 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
 
       {investmentType === 'STP' && (
         <div className="space-y-6">
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Scheme:</div>
+            <div className="text-sm text-gray-900 dark:text-gray-100 font-bold">{selectedScheme.scheme_name}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">{selectedAmc.amc_name}</div>
+          </div>
            <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Total Original Scheme Amount (₹) <span className="text-red-500">*</span>
