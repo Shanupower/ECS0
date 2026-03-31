@@ -316,8 +316,8 @@ export default function DatePickerInput({
     const direction = Math.sign(yearWheelAccumRef.current)
     yearWheelAccumRef.current -= direction * fullSteps * threshold
 
-    // Wheel down => earlier year, wheel up => later year.
-    const yearDelta = direction > 0 ? -fullSteps : fullSteps
+    // Wheel down => later year, wheel up => earlier year.
+    const yearDelta = direction > 0 ? fullSteps : -fullSteps
     setViewYear((prevYear) => {
       const nextYear = prevYear + yearDelta
       if (nextYear < yearBounds.minYear) return yearBounds.minYear

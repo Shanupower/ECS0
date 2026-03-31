@@ -1445,7 +1445,10 @@ export default function TransactionsPage() {
               <option value="MF">Mutual Fund</option>
               <option value="FD">Fixed Deposit</option>
               <option value="INS">Insurance</option>
-              <option value="BOND">Bonds</option>
+              <option value="BOND">Bonds/NCD</option>
+              <option value="NCD">Bonds/NCD</option>
+              <option value="GOVT_FD">Government Schemes</option>
+              <option value="MISC">Misc Transactions</option>
             </select>
           </div>
         </div>
