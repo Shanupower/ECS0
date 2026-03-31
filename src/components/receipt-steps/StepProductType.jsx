@@ -10,7 +10,7 @@ function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true,
     { value: 'INS', label: 'Insurance', Icon: FiShield, enabled: true },
     { value: 'FD', label: 'Fixed Deposit', Icon: FaRupeeSign, enabled: true, iconClass: 'font-extralight' },
     { value: 'BOND', label: 'Bonds/NCD', Icon: FiPieChart, enabled: true },
-    { value: 'GOVT_FD', label: 'Government schemes', Icon: FiAward, enabled: true },
+    { value: 'GOVT_FD', label: 'Government Schemes', Icon: FiAward, enabled: true },
     { value: 'MISC', label: 'Misc Services', Icon: FiTool, enabled: true }
   ]
 

@@ -527,7 +527,7 @@ function StepHeader({ step, productType }) {
   )
 }
 
-const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
+const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government Schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
 
 function getAllowedMfTxnTypesByCategory(amcCategory) {
   if (amcCategory === 'SIF') return ['Lumpsum', 'SIP']
@@ -2716,11 +2716,11 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
             if (type === 'MF') {
               setStep(4)
             } else if (type === 'FD') {
-              setStep(4) // FD also starts at step 4 (FD Issuer selection; excludes Government schemes)
+              setStep(4) // FD also starts at step 4 (FD Issuer selection; excludes Government Schemes)
             } else if (type === 'GOVT_FD') {
               setFdIssuerSeed(null)
               setFdSchemeSeed(null)
-              setStep(4) // Government schemes: step 4 = Government issuer selection
+              setStep(4) // Government Schemes: step 4 = Government issuer selection
             } else if (type === 'BOND') {
               setStep(4) // BOND also starts at step 4 (NCD/Bond Issuer selection)
             } else if (type === 'INS') {
@@ -2734,7 +2734,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         />
       )}
 
-      {/* FD Flow (excludes Government schemes) */}
+      {/* FD Flow (excludes Government Schemes) */}
       {step === 4 && productTypeSeed === 'FD' && (
         <StepFDIssuer
           onBack={() => setStep(3)}
@@ -2749,7 +2749,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         />
       )}
 
-      {/* Government schemes Flow (only Government/Post Office issuers from FD Scheme Management) */}
+      {/* Government Schemes Flow (only Government/Post Office issuers from FD Scheme Management) */}
       {step === 4 && productTypeSeed === 'GOVT_FD' && (
         <StepFDIssuer
           onBack={() => setStep(3)}

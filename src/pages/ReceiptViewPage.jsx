@@ -744,7 +744,7 @@ export default function ReceiptViewPage() {
                 </div>
               )}
 
-              {/* FD / Govt FD Details */}
+              {/* FD / Government Schemes Details */}
               {transformedReceipt.fd_issuer_name && (transformedReceipt.product_category === 'FD' || transformedReceipt.product_category === 'GOVT_FD') && (
                 <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">

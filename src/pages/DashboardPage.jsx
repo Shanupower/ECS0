@@ -277,7 +277,7 @@ export default function DashboardPage() {
     BOND: 'BOND',
     INS: 'Insurance',
     NCD: 'Bonds/NCD',
-    GOVT_FD: 'Govt FD',
+    GOVT_FD: 'Government Schemes',
     MISC: 'Misc'
   }
   const getCategoryLabel = (c) => (c && CATEGORY_LABELS[c]) || (c || 'Other')
