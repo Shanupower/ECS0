@@ -143,17 +143,34 @@ export function normalizeReceiptFields(receipt) {
   // AMC information (MF) (from structured.product_details.mf.amc or flat)
   normalized.amc_code = getValue('product_details.mf.amc.code', 'amc_code', 'amcCode')
   normalized.amc_name = getValue('product_details.mf.amc.name', 'amc_name', 'amcName')
+  normalized.mf_amc_category = getValue(
+    'mf_amc_category',
+    'product_details.mf.amc_category',
+    'mf_details.amc_category'
+  )
 
   // Investment details (from structured.transaction or flat)
-  normalized.investment_amount = getValue(
-    'transaction.amount',
-    'product_details.fd.deposit.amount',
-    'product_details.bond.transaction.amount',
-    'investment_amount',
-    'investmentAmount',
-    'amount',
-    'fd_deposit_amount'
-  )
+  const catUpper = String(normalized.product_category || '').toUpperCase()
+  if (catUpper === 'FD' || catUpper === 'GOVT_FD') {
+    normalized.investment_amount = getValue(
+      'product_details.fd.deposit.amount',
+      'fd_deposit_amount',
+      'transaction.amount',
+      'investment_amount',
+      'investmentAmount',
+      'amount'
+    )
+  } else {
+    normalized.investment_amount = getValue(
+      'transaction.amount',
+      'product_details.fd.deposit.amount',
+      'product_details.bond.transaction.amount',
+      'investment_amount',
+      'investmentAmount',
+      'amount',
+      'fd_deposit_amount'
+    )
+  }
   normalized.period_installments = getValue('transaction.period_installments', 'period_installments', 'periodInstallments', 'sip_stp_swp_period')
   normalized.installments_count = getValue('transaction.installments_count', 'installments_count', 'installmentsCount', 'noOfInstallments')
   normalized.from_text = getValue('transaction.from_text', 'from_text', 'fromText', 'from')
@@ -343,6 +360,11 @@ export function normalizeReceiptFields(receipt) {
   normalized.bond_face_value = getValue('product_details.bond.instrument.face_value', 'bond_face_value', 'bondFaceValue')
   normalized.bond_issue_date = getValue('product_details.bond.instrument.issue_date', 'bond_issue_date', 'bondIssueDate')
   normalized.bond_maturity_date = getValue('product_details.bond.instrument.maturity_date', 'bond_maturity_date', 'bondMaturityDate', 'renewal_due_date', 'renewalDueDate')
+  normalized.bond_tenure_months = getValue(
+    'product_details.bond.instrument.tenure_months',
+    'bond_tenure_months',
+    'bondTenureMonths'
+  )
   normalized.renewal_due_date = getValue('product_details.bond.instrument.maturity_date', 'renewal_due_date', 'renewalDueDate', 'bond_maturity_date', 'bondMaturityDate')
   normalized.bond_transaction_type = getValue('product_details.bond.transaction.type', 'bond_transaction_type', 'bondTransactionType', 'txn_type', 'txnType')
   normalized.bond_number_of_units = getValue('product_details.bond.transaction.number_of_units', 'bond_number_of_units', 'bondNumberOfUnits')
@@ -366,6 +388,11 @@ export function normalizeReceiptFields(receipt) {
     'product_details.insurance.coverage.renewal_date',
     'insurance_renewal_date',
     'insuranceRenewalDate'
+  )
+  normalized.insurance_policy_period = getValue(
+    'insurance_policy_period',
+    'product_details.insurance.policy.period',
+    'product_details.insurance.policy.policy_term'
   )
   normalized.insurance_maturity_date = getValue('product_details.insurance.coverage.maturity_date', 'insurance_maturity_date', 'insuranceMaturityDate')
 

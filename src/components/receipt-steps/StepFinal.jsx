@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { FiUpload, FiFile, FiTrash2, FiCheck, FiAlertCircle, FiRefreshCw, FiPlus } from 'react-icons/fi'
 import { Button } from '../ui'
-import { formatMinInvestment } from '../../data/mf_amc_categories'
+import { formatMinInvestment, getAmcCategoryById } from '../../data/mf_amc_categories'
+import { getReceiptProductCategoryLabel } from '../../utils/categoryMapping'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 const getAllowedMfTxnTypesByCategory = (amcCategory) => {
@@ -306,17 +307,6 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
     catch { return String(a); }
   };
 
-  const getProductTypeLabel = (type) => {
-    switch(type) {
-      case 'MF': return 'Mutual Funds';
-      case 'INS': return 'Insurance';
-      case 'FD': return 'Fixed Deposit';
-      case 'BOND': return 'Bonds';
-      case 'MISC': return 'Misc Services';
-      default: return type;
-    }
-  }
-
   return (
     <div className="receipt-step-card space-y-6 p-6">
       {validationError && (
@@ -554,7 +544,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-[var(--card-bg)] rounded-card p-4">
                 <div className="text-helper text-[var(--text-muted)]">Product Type</div>
-                <div className="text-body font-semibold text-[var(--text-primary)]">{getProductTypeLabel(data.product_category)}</div>
+                <div className="text-body font-semibold text-[var(--text-primary)]">{getReceiptProductCategoryLabel(data)}</div>
               </div>
               
               {data.transaction_type && data.product_category !== 'MF' && (
@@ -751,7 +741,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                         <div className="bg-[var(--card-bg)] rounded-card p-4">
                           <div className="text-helper text-[var(--text-muted)]">AMC Category</div>
                           <div className="font-semibold text-[var(--text-primary)]">
-                            {data.mf_amc_category}
+                            {getAmcCategoryById(data.mf_amc_category).label}
                             {data.mf_amc_category_min_investment != null && (
                               <span className="text-helper text-[var(--text-muted)] ml-2">– Min Investment: {formatMinInvestment(Number(data.mf_amc_category_min_investment))}</span>
                             )}

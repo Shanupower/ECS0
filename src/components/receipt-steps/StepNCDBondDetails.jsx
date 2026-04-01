@@ -9,6 +9,16 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
   const [transactionDate, setTransactionDate] = useState(initialData?.transactionDate || todayYyyyMmDd)
   const [applicationNumber, setApplicationNumber] = useState(initialData?.applicationNumber || '')
   const [form15g15h, setForm15g15h] = useState(initialData?.form15g15h || false)
+  const [tenureMonths, setTenureMonths] = useState(
+    initialData?.bond_tenure_months != null && initialData?.bond_tenure_months !== ''
+      ? String(initialData.bond_tenure_months)
+      : initialData?._formState?.tenureMonths || ''
+  )
+
+  useEffect(() => {
+    if (scheme?.tenure_months == null || scheme?.tenure_months === '') return
+    setTenureMonths((prev) => (prev === '' ? String(scheme.tenure_months) : prev))
+  }, [scheme?.scheme_id, scheme?.tenure_months])
 
   // Determine if it's NCD or Bond based on issuer type
   const isNCD = issuer?.type === 'NCD' || issuer?.type?.toUpperCase() === 'NCD'
@@ -46,7 +56,11 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
       bond_coupon_rate: scheme.coupon_rate,
       bond_face_value: scheme.face_value,
       bond_issue_date: scheme.issue_date,
-      bond_maturity_date: scheme.maturity_date,
+      bond_maturity_date: scheme.maturity_date || null,
+      bond_tenure_months:
+        tenureMonths !== '' && tenureMonths != null
+          ? Number(tenureMonths)
+          : (scheme.tenure_months != null && scheme.tenure_months !== '' ? Number(scheme.tenure_months) : null),
       bond_transaction_type: transactionType,
       bond_number_of_units: numberOfUnits ? parseFloat(numberOfUnits) : null,
       bond_investment_amount: investmentAmount ? parseFloat(investmentAmount) : null,
@@ -54,7 +68,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
       bond_application_number: applicationNumber,
       bond_form_15g_15h: form15g15h
     }
-    bondData._formState = { transactionType, numberOfUnits, investmentAmount, transactionDate, applicationNumber, form15g15h }
+    bondData._formState = { transactionType, numberOfUnits, investmentAmount, transactionDate, applicationNumber, form15g15h, tenureMonths }
     onNext(bondData)
   }
 
@@ -111,6 +125,22 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
             max={todayYyyyMmDd}
             inputClassName="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             ariaLabel="Transaction date"
+          />
+        </div>
+
+        {/* Tenure (months) — stored on receipt for PDF/history */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Tenure (months)
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={tenureMonths}
+            onChange={(e) => setTenureMonths(e.target.value)}
+            placeholder="e.g. 36"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -215,12 +245,10 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
                 <div className="text-base font-semibold text-gray-900 dark:text-white">₹{scheme.face_value.toLocaleString()}</div>
               </div>
             )}
-            {scheme?.issue_date && scheme?.maturity_date && (
+            {scheme?.tenure_months != null && scheme?.tenure_months !== '' && (
               <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Maturity Date</div>
-                <div className="text-base font-semibold text-gray-900 dark:text-white">
-                  {new Date(scheme.maturity_date).toLocaleDateString()}
-                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">Tenure (months)</div>
+                <div className="text-base font-semibold text-gray-900 dark:text-white">{scheme.tenure_months}</div>
               </div>
             )}
             {scheme?.listing_status && (

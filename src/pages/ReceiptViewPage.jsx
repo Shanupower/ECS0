@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { FiArrowLeft, FiPrinter, FiDownload, FiFile, FiImage, FiEye } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { getCategoryDisplayName } from '../utils/categoryMapping'
+import { getCategoryDisplayName, getReceiptProductCategoryLabel } from '../utils/categoryMapping'
 import { normalizeReceiptFields } from '../utils/receiptNormalizer'
 
 export default function ReceiptViewPage() {
@@ -634,7 +634,7 @@ export default function ReceiptViewPage() {
                   {transformedReceipt.product_category && (
                     <div className="bg-white dark:bg-dark-700 rounded-lg p-4 border border-blue-100 dark:border-dark-600">
                       <div className="text-sm text-gray-600 dark:text-gray-400">Product Type</div>
-                      <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{getCategoryDisplayName(transformedReceipt.product_category)}</div>
+                      <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{getReceiptProductCategoryLabel(receipt)}</div>
                     </div>
                   )}
                   

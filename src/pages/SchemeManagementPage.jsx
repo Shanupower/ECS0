@@ -251,7 +251,7 @@ export default function SchemeManagementPage() {
     coupon_rate: 0,
     face_value: 1000,
     issue_date: '',
-    maturity_date: '',
+    tenure_months: '',
     is_variable_rate: false,
     listing_status: 'Listed',
     credit_rating: '',
@@ -1419,7 +1419,10 @@ useEffect(() => {
       coupon_rate: scheme.coupon_rate || 0,
       face_value: scheme.face_value || 1000,
       issue_date: scheme.issue_date || '',
-      maturity_date: scheme.maturity_date || '',
+      tenure_months:
+        scheme.tenure_months !== undefined && scheme.tenure_months !== null && scheme.tenure_months !== ''
+          ? String(scheme.tenure_months)
+          : '',
       is_variable_rate: scheme.is_variable_rate || false,
       listing_status: scheme.listing_status || 'Listed',
       credit_rating: scheme.credit_rating || '',
@@ -1461,7 +1464,7 @@ useEffect(() => {
       coupon_rate: 0,
       face_value: 1000,
       issue_date: '',
-      maturity_date: '',
+      tenure_months: '',
       is_variable_rate: false,
       listing_status: 'Listed',
       credit_rating: '',
@@ -1478,6 +1481,24 @@ useEffect(() => {
       cc: 0,
       si: 0
     })
+  }
+
+  /** NCD/Bond scheme API payload: tenure replaces maturity in schema management; clear legacy maturity_date. */
+  const buildNcdBondSchemePayload = (formData) => {
+    const trimmed = trimFormData(formData)
+    const raw = trimmed.tenure_months
+    let tenure_months = null
+    if (raw !== '' && raw != null) {
+      const n = Number(raw)
+      if (Number.isFinite(n)) tenure_months = n
+    }
+    const isin = String(trimmed.isin || '').trim().toUpperCase()
+    return {
+      ...trimmed,
+      maturity_date: null,
+      tenure_months,
+      isin
+    }
   }
 
   // Insurance Handler Functions
@@ -1814,8 +1835,8 @@ useEffect(() => {
     }
     try {
       const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
-      const trimmedData = trimFormData(ncdBondSchemeFormData)
-      await api.createNCDBondScheme(token, issuerKey, trimmedData)
+      const payload = buildNcdBondSchemePayload(ncdBondSchemeFormData)
+      await api.createNCDBondScheme(token, issuerKey, payload)
       await loadNcdBondSchemes(issuerKey)
       setShowNcdBondSchemeForm(false)
       resetNcdBondSchemeForm()
@@ -1829,8 +1850,8 @@ useEffect(() => {
     if (!selectedNcdBondIssuer || !editingNcdBondScheme) return
     try {
       const issuerKey = selectedNcdBondIssuer._key || selectedNcdBondIssuer.issuer_key
-      const trimmedData = trimFormData(ncdBondSchemeFormData)
-      await api.updateNCDBondScheme(token, issuerKey, editingNcdBondScheme.scheme_id, trimmedData)
+      const payload = buildNcdBondSchemePayload(ncdBondSchemeFormData)
+      await api.updateNCDBondScheme(token, issuerKey, editingNcdBondScheme.scheme_id, payload)
       await loadNcdBondSchemes(issuerKey)
       setEditingNcdBondScheme(null)
       setShowNcdBondSchemeForm(false)
@@ -2386,9 +2407,10 @@ useEffect(() => {
       const subCategory = String(scheme?.sub_category ?? '').toLowerCase()
       const description = String(scheme?.description ?? '').toLowerCase()
       const couponRate = scheme?.coupon_rate !== undefined ? String(scheme.coupon_rate).toLowerCase() : ''
-      const maturityDate = scheme?.maturity_date
-        ? String(new Date(scheme.maturity_date).toISOString().slice(0, 10)).toLowerCase()
-        : ''
+      const tenureStr =
+        scheme?.tenure_months !== undefined && scheme?.tenure_months !== null && scheme?.tenure_months !== ''
+          ? String(scheme.tenure_months).toLowerCase()
+          : ''
       const status = scheme?.is_active !== false ? 'active' : 'inactive'
 
       return (
@@ -2399,7 +2421,7 @@ useEffect(() => {
         subCategory.includes(normalizedSearchQuery) ||
         description.includes(normalizedSearchQuery) ||
         couponRate.includes(normalizedSearchQuery) ||
-        maturityDate.includes(normalizedSearchQuery) ||
+        tenureStr.includes(normalizedSearchQuery) ||
         status.includes(normalizedSearchQuery)
       )
     })
@@ -2655,7 +2677,7 @@ useEffect(() => {
                         Coupon Rate
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">
-                        Maturity Date
+                        Tenure (mo)
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                         Status
@@ -2700,7 +2722,7 @@ useEffect(() => {
                         {scheme.coupon_rate !== undefined ? `${scheme.coupon_rate}%` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
-                        {scheme.maturity_date ? new Date(scheme.maturity_date).toLocaleDateString() : 'N/A'}
+                        {scheme.tenure_months != null && scheme.tenure_months !== '' ? scheme.tenure_months : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -2794,11 +2816,10 @@ useEffect(() => {
                   
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                      ISIN <span className="text-red-500">*</span>
+                      ISIN (optional, 12 chars if provided)
                     </label>
                     <input
                       type="text"
-                      required
                       maxLength={12}
                       value={ncdBondSchemeFormData.isin}
                       onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, isin: e.target.value.toUpperCase() })}
@@ -2907,14 +2928,16 @@ useEffect(() => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Maturity Date <span className="text-red-500">*</span>
+                        Tenure (months)
                       </label>
-                      <DatePickerInput
-                        value={ncdBondSchemeFormData.maturity_date}
-                        required
-                        onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: v })}
-                        inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        ariaLabel="Maturity date"
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={ncdBondSchemeFormData.tenure_months}
+                        onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, tenure_months: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., 36"
                       />
                     </div>
                   </div>
@@ -7417,11 +7440,10 @@ useEffect(() => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    ISIN <span className="text-red-500">*</span>
+                    ISIN (optional, 12 chars if provided)
                   </label>
                   <input
                     type="text"
-                    required
                     maxLength={12}
                     value={ncdBondSchemeFormData.isin}
                     onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, isin: e.target.value.toUpperCase() })}
@@ -7538,14 +7560,16 @@ useEffect(() => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Maturity Date <span className="text-red-500">*</span>
+                      Tenure (months)
                     </label>
-                    <DatePickerInput
-                      value={ncdBondSchemeFormData.maturity_date}
-                      required
-                      onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, maturity_date: v })}
-                      inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      ariaLabel="Maturity date"
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={ncdBondSchemeFormData.tenure_months}
+                      onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, tenure_months: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g., 36"
                     />
                   </div>
                 </div>

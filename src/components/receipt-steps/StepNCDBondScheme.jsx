@@ -172,9 +172,15 @@ export default function StepNCDBondScheme({ onBack, onNext, token, issuer, initi
                     </div>
                   )}
 
-                  {scheme.issue_date && scheme.maturity_date && (
+                  {scheme.tenure_months != null && scheme.tenure_months !== '' && (
                     <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                      <span className="font-medium">Tenure:</span> {new Date(scheme.issue_date).toLocaleDateString()} - {new Date(scheme.maturity_date).toLocaleDateString()}
+                      <span className="font-medium">Tenure:</span> {scheme.tenure_months} months
+                    </div>
+                  )}
+                  {!scheme.tenure_months && scheme.issue_date && scheme.maturity_date && (
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      <span className="font-medium">Tenure (legacy):</span>{' '}
+                      {new Date(scheme.issue_date).toLocaleDateString()} - {new Date(scheme.maturity_date).toLocaleDateString()}
                     </div>
                   )}
 

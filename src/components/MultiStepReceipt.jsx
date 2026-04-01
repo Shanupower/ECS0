@@ -27,6 +27,7 @@ import StepProduct from './receipt-steps/StepProduct.jsx'
 import StepFinal from './receipt-steps/StepFinal.jsx'
 import DatePickerInput from './ui/DatePickerInput.jsx'
 import { getAmcCategoryById, mergeCategoryMinimums } from '../data/mf_amc_categories'
+import { getReceiptProductCategoryLabel } from '../utils/categoryMapping'
 
 // import investorsData from '../data/investors.json' // Removed - too large, using optimized loading instead
 // import empData from '../data/empdata.json' // Removed - using backend API instead
@@ -538,7 +539,14 @@ function getAllowedMfTxnTypesByCategory(amcCategory) {
 function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdIssuerSeed, fdSchemeSeed, ncdBondIssuerSeed, ncdBondSchemeSeed, insuranceIssuerSeed, insuranceProductSeed, finalData, receiptNo = null, draftId = null }) {
   const [collapsed, setCollapsed] = useState(true)
   const rawProduct = productTypeSeed || finalData?.product_category || ''
-  const productLabel = PRODUCT_TYPE_LABELS[rawProduct] || rawProduct || ''
+  const productLabel = rawProduct
+    ? getReceiptProductCategoryLabel({
+        product_category: rawProduct,
+        mf_amc_category: finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id,
+        mf_details: finalData?.mf_details,
+        product_details: finalData?.product_details
+      })
+    : (PRODUCT_TYPE_LABELS[rawProduct] || '')
 
   const normalizeTxnTypeToModeDisplay = (raw) => {
     const v = String(raw || '').trim()
@@ -572,7 +580,7 @@ function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdI
       fdSchemeSeed?.scheme_name || ncdBondSchemeSeed?.scheme_name || insuranceProductSeed?.product_name ||
       mfSchemeSeed?.selectedScheme?.scheme_name || finalData?.service_name || '') +
       (productTypeSeed === 'MF' && (finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id) && (finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id) !== 'MF'
-        ? ` (${finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.label})`
+        ? ` (${getAmcCategoryById(finalData?.mf_amc_category || mfSchemeSeed?.selectedAmcCategory?.id).label})`
         : ''),
     amount: finalData?.investment_amount || finalData?.investmentAmount || finalData?.fd_deposit_amount || finalData?.service_price || ''
   }
@@ -2161,6 +2169,10 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       bond_face_value: bondData.bond_face_value || null,
       bond_issue_date: bondData.bond_issue_date || null,
       bond_maturity_date: bondData.bond_maturity_date || null,
+      bond_tenure_months:
+        bondData.bond_tenure_months != null && bondData.bond_tenure_months !== ''
+          ? Number(bondData.bond_tenure_months)
+          : null,
       renewal_due_date: bondData.bond_maturity_date || null,
       
       // NCD/Bond Transaction details

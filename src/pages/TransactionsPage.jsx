@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/ui/Toast.jsx'
 import { api } from '../api'
-import { getCategoryDisplayName } from '../utils/categoryMapping'
+import { getCategoryDisplayName, getReceiptProductCategoryLabel } from '../utils/categoryMapping'
+import { effectiveInvestmentAmountForReceipt } from '../utils/receiptAmount'
 import { normalizeReceiptsArray } from '../utils/receiptNormalizer'
 import { Card, Button, EmptyState, Skeleton, SegmentedControl, Chip } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
@@ -341,7 +342,7 @@ export default function TransactionsPage() {
       // Apply amount range filter on frontend
       if (filters.amount_min || filters.amount_max) {
         normalizedReceipts = normalizedReceipts.filter(receipt => {
-          const amount = receipt.investment_amount || receipt.fd_deposit_amount || 0
+          const amount = effectiveInvestmentAmountForReceipt(receipt) ?? 0
           if (filters.amount_min && amount < parseFloat(filters.amount_min)) return false
           if (filters.amount_max && amount > parseFloat(filters.amount_max)) return false
           return true
@@ -591,7 +592,10 @@ export default function TransactionsPage() {
     setEditData({
       // Core fields
       date: coerceToYyyyMmDd(receipt.date),
-      investment_amount: receipt.investment_amount || receipt.fd_deposit_amount || '',
+      investment_amount: (() => {
+        const a = effectiveInvestmentAmountForReceipt(receipt)
+        return a != null ? String(a) : ''
+      })(),
       // For INS receipts, the frontend modal fields still use the generic names
       // `scheme_name` and `folio_policy_no`, so we must fall back to
       // `insurance_*` values from the receipt normalizer.
@@ -606,9 +610,21 @@ export default function TransactionsPage() {
         receipt.insurance_policy_number ||
         receipt.bond_application_number ||
         '',
-      insurance_date_of_issue: coerceToYyyyMmDd(receipt.insurance_date_of_issue),
-      insurance_renewal_date: coerceToYyyyMmDd(receipt.insurance_renewal_date || receipt.renewal_due_date),
-      insurance_policy_period: receipt.insurance_policy_period || receipt.insurance_policy_term_years || '',
+      insurance_date_of_issue: coerceToYyyyMmDd(
+        receipt.insurance_date_of_issue ||
+        receipt.product_details?.insurance?.coverage?.policy_start_date
+      ),
+      insurance_renewal_date: coerceToYyyyMmDd(
+        receipt.insurance_renewal_date ||
+        receipt.renewal_due_date ||
+        receipt.product_details?.insurance?.policy?.renewal_date
+      ),
+      insurance_policy_period:
+        receipt.insurance_policy_period ??
+        receipt.product_details?.insurance?.policy?.period ??
+        receipt.insurance_policy_term_years ??
+        receipt.product_details?.insurance?.coverage?.policy_term_years ??
+        '',
       fd_maturity_date: coerceToYyyyMmDd(receipt.fd_maturity_date),
       bond_issue_date: coerceToYyyyMmDd(receipt.bond_issue_date),
       bond_maturity_date: coerceToYyyyMmDd(receipt.bond_maturity_date || receipt.renewal_due_date),
@@ -617,6 +633,8 @@ export default function TransactionsPage() {
         : (receipt.txn_type || ''),
       switch_from_scheme_name: receipt.switch_from_scheme_name || '',
       switch_to_scheme_name: receipt.switch_to_scheme_name || '',
+      stp_target_scheme_name:
+        receipt.stp_target_scheme_name || receipt.transaction?.stp?.to_scheme_name || '',
       // Transaction / payment details
       entry_mode: receipt.entry_mode || '',
       transaction_channel: receipt.channel || receipt.transaction_channel || '',
@@ -1051,12 +1069,12 @@ export default function TransactionsPage() {
                   <td>${esc(r.emp_code || '—')}</td>
                   <td>${esc(r.investor_name || r.investorName || 'N/A')}</td>
                   <td>${esc(r.pan || '—')}</td>
-                  <td>${esc(getCategoryDisplayName(r.product_category))}</td>
+                  <td>${esc(getReceiptProductCategoryLabel(r))}</td>
                   <td>${esc(r.scheme_name || '—')}</td>
                   <td>${esc(r.folio_policy_no || '—')}</td>
                   <td>${esc(r.transaction_type || '—')}</td>
                   <td>${esc(r.mode || '—')}</td>
-                  <td>${esc(formatCurrency(r.investment_amount || r.fd_deposit_amount || 0))}</td>
+                  <td>${esc(formatCurrency(effectiveInvestmentAmountForReceipt(r) ?? 0))}</td>
                   <td>${esc(formatCurrency(r.cc || 0))}</td>
                   <td>${esc(r.si == null ? '—' : formatCurrency(r.si || 0))}</td>
                   <td>${esc(r.status || r.transaction_status || 'Pending')}</td>
@@ -1611,7 +1629,7 @@ export default function TransactionsPage() {
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-gray-500 dark:text-gray-400">Amount</span>
-                        <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(receipt.fd_deposit_amount || receipt.investment_amount || receipt.investmentAmount)}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(effectiveInvestmentAmountForReceipt(receipt) ?? 0)}</p>
                       </div>
                       {(hasPaymentDetails(receipt)) && (
                         <div>
@@ -1649,7 +1667,7 @@ export default function TransactionsPage() {
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Product</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{getDisplaySchemeName(receipt)}</p>
                       <div className="flex items-center gap-1 flex-wrap">
-                        <p className="text-xs text-gray-600 dark:text-gray-400">{getCategoryDisplayName(receipt.product_category)}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{getReceiptProductCategoryLabel(receipt)}</p>
                         {getMode(receipt) && receipt.product_category === 'MF' && (
                           <>
                             <span className="text-gray-400 dark:text-dark-500">•</span>
@@ -1704,11 +1722,11 @@ export default function TransactionsPage() {
                       </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-dark-700">
+                    {/* Actions — wrap to new lines for readability */}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200 dark:border-dark-700">
                       <button
                         onClick={() => window.open(`/receipts/${receipt._key || receipt.id}`, '_blank')}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
                       >
                         <FiEye className="w-3.5 h-3.5 mr-1.5" />
                         View Details
@@ -1716,39 +1734,55 @@ export default function TransactionsPage() {
                       {isAdmin && (
                         <button
                           onClick={() => handleAddBonus(receipt)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-lg text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60"
+                          className="inline-flex items-center justify-center px-3 py-2 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-lg text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
                         >
                           <FiAward className="w-3.5 h-3.5 mr-1.5" />
                           Add Bonus
                         </button>
                       )}
-                      {/* Edit button for pending receipts in mobile view */}
                       {!receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
                         <button
                           onClick={() => handleEdit(receipt)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60"
+                          className="inline-flex items-center justify-center px-3 py-2 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
                         >
                           <FiEdit className="w-3.5 h-3.5 mr-1.5" />
                           Edit
                         </button>
                       )}
-                      {/* Admin reject button for pending receipts in mobile view */}
                       {isAdmin && !receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
-                        <button
-                          onClick={() => handleReject(receipt)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-medium rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60"
-                        >
-                          <FiXCircle className="w-3.5 h-3.5 mr-1.5" />
-                          Reject
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleStatusChange(receipt._key || receipt.id, 'Completed')}
+                            className="inline-flex items-center justify-center px-3 py-2 border border-green-300 dark:border-green-600 text-xs font-medium rounded-lg text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
+                          >
+                            <FiCheck className="w-3.5 h-3.5 mr-1.5" />
+                            Complete
+                          </button>
+                          <button
+                            onClick={() => handleReject(receipt)}
+                            className="inline-flex items-center justify-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-medium rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
+                          >
+                            <FiXCircle className="w-3.5 h-3.5 mr-1.5" />
+                            Reject
+                          </button>
+                        </>
                       )}
                       {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
                         <button
-                          onClick={() => handleDelete(receipt._key || receipt.id)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-medium rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60"
+                          onClick={() => (receipt.deleted_at ? handleRestore(receipt._key || receipt.id) : handleDelete(receipt._key || receipt.id))}
+                          className="inline-flex items-center justify-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-medium rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
                         >
-                          <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
-                          Delete
+                          {receipt.deleted_at ? (
+                            <>
+                              <FiRotateCw className="w-3.5 h-3.5 mr-1.5" />
+                              Restore
+                            </>
+                          ) : (
+                            <>
+                              <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
+                              Delete
+                            </>
+                          )}
                         </button>
                       )}
                     </div>
@@ -1837,7 +1871,7 @@ export default function TransactionsPage() {
                               </div>
                               <span className="text-gray-400 dark:text-dark-500">•</span>
                               <span className="text-xs text-gray-600 dark:text-dark-400">
-                                {getCategoryDisplayName(receipt.product_category)}
+                                {getReceiptProductCategoryLabel(receipt)}
                               </span>
                               {getMode(receipt) && receipt.product_category === 'MF' && (
                                 <>
@@ -1883,7 +1917,7 @@ export default function TransactionsPage() {
                                 {formatDate(receipt.date)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-dark-400">
-                                {getCategoryDisplayName(receipt.product_category)}
+                                {getReceiptProductCategoryLabel(receipt)}
                               </div>
                             </td>
                           </>
@@ -1900,7 +1934,7 @@ export default function TransactionsPage() {
                                 {formatDate(receipt.date)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-dark-400">
-                                {getCategoryDisplayName(receipt.product_category)}
+                                {getReceiptProductCategoryLabel(receipt)}
                               </div>
                             </div>
                             </td>
@@ -1909,7 +1943,7 @@ export default function TransactionsPage() {
                         <td className="px-3 py-3">
                           <div className="text-right">
                             <div className="text-base font-bold text-gray-900 dark:text-white">
-                              {formatCurrency(receipt.fd_deposit_amount || receipt.investment_amount || receipt.investmentAmount)}
+                              {formatCurrency(effectiveInvestmentAmountForReceipt(receipt) ?? 0)}
                             </div>
                           </div>
                         </td>
@@ -2093,91 +2127,88 @@ export default function TransactionsPage() {
                                   </div>
                                 )}
                               </div>
-                              
-                              {/* Actions Section */}
-                              <div className="flex flex-col gap-2">
-                                <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Actions</div>
-                                <div className="flex items-center gap-2">
+                            </div>
+                            {/* Actions on their own row for clearer layout */}
+                            <div className="w-full flex flex-col gap-2 pt-3 mt-3 border-t border-[var(--stroke)]">
+                              <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Actions</div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    window.open(`/receipts/${receiptId}`, '_blank')
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all hover:shadow-sm"
+                                >
+                                  <FiEye className="w-3.5 h-3.5 mr-1.5" />
+                                  View Details
+                                </button>
+                                {!receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      window.open(`/receipts/${receiptId}`, '_blank')
+                                      handleEdit(receipt)
                                     }}
                                     className="inline-flex items-center px-3 py-1.5 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all hover:shadow-sm"
                                   >
-                                    <FiEye className="w-3.5 h-3.5 mr-1.5" />
-                                    View Details
+                                    <FiEdit className="w-3.5 h-3.5 mr-1.5" />
+                                    Edit
                                   </button>
-                                  {/* Edit button for pending receipts */}
-                                  {!receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
+                                )}
+                                {isAdmin && !receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
+                                  <>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        handleEdit(receipt)
+                                        handleStatusChange(receiptId, 'Completed')
                                       }}
-                                      className="inline-flex items-center px-3 py-1.5 border border-blue-300 dark:border-blue-600 text-xs font-medium rounded-md text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all hover:shadow-sm"
+                                      className="inline-flex items-center px-3 py-1.5 border border-green-300 dark:border-green-600 text-xs font-medium rounded-md text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 transition-all hover:shadow-sm"
                                     >
-                                      <FiEdit className="w-3.5 h-3.5 mr-1.5" />
-                                      Edit
+                                      <FiCheck className="w-3.5 h-3.5 mr-1.5" />
+                                      Complete
                                     </button>
-                                  )}
-                                  {/* Admin actions for pending receipts */}
-                                  {isAdmin && !receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
-                                    <>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleStatusChange(receiptId, 'Completed')
-                                        }}
-                                        className="inline-flex items-center px-3 py-1.5 border border-green-300 dark:border-green-600 text-xs font-medium rounded-md text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 hover:bg-green-100 dark:hover:bg-green-900/60 transition-all hover:shadow-sm"
-                                      >
-                                        <FiCheck className="w-3.5 h-3.5 mr-1.5" />
-                                        Complete
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleReject(receipt)
-                                        }}
-                                        className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all hover:shadow-sm"
-                                      >
-                                        <FiXCircle className="w-3.5 h-3.5 mr-1.5" />
-                                        Reject
-                                      </button>
-                                    </>
-                                  )}
-                                  {isAdmin && !receipt.deleted_at && (
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        handleAddBonus(receipt)
+                                        handleReject(receipt)
                                       }}
-                                      className="inline-flex items-center px-3 py-1.5 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-md text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 transition-all hover:shadow-sm mr-2"
+                                      className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all hover:shadow-sm"
                                     >
-                                      <FiAward className="w-3.5 h-3.5 mr-1.5" />
-                                      Bonus
+                                      <FiXCircle className="w-3.5 h-3.5 mr-1.5" />
+                                      Reject
                                     </button>
-                                  )}
+                                  </>
+                                )}
+                                {isAdmin && !receipt.deleted_at && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      receipt.deleted_at ? handleRestore(receiptId) : handleDelete(receiptId)
+                                      handleAddBonus(receipt)
                                     }}
-                                    className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all hover:shadow-sm"
+                                    className="inline-flex items-center px-3 py-1.5 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-md text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 transition-all hover:shadow-sm"
                                   >
-                                    {receipt.deleted_at ? (
-                                      <>
-                                        <FiRotateCw className="w-3.5 h-3.5 mr-1.5" />
-                                        Restore
-                                      </>
-                                    ) : (
-                                      <>
-                                        <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
-                                        Delete
-                                      </>
-                                    )}
+                                    <FiAward className="w-3.5 h-3.5 mr-1.5" />
+                                    Bonus
                                   </button>
-                                </div>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    receipt.deleted_at ? handleRestore(receiptId) : handleDelete(receiptId)
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all hover:shadow-sm"
+                                >
+                                  {receipt.deleted_at ? (
+                                    <>
+                                      <FiRotateCw className="w-3.5 h-3.5 mr-1.5" />
+                                      Restore
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
+                                      Delete
+                                    </>
+                                  )}
+                                </button>
                               </div>
                             </div>
                           </td>
