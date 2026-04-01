@@ -355,6 +355,7 @@ export const api={
   
   // NCD/Bond Schemes endpoints (nested structure)
   listNCDBondIssuers:(t)=>req('/api/ncd-bonds-schemes/issuers',{token:t}),
+  listNCDBondReceiptSchemes:(t,segment)=>req('/api/ncd-bonds-schemes/receipt-schemes',{token:t,query:{segment}}),
   getNCDBondIssuer:(t,issuer_key)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}`,{token:t}),
   getNCDBondSchemesByIssuer:(t,issuer_key)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/schemes`,{token:t}),
   getNCDBondScheme:(t,issuer_key,scheme_id)=>req(`/api/ncd-bonds-schemes/issuer/${issuer_key}/scheme/${scheme_id}`,{token:t}),

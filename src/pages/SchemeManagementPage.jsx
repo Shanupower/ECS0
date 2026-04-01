@@ -2788,11 +2788,10 @@ useEffect(() => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                        Scheme ID <span className="text-red-500">*</span>
+                        Scheme ID
                       </label>
                       <input
                         type="text"
-                        required
                         value={ncdBondSchemeFormData.scheme_id}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_id: e.target.value.toUpperCase() })}
                         className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
@@ -2801,11 +2800,10 @@ useEffect(() => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                        Scheme Name <span className="text-red-500">*</span>
+                        Scheme Name
                       </label>
                       <input
                         type="text"
-                        required
                         value={ncdBondSchemeFormData.scheme_name}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_name: e.target.value })}
                         className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
@@ -2844,10 +2842,9 @@ useEffect(() => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Category <span className="text-red-500">*</span>
+                        Category
                       </label>
                       <select
-                        required
                         value={ncdBondSchemeFormData.category}
                         onChange={(e) => {
                           setNcdBondSchemeFormData({ 
@@ -2866,10 +2863,9 @@ useEffect(() => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Sub Category <span className="text-red-500">*</span>
+                        Sub Category
                       </label>
                       <select
-                        required
                         value={ncdBondSchemeFormData.sub_category}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, sub_category: e.target.value })}
                         disabled={!ncdBondSchemeFormData.category}
@@ -2886,12 +2882,11 @@ useEffect(() => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Coupon Rate (%) <span className="text-red-500">*</span>
+                        Coupon Rate (%)
                       </label>
                       <input
                         type="number"
                         step="0.01"
-                        required
                         value={ncdBondSchemeFormData.coupon_rate}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, coupon_rate: parseFloat(e.target.value) })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -2900,11 +2895,10 @@ useEffect(() => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Face Value (₹) <span className="text-red-500">*</span>
+                        Face Value (₹)
                       </label>
                       <input
                         type="number"
-                        required
                         value={ncdBondSchemeFormData.face_value}
                         onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, face_value: parseFloat(e.target.value) })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -2916,11 +2910,10 @@ useEffect(() => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Issue Date <span className="text-red-500">*</span>
+                        Issue Date
                       </label>
                       <DatePickerInput
                         value={ncdBondSchemeFormData.issue_date}
-                        required
                         onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: v })}
                         inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         ariaLabel="Issue date"
@@ -7412,11 +7405,10 @@ useEffect(() => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Scheme ID <span className="text-red-500">*</span>
+                      Scheme ID
                     </label>
                     <input
                       type="text"
-                      required
                       value={ncdBondSchemeFormData.scheme_id}
                       onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_id: e.target.value.toUpperCase() })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -7425,11 +7417,10 @@ useEffect(() => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Scheme Name <span className="text-red-500">*</span>
+                      Scheme Name
                     </label>
                     <input
                       type="text"
-                      required
                       value={ncdBondSchemeFormData.scheme_name}
                       onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, scheme_name: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -7518,12 +7509,11 @@ useEffect(() => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Coupon Rate (%) <span className="text-red-500">*</span>
+                      Coupon Rate (%)
                     </label>
                     <input
                       type="number"
                       step="0.01"
-                      required
                       value={ncdBondSchemeFormData.coupon_rate}
                       onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, coupon_rate: parseFloat(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -7532,11 +7522,10 @@ useEffect(() => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Face Value (₹) <span className="text-red-500">*</span>
+                      Face Value (₹)
                     </label>
                     <input
                       type="number"
-                      required
                       value={ncdBondSchemeFormData.face_value}
                       onChange={(e) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, face_value: parseFloat(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -7548,11 +7537,10 @@ useEffect(() => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Issue Date <span className="text-red-500">*</span>
+                      Issue Date
                     </label>
                     <DatePickerInput
                       value={ncdBondSchemeFormData.issue_date}
-                      required
                       onChange={(v) => setNcdBondSchemeFormData({ ...ncdBondSchemeFormData, issue_date: v })}
                       inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       ariaLabel="Issue date"

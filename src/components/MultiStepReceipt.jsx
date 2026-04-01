@@ -16,7 +16,6 @@ import StepFDIssuer from './receipt-steps/StepFDIssuer.jsx'
 import StepFDScheme from './receipt-steps/StepFDScheme.jsx'
 import StepFDDetails from './receipt-steps/StepFDDetails.jsx'
 import StepNCDBondIssuer from './receipt-steps/StepNCDBondIssuer.jsx'
-import StepNCDBondScheme from './receipt-steps/StepNCDBondScheme.jsx'
 import StepNCDBondDetails from './receipt-steps/StepNCDBondDetails.jsx'
 import StepInsuranceIssuer from './receipt-steps/StepInsuranceIssuer.jsx'
 import StepInsuranceProduct from './receipt-steps/StepInsuranceProduct.jsx'
@@ -446,10 +445,9 @@ function StepHeader({ step, productType }) {
         ['Employee', 1],
         ['Investor', 2],
         ['Product Type', 3],
-        ['Issuer', 4],
-        ['Scheme', 5],
-        ['Details', 6],
-        ['Preview', 7],
+        ['Scheme', 4],
+        ['Details', 5],
+        ['Preview', 6],
       ]
     } else if (productType === 'INS') {
       return [
@@ -489,7 +487,7 @@ function StepHeader({ step, productType }) {
     const currentStepIndex = stepLabels.findIndex(([_, stepNumber]) => stepNumber === step)
     if (currentStepIndex === -1) return 0
     const completed = currentStepIndex + 1
-    // Steps 1–3: show progress out of 7 so bar doesn't jump backward when product flow has more steps
+    // Steps 1–3: show progress out of longest flow (7) so bar doesn't jump backward when product changes
     const denominator = !productType && step <= 3 ? 7 : totalSteps
     return Math.min(100, (completed / denominator) * 100)
   }
@@ -529,6 +527,30 @@ function StepHeader({ step, productType }) {
 }
 
 const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government Schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
+
+function isBondNcdProductType(productType) {
+  return productType === 'BOND' || productType === 'NCD'
+}
+
+function getReceiptPreviewStep(productType) {
+  if (isBondNcdProductType(productType)) return 6
+  if (productType === 'MISC') return 5
+  return 7
+}
+
+function isOnReceiptPreviewStep(step, productType, hasFinalData) {
+  if (!hasFinalData || !productType) return false
+  return step === getReceiptPreviewStep(productType)
+}
+
+function normalizeBondDraftStep(step, draftData) {
+  const pt = draftData.productTypeSeed
+  if (!isBondNcdProductType(pt)) return step
+  if (step === 7) return 6
+  if (step === 6) return draftData.finalData ? 6 : 5
+  if (step === 5) return draftData.ncdBondSchemeSeed ? 5 : 4
+  return step
+}
 
 function getAllowedMfTxnTypesByCategory(amcCategory) {
   if (amcCategory === 'SIF') return ['Lumpsum', 'SIP']
@@ -1762,7 +1784,11 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       }
       if (r.product_category === 'BOND' && r.bond_scheme_id && !seen.BOND.has(r.bond_scheme_id)) {
         seen.BOND.add(r.bond_scheme_id)
-        result.BOND.push({ scheme_id: r.bond_scheme_id, scheme_name: r.bond_scheme_name })
+        result.BOND.push({
+          scheme_id: r.bond_scheme_id,
+          scheme_name: r.bond_scheme_name,
+          issuer_key: r.bond_issuer_key
+        })
       }
       if (r.product_category === 'INS' && r.insurance_product_id && !seen.INS.has(r.insurance_product_id)) {
         seen.INS.add(r.insurance_product_id)
@@ -1813,38 +1839,42 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
     setFinalData(draftData.finalData || null)
     setFailureDraftId(draftId || null)
 
-    const nextStep = draftData.step || (draftData.finalData ? 7 : 1)
+    let nextStep =
+      draftData.step != null
+        ? draftData.step
+        : draftData.finalData
+          ? getReceiptPreviewStep(draftData.productTypeSeed)
+          : 1
+    nextStep = normalizeBondDraftStep(nextStep, draftData)
     setStep(nextStep)
     setHasAppliedDraft(true)
   }, [draftData, draftId, hasAppliedDraft, empSeed, investorSeed])
 
   // Monitor for stuck users - show popup after 2 minutes on same step
   useEffect(() => {
-    if (step > 1 && step < 7) {
-      // Clear existing timer
+    const previewStep = getReceiptPreviewStep(productTypeSeed || '')
+    if (step > 1 && step < previewStep) {
       if (stuckTimer) {
         clearTimeout(stuckTimer)
       }
-      
-      // Set new timer for 2 minutes
+
       const timer = setTimeout(() => {
         setShowFailurePopup(true)
-      }, 120000) // 2 minutes
-      
+      }, 120000)
+
       setStuckTimer(timer)
-      
+
       return () => {
         clearTimeout(timer)
       }
     } else {
-      // Clear timer if on first or last step
       if (stuckTimer) {
         clearTimeout(stuckTimer)
         setStuckTimer(null)
       }
       setShowFailurePopup(false)
     }
-  }, [step])
+  }, [step, productTypeSeed])
 
   // Show failure popup when there's a save error
   useEffect(() => {
@@ -2615,8 +2645,10 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
 
       {/* Main column has min width; preview grows to use remaining space (no empty strip on the right) */}
       <div className="lg:grid lg:grid-cols-[minmax(560px,1fr)_minmax(200px,16rem)] lg:gap-6 lg:items-start">
-        <div className={`space-y-4 ${step >= 7 ? 'lg:col-span-2' : ''}`}>
-      {step < 7 && (
+        <div
+          className={`space-y-4 ${isOnReceiptPreviewStep(step, productTypeSeed, !!finalData) ? 'lg:col-span-2' : ''}`}
+        >
+      {!isOnReceiptPreviewStep(step, productTypeSeed, !!finalData) && (
         <div className="lg:hidden">
         <LivePreview
           empSeed={empSeed}
@@ -2635,8 +2667,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         </div>
       )}
 
-      {/* Save to draft - shown during receipt creation (steps 2–6) */}
-      {step >= 2 && step < 7 && (
+      {/* Save to draft - shown during receipt creation (before preview step) */}
+      {step >= 2 && step < getReceiptPreviewStep(productTypeSeed || '') && (
         <Card padding="sm" className="mb-2 border-0 shadow-none bg-transparent">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-caption text-[var(--text-muted)]">
@@ -2811,38 +2843,26 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       {step === 4 && productTypeSeed === 'BOND' && (
         <StepNCDBondIssuer
           onBack={() => setStep(3)}
-          onNext={(issuer) => {
+          onNext={(issuer, scheme) => {
             setNcdBondIssuerSeed(issuer)
+            setNcdBondSchemeSeed(scheme)
             setStep(5)
           }}
           token={token}
           initialIssuerKey={ncdBondIssuerSeed?._key || ncdBondIssuerSeed?.issuer_key || receiptPresets.BOND?.issuer_key || ''}
-          recentIssuers={recentIssuersByType.BOND}
-        />
-      )}
-
-      {step === 5 && productTypeSeed === 'BOND' && ncdBondIssuerSeed && (
-        <StepNCDBondScheme
-          onBack={() => setStep(4)}
-          onNext={(scheme) => {
-            setNcdBondSchemeSeed(scheme)
-            setStep(6)
-          }}
-          token={token}
-          issuer={ncdBondIssuerSeed}
           initialSchemeId={ncdBondSchemeSeed?.scheme_id || receiptPresets.BOND?.scheme_id || ''}
           recentSchemes={recentSchemesByType.BOND}
         />
       )}
 
-      {step === 6 && productTypeSeed === 'BOND' && ncdBondSchemeSeed && (
+      {step === 5 && productTypeSeed === 'BOND' && ncdBondIssuerSeed && ncdBondSchemeSeed && (
         <StepNCDBondDetails
-          onBack={() => setStep(5)}
+          onBack={() => setStep(4)}
           onNext={(bondData) => {
             setBondDetailsSeed(bondData._formState || null)
             const cleanReceipt = buildNCDBondReceipt(bondData)
             setFinalData(cleanReceipt)
-            setStep(7)
+            setStep(6)
           }}
           token={token}
           issuer={ncdBondIssuerSeed}
@@ -3029,11 +3049,17 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         />
       )}
 
-      {step === 7 && finalData && (
+      {finalData &&
+        ((isBondNcdProductType(productTypeSeed) && step === 6) ||
+          (!isBondNcdProductType(productTypeSeed) && step === 7)) && (
         <StepFinal 
           data={finalData} 
           onBack={() => {
-            const needsDetailsStep = ['MF', 'FD', 'GOVT_FD', 'BOND', 'INS'].includes(productTypeSeed)
+            if (isBondNcdProductType(productTypeSeed)) {
+              setStep(5)
+              return
+            }
+            const needsDetailsStep = ['MF', 'FD', 'GOVT_FD', 'BOND', 'INS', 'NCD'].includes(productTypeSeed)
             setStep(needsDetailsStep ? 6 : 5)
           }} 
           onSave={saveToServer}
@@ -3047,7 +3073,7 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
         />
       )}
         </div>
-        {step < 7 && (
+        {!isOnReceiptPreviewStep(step, productTypeSeed, !!finalData) && (
           <aside className="hidden lg:block lg:sticky lg:top-24 w-full min-w-0">
             <LivePreview
               empSeed={empSeed}
