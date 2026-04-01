@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Label } from 'recharts'
 import { useAuth } from '../context/AuthContext'
@@ -336,6 +336,18 @@ export default function DashboardPage() {
         { value: 'personal', label: 'Personal' },
         { value: 'branch', label: 'Your branch' },
       ]
+
+  const allBranchesTargetSummary = useMemo(() => {
+    if (!branchStats?.branches?.length) return null
+    const branches = branchStats.branches
+    const totalTarget =
+      branchStats.total_monthly_target != null && branchStats.total_monthly_target !== ''
+        ? toSafeNumber(branchStats.total_monthly_target)
+        : branches.reduce((s, b) => s + toSafeNumber(b.total_target), 0)
+    const totalCc = toSafeNumber(branchStats.total_collection_credit)
+    const overallPct = totalTarget > 0 ? Math.min(100, Math.max(0, (totalCc / totalTarget) * 100)) : 0
+    return { branches, totalTarget, totalCc, overallPct }
+  }, [branchStats])
 
   return (
     <div className="space-y-6">
@@ -1069,47 +1081,114 @@ export default function DashboardPage() {
           {isAdmin && <CSVExport token={token} user={user} />}
 
           {/* Branch leaderboard */}
-          {showWidget('branch_performance') && branchStats && isAdmin && viewMode === 'all' && (
+          {showWidget('branch_performance') && branchStats && isAdmin && viewMode === 'all' && allBranchesTargetSummary && (
             <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center mb-6">
-                <FiMapPin className="w-5 h-5 text-[var(--accent)] mr-2" />
-                <h3 className="text-title font-semibold text-[var(--text)]">Branch Performance Overview</h3>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
+                <div className="flex items-center">
+                  <FiMapPin className="w-5 h-5 text-[var(--accent)] mr-2" />
+                  <h3 className="text-title font-semibold text-[var(--text)]">Branch Performance Overview</h3>
+                </div>
+                <p className="text-helper text-[var(--text-muted)]">All branches · period from filters above</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {branchStats.branches && branchStats.branches.slice(0, 6).map((branch, index) => (
-                  <button
-                    key={branch.branch_code || branch.branch || index}
-                    type="button"
-                    onClick={() => (branch.branch_code || branch.branch) && navigate(`/transactions?branch=${encodeURIComponent(branch.branch_code || branch.branch)}`)}
-                    className="text-left rounded-card border border-[var(--stroke)] bg-[var(--card-hover)] p-4 hover:shadow-card hover:bg-[var(--card-bg)] transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-[var(--accent-muted)] rounded-full flex items-center justify-center mr-3">
-                          <span className="text-small font-bold text-[var(--accent)]">#{index + 1}</span>
-                        </div>
-                        <div>
-                          <div className="text-small font-medium text-[var(--text)]">{branch.branch || branch.branch_name || 'Unknown Branch'}</div>
-                          <div className="text-xs text-[var(--text-muted)]">{branch.branch_name || branch.branch || 'Unknown Branch'}</div>
-                        </div>
-                      </div>
+
+              {/* Aggregated target vs actual (CC) */}
+              <div className="mb-6 rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <FiTarget className="w-4 h-4 text-[var(--accent)]" />
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">Target summary (all branches)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-small">
+                  <div>
+                    <div className="text-[var(--text-muted)] mb-0.5">Combined monthly target</div>
+                    <div className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(allBranchesTargetSummary.totalTarget)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-muted)] mb-0.5">Collection / credit (actual)</div>
+                    <div className="text-lg font-bold text-[var(--warn)]">{formatCurrency(allBranchesTargetSummary.totalCc)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-muted)] mb-0.5">Attainment vs target</div>
+                    <div className="text-lg font-bold text-[var(--accent)]">
+                      {allBranchesTargetSummary.totalTarget > 0
+                        ? `${allBranchesTargetSummary.overallPct.toFixed(1)}%`
+                        : '—'}
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-small">
-                        <span className="text-[var(--text-muted)]">Investments:</span>
-                        <span className="font-medium text-[var(--text)]">{formatCurrency(branch.total_investments || 0)}</span>
-                      </div>
-                      <div className="flex justify-between text-small">
-                        <span className="text-[var(--text-muted)]">Receipts:</span>
-                        <span className="font-medium text-[var(--text)]">{branch.total_receipts || 0}</span>
-                      </div>
-                      <div className="flex justify-between text-small">
-                        <span className="text-[var(--text-muted)]">Collection/Credit:</span>
-                        <span className="font-medium text-[var(--text)]">{formatCurrency(branch.commissions || 0)}</span>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                  </div>
+                </div>
+                {allBranchesTargetSummary.totalTarget > 0 && (
+                  <div className="mt-3 h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${allBranchesTargetSummary.overallPct}%`,
+                        backgroundColor: 'var(--accent, #0071e3)',
+                        maxWidth: '100%'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="max-h-[560px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {allBranchesTargetSummary.branches.map((branch, index) => {
+                    const tgt = toSafeNumber(branch.total_target)
+                    const cc = toSafeNumber(branch.commissions ?? branch.total_cc)
+                    const branchPct = tgt > 0 ? Math.min(100, Math.max(0, (cc / tgt) * 100)) : null
+                    return (
+                      <button
+                        key={branch.branch_code || branch.branch || index}
+                        type="button"
+                        onClick={() => (branch.branch_code || branch.branch) && navigate(`/transactions?branch=${encodeURIComponent(branch.branch_code || branch.branch)}`)}
+                        className="text-left rounded-card border border-[var(--stroke)] bg-[var(--card-hover)] p-4 hover:shadow-card hover:bg-[var(--card-bg)] transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center min-w-0">
+                            <div className="w-8 h-8 bg-[var(--accent-muted)] rounded-full flex items-center justify-center mr-3 shrink-0">
+                              <span className="text-small font-bold text-[var(--accent)]">#{index + 1}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-small font-medium text-[var(--text)] truncate">{branch.branch || branch.branch_name || 'Unknown Branch'}</div>
+                              <div className="text-xs text-[var(--text-muted)] truncate">{branch.branch_code ? `Code: ${branch.branch_code}` : (branch.branch_name || branch.branch || '')}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-small gap-2">
+                            <span className="text-[var(--text-muted)] shrink-0">Monthly target</span>
+                            <span className="font-medium text-[var(--text)] text-right">{formatCurrency(tgt)}</span>
+                          </div>
+                          <div className="flex justify-between text-small gap-2">
+                            <span className="text-[var(--text-muted)] shrink-0">CC (actual)</span>
+                            <span className="font-medium text-[var(--text)] text-right">{formatCurrency(cc)}</span>
+                          </div>
+                          {branchPct != null && (
+                            <div className="pt-1">
+                              <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
+                                <span>vs target</span>
+                                <span>{branchPct.toFixed(0)}%</span>
+                              </div>
+                              <div className="h-1.5 bg-[var(--stroke)] rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-[var(--accent)]"
+                                  style={{ width: `${branchPct}%`, maxWidth: '100%' }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-small border-t border-[var(--stroke)]/80 pt-2 mt-2">
+                            <span className="text-[var(--text-muted)]">Investments</span>
+                            <span className="font-medium text-[var(--text)]">{formatCurrency(branch.total_investments || 0)}</span>
+                          </div>
+                          <div className="flex justify-between text-small">
+                            <span className="text-[var(--text-muted)]">Receipts</span>
+                            <span className="font-medium text-[var(--text)]">{branch.total_receipts || 0}</span>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </Card>
           )}
