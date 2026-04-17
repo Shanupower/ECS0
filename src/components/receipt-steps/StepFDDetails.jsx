@@ -5,7 +5,8 @@ import DatePickerInput from '../ui/DatePickerInput.jsx'
 export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false, initialData }) {
   const todayYyyyMmDd = new Date().toISOString().split('T')[0]
   const [principalAmount, setPrincipalAmount] = useState(initialData?.principalAmount || '')
-  const [tenureMonths, setTenureMonths] = useState(initialData?.tenureMonths || '')
+  const [tenureUnit, setTenureUnit] = useState(initialData?.tenureUnit || 'months') // 'months' | 'days'
+  const [tenureValue, setTenureValue] = useState(initialData?.tenureValue || initialData?.tenureMonths || '')
   const [payoutFrequency, setPayoutFrequency] = useState(initialData?.payoutFrequency || '')
   const [bookingDate, setBookingDate] = useState(initialData?.bookingDate || todayYyyyMmDd)
   const [seniorCitizen, setSeniorCitizen] = useState(initialData?.seniorCitizen || false)
@@ -97,20 +98,24 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
         return isActive && matchesFrequency
       })
 
-      // Store all matching slabs for validation
-      setAvailableRateSlabs(matchingSlabs)
+      const normalizeUnit = (u) => (String(u || 'months').trim().toLowerCase() === 'days' ? 'days' : 'months')
+      const selectedUnit = normalizeUnit(tenureUnit)
+      const matchingSlabsForUnit = matchingSlabs.filter((slab) => normalizeUnit(slab.tenure_unit) === selectedUnit)
 
-      // Build quick-select options: specific tenures (min===max) as "12M", "24M"; ranges as "0-60M", "61-120M"
+      // Store all matching slabs for validation (unit-aware)
+      setAvailableRateSlabs(matchingSlabsForUnit)
+
+      // Build quick-select options: specific tenures (min===max) as "12M"/"10D"; ranges as "0-60M"/"7-14D"
       const optionsMap = new Map() // value -> label to dedupe and keep order
-      matchingSlabs.forEach(slab => {
-        const min = slab.tenure_min_months
-        const max = slab.tenure_max_months
+      matchingSlabsForUnit.forEach(slab => {
+        const min = selectedUnit === 'days' ? slab.tenure_min_days : slab.tenure_min_months
+        const max = selectedUnit === 'days' ? slab.tenure_max_days : slab.tenure_max_months
         if (min == null || max == null) return
         if (min === max) {
-          optionsMap.set(min, `${min}M`)
+          optionsMap.set(min, selectedUnit === 'days' ? `${min}D` : `${min}M`)
         } else {
-          // Range slab: use min as value so user can type any value in range; label e.g. "0-60M"
-          optionsMap.set(`${min}-${max}`, `${min}-${max}M`)
+          // Range slab: use min as value so user can type any value in range; label e.g. "0-60M" or "7-14D"
+          optionsMap.set(`${min}-${max}`, selectedUnit === 'days' ? `${min}-${max}D` : `${min}-${max}M`)
         }
       })
       // Sort: numeric keys first (specific tenures), then range keys by min value
@@ -131,28 +136,35 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       setTenureQuickSelectOptions([])
       setAvailableRateSlabs([])
     }
-  }, [fullScheme?.rate_slabs, payoutFrequency, fullScheme?.scheme_id])
+  }, [fullScheme?.rate_slabs, payoutFrequency, fullScheme?.scheme_id, tenureUnit])
 
   useEffect(() => {
     calculateRate()
-  }, [tenureMonths, payoutFrequency, seniorCitizen, women, renewal])
+  }, [tenureUnit, tenureValue, payoutFrequency, seniorCitizen, women, renewal])
 
   useEffect(() => {
-    if (bookingDate && tenureMonths) {
+    if (bookingDate && tenureValue) {
       const date = new Date(bookingDate)
-      date.setMonth(date.getMonth() + parseInt(tenureMonths))
+      const n = parseInt(tenureValue, 10)
+      if (!Number.isFinite(n) || n <= 0) return
+      if (tenureUnit === 'days') {
+        date.setDate(date.getDate() + n)
+      } else {
+        date.setMonth(date.getMonth() + n)
+      }
       setMaturityDate(date.toISOString().split('T')[0])
     }
-  }, [bookingDate, tenureMonths])
+  }, [bookingDate, tenureUnit, tenureValue])
 
   useEffect(() => {
     const principal = parseFloat(principalAmount)
-    const months = parseInt(tenureMonths, 10)
-    if (!Number.isFinite(principal) || principal <= 0 || !Number.isFinite(months) || months <= 0) {
+    const n = parseInt(tenureValue, 10)
+    if (!Number.isFinite(principal) || principal <= 0 || !Number.isFinite(n) || n <= 0) {
       setMaturityAmount(null)
       return
     }
-    const years = months / 12
+    // For day-tenure, approximate year fraction for the maturity amount estimate.
+    const years = tenureUnit === 'days' ? (n / 365) : (n / 12)
     // Cumulative: use effective annualized yield if available; fallback to total rate.
     if (fullScheme?.is_cumulative) {
       const annualYield = Number.isFinite(Number(effectiveYieldPa))
@@ -174,11 +186,11 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
     }
     const amount = principal + (principal * (annualRate / 100) * years)
     setMaturityAmount(Math.round(amount * 100) / 100)
-  }, [principalAmount, tenureMonths, effectiveYieldPa, lockedInterestRatePa, fullScheme?.is_cumulative])
+  }, [principalAmount, tenureUnit, tenureValue, effectiveYieldPa, lockedInterestRatePa, fullScheme?.is_cumulative])
 
   const calculateRate = async () => {
     const schemeToUse = fullScheme || scheme
-    if (!tenureMonths || !payoutFrequency || !token || !schemeToUse?.scheme_id) {
+    if (!tenureValue || !payoutFrequency || !token || !schemeToUse?.scheme_id) {
       setRateError(null)
       setRateCalculation(null)
       return
@@ -191,7 +203,10 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       const result = await api.calculateFDRate(token, {
         issuer_key: issuer_key,
         scheme_id: schemeToUse.scheme_id,
-        tenure_months: parseInt(tenureMonths),
+        tenure_unit: tenureUnit,
+        tenure_value: parseInt(tenureValue),
+        // backward compatibility for older backend deployments (months only)
+        tenure_months: tenureUnit === 'months' ? parseInt(tenureValue) : undefined,
         payout_frequency: payoutFrequency,
         senior_citizen: seniorCitizen,
         women: women,
@@ -212,7 +227,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       // Set user-friendly error message
       const errorMessage = error.message || error.error || error.detail || String(error)
       if (errorMessage.includes('No matching rate slab') || errorMessage.includes('rate slab')) {
-        setRateError(`No rate slab found for ${tenureMonths} months with ${payoutFrequency} payout frequency. Please select a different tenure.`)
+        setRateError(`No rate slab found for ${tenureValue} ${tenureUnit} with ${payoutFrequency} payout frequency. Please select a different tenure.`)
       } else {
         setRateError('Failed to calculate interest rate. Please check your inputs.')
       }
@@ -228,6 +243,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
   const handleNext = () => {
     const schemeToUse = fullScheme || scheme
     const issuer_key = issuer?._key || issuer?.issuer_key
+    const tv = parseInt(tenureValue, 10)
     const fdData = {
       fd_issuer_key: issuer_key,
       fd_issuer_name: issuer.short_name,
@@ -236,7 +252,10 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       fd_scheme_name: schemeToUse.scheme_name,
       fd_is_cumulative: schemeToUse.is_cumulative,
       fd_deposit_amount: parseFloat(principalAmount),
-      fd_tenure_months: parseInt(tenureMonths),
+      fd_tenure_unit: tenureUnit,
+      fd_tenure_value: tv,
+      // legacy for months-based receipts
+      fd_tenure_months: tenureUnit === 'months' ? tv : null,
       fd_payout_frequency: payoutFrequency,
       fd_booking_date: bookingDate,
       fd_locked_interest_rate_pa: lockedInterestRatePa,
@@ -254,7 +273,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       fd_renewal_investment_type: fdTransactionType === 'Renewal' ? renewalInvestmentType : null,
       fd_renewal_additional_amount: fdTransactionType === 'Renewal' && renewalAdditionalAmount ? parseFloat(renewalAdditionalAmount) : null
     }
-    fdData._formState = { principalAmount, tenureMonths, payoutFrequency, bookingDate, seniorCitizen, women, renewal, form15g15h, applicationNumber, fdTransactionType, renewalInvestmentType, renewalAdditionalAmount }
+    fdData._formState = { principalAmount, tenureUnit, tenureValue, payoutFrequency, bookingDate, seniorCitizen, women, renewal, form15g15h, applicationNumber, fdTransactionType, renewalInvestmentType, renewalAdditionalAmount }
     onNext(fdData)
   }
 
@@ -263,7 +282,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
     const schemeToUse = fullScheme || scheme
     
     // Basic field validation
-    if (!principalAmount || !tenureMonths || !payoutFrequency || !applicationNumber) return false
+    if (!principalAmount || !tenureValue || !payoutFrequency || !applicationNumber) return false
     
     // Amount validation
     const minAmount = schemeToUse?.min_amount || issuer?.min_deposit_amount || 0
@@ -273,15 +292,19 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
     // Scheme validation
     if (!schemeToUse) return false
     
-    // Basic tenure range validation
-    const tenure = parseInt(tenureMonths)
-    if (tenure < schemeToUse.min_tenure_months) return false
-    if (tenure > schemeToUse.max_tenure_months) return false
+    // Basic tenure range validation (months-only at scheme level)
+    const tenure = parseInt(tenureValue)
+    if (tenureUnit === 'months') {
+      if (tenure < schemeToUse.min_tenure_months) return false
+      if (tenure > schemeToUse.max_tenure_months) return false
+    }
     
     // CRITICAL: Validate that a rate slab exists for this tenure (check both specific and ranges)
     if (availableRateSlabs.length > 0) {
       const hasMatchingSlab = availableRateSlabs.some(slab => {
-        // Check if tenure falls within this slab's range
+        const slabUnit = String(slab.tenure_unit || 'months').toLowerCase() === 'days' ? 'days' : 'months'
+        if (slabUnit !== tenureUnit) return false
+        if (tenureUnit === 'days') return tenure >= slab.tenure_min_days && tenure <= slab.tenure_max_days
         return tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months
       })
       if (!hasMatchingSlab) {
@@ -366,21 +389,49 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
         {/* Tenure */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {isGovtScheme ? 'Scheme Tenure (months)' : 'Tenure (months)'} <span className="text-red-500">*</span>
+            {isGovtScheme ? 'Scheme Tenure' : 'Tenure'} <span className="text-red-500">*</span>
           </label>
+
+          <div className="mb-2 flex items-center gap-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="fdTenureUnit"
+                value="months"
+                checked={tenureUnit === 'months'}
+                onChange={(e) => setTenureUnit(e.target.value)}
+                className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">Months</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="fdTenureUnit"
+                value="days"
+                checked={tenureUnit === 'days'}
+                onChange={(e) => setTenureUnit(e.target.value)}
+                className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">Days</span>
+            </label>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              (rate slab matching uses this unit)
+            </span>
+          </div>
           
           {/* Show all available tenures as quick-select buttons (specific + range slabs) */}
           {tenureQuickSelectOptions.length > 0 && tenureQuickSelectOptions.length <= 40 && (
             <div className="mb-2 flex flex-wrap gap-2">
               {tenureQuickSelectOptions.map((opt, idx) => {
                 const isSelected = opt.isRange
-                  ? (tenureMonths && parseInt(tenureMonths) >= opt.value && parseInt(tenureMonths) <= (opt.rangeMax ?? opt.value))
-                  : parseInt(tenureMonths) === opt.value
+                  ? (tenureValue && parseInt(tenureValue) >= opt.value && parseInt(tenureValue) <= (opt.rangeMax ?? opt.value))
+                  : parseInt(tenureValue) === opt.value
                 return (
                   <button
                     key={opt.isRange ? `range-${opt.value}-${opt.rangeMax}-${idx}` : `specific-${opt.value}`}
                     type="button"
-                    onClick={() => setTenureMonths(opt.value.toString())}
+                    onClick={() => setTenureValue(opt.value.toString())}
                     className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                       isSelected
                         ? 'bg-red-600 text-white border-red-600'
@@ -396,15 +447,18 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           
           <input
             type="number"
-            value={tenureMonths}
-            onChange={(e) => setTenureMonths(e.target.value)}
+            value={tenureValue}
+            onChange={(e) => setTenureValue(e.target.value)}
             placeholder={isGovtScheme ? 'Enter scheme tenure' : 'Enter tenure'}
-            min={scheme.min_tenure_months}
-            max={scheme.max_tenure_months}
+            min={1}
             className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
-              tenureMonths && availableRateSlabs.length > 0 && !availableRateSlabs.some(slab => {
-                const tenure = parseInt(tenureMonths)
-                return tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months
+              tenureValue && availableRateSlabs.length > 0 && !availableRateSlabs.some(slab => {
+                const tenure = parseInt(tenureValue)
+                const slabUnit = String(slab.tenure_unit || 'months').toLowerCase() === 'days' ? 'days' : 'months'
+                if (slabUnit !== tenureUnit) return false
+                return tenureUnit === 'days'
+                  ? (tenure >= slab.tenure_min_days && tenure <= slab.tenure_max_days)
+                  : (tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months)
               })
                 ? 'border-red-500 dark:border-red-500'
                 : 'border-gray-300 dark:border-gray-600'
@@ -417,15 +471,15 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 Available tenures: {tenureQuickSelectOptions.map(o => o.label).join(', ')}
                 {tenureQuickSelectOptions.length <= 40 && ' (click buttons above)'}
                 {tenureQuickSelectOptions.some(o => o.isRange) && (
-                  <span className="block mt-1">For range slabs, enter any month within the range after selecting.</span>
+                  <span className="block mt-1">For range slabs, enter any value within the range after selecting.</span>
                 )}
               </>
             ) : availableRateSlabs.length > 0 ? (
               <>
                 Available ranges: {availableRateSlabs.map(slab =>
-                  slab.tenure_min_months === slab.tenure_max_months
-                    ? `${slab.tenure_min_months}M`
-                    : `${slab.tenure_min_months}-${slab.tenure_max_months}M`
+                  tenureUnit === 'days'
+                    ? (slab.tenure_min_days === slab.tenure_max_days ? `${slab.tenure_min_days}D` : `${slab.tenure_min_days}-${slab.tenure_max_days}D`)
+                    : (slab.tenure_min_months === slab.tenure_max_months ? `${slab.tenure_min_months}M` : `${slab.tenure_min_months}-${slab.tenure_max_months}M`)
                 ).join(', ')}
               </>
             ) : scheme?.min_tenure_months != null && scheme?.max_tenure_months != null ? (
@@ -436,12 +490,16 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           </p>
           
           {/* Show error if tenure is not covered by any available slab */}
-          {tenureMonths && availableRateSlabs.length > 0 && !availableRateSlabs.some(slab => {
-            const tenure = parseInt(tenureMonths)
-            return tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months
+          {tenureValue && availableRateSlabs.length > 0 && !availableRateSlabs.some(slab => {
+            const tenure = parseInt(tenureValue)
+            const slabUnit = String(slab.tenure_unit || 'months').toLowerCase() === 'days' ? 'days' : 'months'
+            if (slabUnit !== tenureUnit) return false
+            return tenureUnit === 'days'
+              ? (tenure >= slab.tenure_min_days && tenure <= slab.tenure_max_days)
+              : (tenure >= slab.tenure_min_months && tenure <= slab.tenure_max_months)
           }) && (
             <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-              ⚠️ No rate slab available for {tenureMonths} months. Please enter a tenure within the available ranges.
+              ⚠️ No rate slab available for {tenureValue} {tenureUnit}. Please enter a tenure within the available ranges.
             </p>
           )}
           

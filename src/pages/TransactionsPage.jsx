@@ -49,6 +49,12 @@ export default function TransactionsPage() {
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const isAdmin = user?.role === 'admin'
+  const isManager = user?.role === 'manager'
+  const isBranchUser = user?.role === 'branch'
+  const [viewScope, setViewScope] = useState('mine') // 'mine' | 'branch'
+  const [scopeTouched, setScopeTouched] = useState(false)
+  const [dateBasis, setDateBasis] = useState('receipt') // 'receipt' | 'transaction'
   const [filters, setFilters] = useState(() => {
     const y = new Date().getFullYear()
     const params = new URLSearchParams(window.location.search)
@@ -97,7 +103,11 @@ export default function TransactionsPage() {
   const [legacyUploadError, setLegacyUploadError] = useState('')
   const [legacyUploading, setLegacyUploading] = useState(false)
 
-  const isAdmin = user?.role === 'admin'
+  // Default manager view to Branch (can toggle back to My).
+  useEffect(() => {
+    if (isManager && !scopeTouched) setViewScope('branch')
+  }, [isManager, scopeTouched])
+
   const formatDateForInput = (date) => {
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -210,12 +220,20 @@ export default function TransactionsPage() {
       const query = {
         from: filters.from,
         to: filters.to,
+        date_basis: dateBasis,
         category: filters.category || undefined,
         status: filters.status || undefined,
         txn_type: txnType || undefined,
         search: filters.search || undefined,
         branch_code: filters.branch_code || undefined,
-        emp_code: filters.emp_code || undefined
+        emp_code: (() => {
+          if (isAdmin) return filters.emp_code || undefined
+          if (isManager) {
+            if (viewScope === 'mine') return user?.emp_code || undefined
+            return filters.emp_code || undefined
+          }
+          return undefined
+        })()
       }
       
       // Remove undefined values
@@ -244,12 +262,20 @@ export default function TransactionsPage() {
       const query = {
         from: filters.from,
         to: filters.to,
+        date_basis: dateBasis,
         category: filters.category || undefined,
         status: filters.status || undefined,
         txn_type: txnType || undefined,
         search: filters.search || undefined,
         branch_code: filters.branch_code || undefined,
-        emp_code: filters.emp_code || undefined,
+        emp_code: (() => {
+          if (isAdmin) return filters.emp_code || undefined
+          if (isManager) {
+            if (viewScope === 'mine') return user?.emp_code || undefined
+            return filters.emp_code || undefined
+          }
+          return undefined
+        })(),
         sort: filters.sort || 'created_at:desc',
         page: pagination.page,
         size: filters.size || 20
@@ -261,8 +287,19 @@ export default function TransactionsPage() {
       let result
       
       // Handle branch users - they should use branch receipts endpoint
-      if (user?.role === 'branch' && user?.branch_code) {
+      if (isBranchUser && user?.branch_code) {
         result = await api.getBranchReceipts(token, user.branch_code, query)
+      }
+      // Managers can toggle between My vs Branch scope.
+      else if (isManager) {
+        if (viewScope === 'mine' && user?.emp_code) {
+          const empQuery = { ...query }
+          delete empQuery.emp_code
+          result = await api.getReceiptsByEmpCode(token, user.emp_code, empQuery)
+        } else {
+          // Branch-wide (server will scope to manager's branch); optional emp_code filter is allowed.
+          result = await api.listReceipts(token, query)
+        }
       }
       // Use employee-specific endpoint if filtering by employee code and user is admin
       // or if user is employee (show only their own receipts)
@@ -274,6 +311,7 @@ export default function TransactionsPage() {
         const empQuery = {
           from: filters.from,
           to: filters.to,
+          date_basis: dateBasis,
           category: filters.category || undefined,
           status: filters.status || undefined,
           txn_type: txnType || undefined,
@@ -409,7 +447,7 @@ export default function TransactionsPage() {
     loadReceipts()
     loadSummary()
     loadDrafts()
-  }, [token, filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
+  }, [token, filters.from, filters.to, dateBasis, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
 
   // Check for success/error messages from receipt creation
   useEffect(() => {
@@ -919,8 +957,10 @@ export default function TransactionsPage() {
         branch_code: isAdmin ? (filters.branch_code || undefined) : (user?.branch_code || undefined),
         emp_code: isAdmin
           ? (filters.emp_code || undefined)
-          : (user?.role === 'branch' || user?.role === 'manager')
+          : (user?.role === 'branch')
             ? (filters.emp_code || undefined)
+            : (user?.role === 'manager')
+              ? (viewScope === 'mine' ? (user?.emp_code || undefined) : (filters.emp_code || undefined))
             : undefined,
         status: filters.status || undefined,
         category: filters.category || undefined,
@@ -1317,6 +1357,47 @@ export default function TransactionsPage() {
           <h3 className="text-section-title text-[var(--text-primary)]">Filters & Search</h3>
         </div>
 
+        {/* Manager scope toggle: My vs Branch transactions */}
+        {isManager && (
+          <div className="mb-4 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-label text-[var(--text-secondary)]">View</span>
+                <SegmentedControl
+                  options={[
+                    { value: 'branch', label: 'Branch transactions' },
+                    { value: 'mine', label: 'My transactions' }
+                  ]}
+                  value={viewScope}
+                  onChange={(value) => {
+                    setScopeTouched(true)
+                    setViewScope(value)
+                    if (value === 'mine') setFilters(prev => ({ ...prev, emp_code: '' }))
+                  }}
+                />
+              </div>
+            </div>
+
+            {viewScope === 'branch' && (
+              <div>
+                <label className="block text-label text-[var(--text-secondary)] mb-2">Employee Code (optional)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FiUser className="h-4 w-4 text-[var(--text-muted)]" />
+                  </div>
+                  <input
+                    type="text"
+                    value={filters.emp_code}
+                    onChange={e => setFilters(prev => ({ ...prev, emp_code: e.target.value }))}
+                    placeholder="Filter within branch"
+                    className="w-full sm:max-w-[320px] pl-10 pr-4 py-3 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Active filter chips */}
         {(filters.category || filters.status || filters.branch_code || filters.emp_code || filters.search) && (
           <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -1452,6 +1533,38 @@ export default function TransactionsPage() {
               />
             </div>
           </div>
+          <div className="flex items-end">
+            <div className="w-full">
+              <label className="block text-label text-[var(--text-secondary)] mb-2">Date Basis</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDateBasis('receipt')}
+                  className={`flex-1 px-3 py-3 rounded-input border text-sm font-medium transition-colors ${
+                    dateBasis === 'receipt'
+                      ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+                      : 'border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] hover:bg-[var(--card-hover)]'
+                  }`}
+                >
+                  Receipt Date
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateBasis('transaction')}
+                  className={`flex-1 px-3 py-3 rounded-input border text-sm font-medium transition-colors ${
+                    dateBasis === 'transaction'
+                      ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+                      : 'border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] hover:bg-[var(--card-hover)]'
+                  }`}
+                >
+                  Transaction Date
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                Offline uses cheque date when available.
+              </p>
+            </div>
+          </div>
           <div>
             <label className="block text-label text-[var(--text-secondary)] mb-2">Category</label>
             <select
@@ -1463,8 +1576,8 @@ export default function TransactionsPage() {
               <option value="MF">Mutual Fund</option>
               <option value="FD">Fixed Deposit</option>
               <option value="INS">Insurance</option>
-              <option value="BOND">Bonds/NCD</option>
-              <option value="NCD">Bonds/NCD</option>
+              <option value="BOND">Bond</option>
+              <option value="NCD">NCD</option>
               <option value="GOVT_FD">Government Schemes</option>
               <option value="MISC">Misc Transactions</option>
             </select>
@@ -1485,7 +1598,8 @@ export default function TransactionsPage() {
               <option value="SIP">SIP</option>
               <option value="SWP">SWP</option>
               <option value="STP">STP</option>
-              <option value="Switch Over">Switch Over</option>
+              {/* Use a space-free canonical value so query parsing/encoding never drops this filter */}
+              <option value="SWITCH_OVER">Switch Over</option>
             </select>
           </div>
         )}

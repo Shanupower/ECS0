@@ -88,6 +88,7 @@ export default function DashboardPage() {
     from: `${currentYear}-01-01`,
     to: `${currentYear}-12-31`
   })
+  const [dateBasis, setDateBasis] = useState('receipt') // 'receipt' | 'transaction'
   const [includePending, setIncludePending] = useState(true)
   const [viewMode, setViewMode] = useState(() => {
     // Branch managers should default to branch view (matches existing backend behavior).
@@ -130,6 +131,7 @@ export default function DashboardPage() {
       let queryParams = {
         from: dateRange.from,
         to: dateRange.to,
+        date_basis: dateBasis,
         includePending: includePending ? '1' : '0'
       }
       
@@ -180,7 +182,7 @@ export default function DashboardPage() {
       setDailyStats(dailyData)
       
       if (isAdmin && viewMode === 'all') {
-        const branchData = await api.getGlobalBranchStats(token, { from: dateRange.from, to: dateRange.to, includePending: includePending ? '1' : '0' })
+        const branchData = await api.getGlobalBranchStats(token, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, includePending: includePending ? '1' : '0' })
         setBranchStats(branchData)
       } else {
         setBranchStats(null)
@@ -197,7 +199,7 @@ export default function DashboardPage() {
         setMonthlyCcSi(Array.isArray(monthly) ? monthly : [])
       } catch { setMonthlyCcSi([]) }
       try {
-        const receipts = await api.listReceipts(token, { from: dateRange.from, to: dateRange.to, sort: 'created_at:desc', size: '10' })
+        const receipts = await api.listReceipts(token, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, sort: 'created_at:desc', size: '10' })
         setRecentReceipts(receipts.items || receipts.data || receipts || [])
       } catch { setRecentReceipts([]) }
       try {
@@ -222,7 +224,7 @@ export default function DashboardPage() {
         setIssuesSnapshotTotal(0)
       }
       try {
-        const loc = await api.getInvestorLocations(token, { from: dateRange.from, to: dateRange.to, includePending: includePending ? '1' : '0' })
+        const loc = await api.getInvestorLocations(token, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, includePending: includePending ? '1' : '0' })
         setInvestorLocations(loc?.byState ? loc : null)
       } catch { setInvestorLocations(null) }
       
@@ -242,7 +244,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboardData()
-  }, [token, dateRange, includePending, viewMode])
+  }, [token, dateRange, dateBasis, includePending, viewMode])
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -499,6 +501,34 @@ export default function DashboardPage() {
                   onChange={(v) => setDateRange(prev => ({ ...prev, to: v }))}
                   inputClassName="rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2 text-body text-[var(--text-primary)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
                 />
+              </div>
+              <div className="flex flex-col gap-1.5 min-w-[220px]">
+                <label className="text-label text-[var(--text-secondary)]">Date basis</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDateBasis('receipt')}
+                    className={`flex-1 rounded-input border px-3 py-2 text-small font-medium transition-colors ${
+                      dateBasis === 'receipt'
+                        ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+                        : 'border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--card-hover)]'
+                    }`}
+                  >
+                    Receipt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDateBasis('transaction')}
+                    className={`flex-1 rounded-input border px-3 py-2 text-small font-medium transition-colors ${
+                      dateBasis === 'transaction'
+                        ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+                        : 'border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--card-hover)]'
+                    }`}
+                  >
+                    Transaction
+                  </button>
+                </div>
+                <span className="text-[11px] text-[var(--text-muted)]">Offline uses cheque date when available.</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {datePresets.map((preset) => (

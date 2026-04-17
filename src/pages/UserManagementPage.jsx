@@ -32,6 +32,7 @@ export default function UserManagementPage() {
     emp_code: '',
     name: '',
     email: '',
+    mobile: '',
     branch: '',
     role: 'employee',
     password: ''
@@ -191,6 +192,7 @@ export default function UserManagementPage() {
       emp_code: '',
       name: '',
       email: '',
+      mobile: '',
       branch: '',
       role: 'employee',
       password: ''
@@ -219,6 +221,7 @@ export default function UserManagementPage() {
       emp_code: user.emp_code || '',
       name: user.name || '',
       email: user.email || '',
+      mobile: user.mobile || '',
       branch: getBranchFormValue(user.branch, user.branch_code),
       role: user.role || 'employee',
       password: ''
@@ -268,6 +271,7 @@ export default function UserManagementPage() {
     return (
       user.name?.toLowerCase().includes(query) ||
       user.email?.toLowerCase().includes(query) ||
+      String(user.mobile || '').toLowerCase().includes(query) ||
       user.emp_code?.toLowerCase().includes(query) ||
       user.branch?.toLowerCase().includes(query)
     )
@@ -340,7 +344,7 @@ export default function UserManagementPage() {
             </div>
               <input
               type="text"
-              placeholder="Search by name, email, employee code, or branch..."
+              placeholder="Search by name, email, phone, employee code, or branch..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] focus:outline-none"
@@ -466,6 +470,37 @@ export default function UserManagementPage() {
                   <p className="mt-1 text-sm text-[var(--error)] flex items-center">
                     <FiAlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.email}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Employee Phone Number</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={formData.mobile}
+                  onChange={e => {
+                    setFormData(prev => ({ ...prev, mobile: e.target.value }))
+                    if (fieldErrors.mobile) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev }
+                        delete newErrors.mobile
+                        return newErrors
+                      })
+                    }
+                  }}
+                  className={`w-full p-3 border ${
+                    fieldErrors.mobile 
+                      ? 'border-[var(--error)]' 
+                      : 'border-[var(--stroke)]'
+                  } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
+                  placeholder="Optional (10 digits)"
+                />
+                {fieldErrors.mobile && (
+                  <p className="mt-1 text-sm text-[var(--error)] flex items-center">
+                    <FiAlertCircle className="w-4 h-4 mr-1" />
+                    {fieldErrors.mobile}
                   </p>
                 )}
               </div>
@@ -634,6 +669,7 @@ export default function UserManagementPage() {
                       <div className="space-y-1 text-xs text-[var(--text-secondary)]">
                         <div><span className="font-medium">Code:</span> {user.emp_code}</div>
                         <div><span className="font-medium">Email:</span> {user.email}</div>
+                        <div><span className="font-medium">Phone:</span> {user.mobile || '—'}</div>
                         <div><span className="font-medium">Branch:</span> {getUserBranchDisplay(user.branch)}</div>
                         <div><span className="font-medium">Created:</span> {formatDate(user.created_at)}</div>
                       </div>
@@ -675,6 +711,7 @@ export default function UserManagementPage() {
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Employee Code</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Name</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Email</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Phone</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Branch</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Role</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Created</th>
@@ -699,6 +736,9 @@ export default function UserManagementPage() {
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)] truncate">
                       {user.email}
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)] truncate">
+                      {user.mobile || '—'}
                     </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)] truncate">
                       {getUserBranchDisplay(user.branch)}

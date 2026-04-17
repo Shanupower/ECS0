@@ -1095,6 +1095,19 @@ useEffect(() => {
     try {
       const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
       const trimmedData = trimFormData(fdSlabFormData)
+      const unit = (trimmedData.tenure_unit || 'months').toString().trim().toLowerCase() === 'days' ? 'days' : 'months'
+      trimmedData.tenure_unit = unit
+      if (unit === 'days') {
+        trimmedData.tenure_min_days = Number(trimmedData.tenure_min_days)
+        trimmedData.tenure_max_days = Number(trimmedData.tenure_max_days)
+        delete trimmedData.tenure_min_months
+        delete trimmedData.tenure_max_months
+      } else {
+        trimmedData.tenure_min_months = Number(trimmedData.tenure_min_months)
+        trimmedData.tenure_max_months = Number(trimmedData.tenure_max_months)
+        delete trimmedData.tenure_min_days
+        delete trimmedData.tenure_max_days
+      }
       await api.createFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, trimmedData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setShowFDSlabForm(false)
@@ -1110,6 +1123,19 @@ useEffect(() => {
     try {
       const issuerKey = selectedFdIssuer._key || selectedFdIssuer.issuer_key
       const trimmedData = trimFormData(fdSlabFormData)
+      const unit = (trimmedData.tenure_unit || 'months').toString().trim().toLowerCase() === 'days' ? 'days' : 'months'
+      trimmedData.tenure_unit = unit
+      if (unit === 'days') {
+        trimmedData.tenure_min_days = Number(trimmedData.tenure_min_days)
+        trimmedData.tenure_max_days = Number(trimmedData.tenure_max_days)
+        delete trimmedData.tenure_min_months
+        delete trimmedData.tenure_max_months
+      } else {
+        trimmedData.tenure_min_months = Number(trimmedData.tenure_min_months)
+        trimmedData.tenure_max_months = Number(trimmedData.tenure_max_months)
+        delete trimmedData.tenure_min_days
+        delete trimmedData.tenure_max_days
+      }
       await api.updateFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, editingFDSlab.slab_id, trimmedData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setEditingFDSlab(null)
@@ -1167,8 +1193,11 @@ useEffect(() => {
     const defaultPayoutFrequency = selectedFdScheme?.is_cumulative ? 'On Maturity' : 'Monthly'
     setFdSlabFormData({
       slab_id: '',
+      tenure_unit: 'months',
       tenure_min_months: 12,
       tenure_max_months: 24,
+      tenure_min_days: 7,
+      tenure_max_days: 14,
       payout_frequency_type: defaultPayoutFrequency,
       base_interest_rate_pa: 0,
       compounding_frequency: null,
@@ -1378,10 +1407,14 @@ useEffect(() => {
     setEditingFDSlab(slab)
     // Auto-set payout frequency to "On Maturity" for cumulative schemes
     const defaultPayoutFrequency = selectedFdScheme?.is_cumulative ? 'On Maturity' : (slab.payout_frequency_type || 'Monthly')
+    const unit = (slab.tenure_unit || 'months').toString().trim().toLowerCase() === 'days' ? 'days' : 'months'
     setFdSlabFormData({
       slab_id: slab.slab_id || '',
+      tenure_unit: unit,
       tenure_min_months: slab.tenure_min_months || 12,
       tenure_max_months: slab.tenure_max_months || 24,
+      tenure_min_days: slab.tenure_min_days || 7,
+      tenure_max_days: slab.tenure_max_days || 14,
       payout_frequency_type: defaultPayoutFrequency,
       base_interest_rate_pa: slab.base_interest_rate_pa || 0,
       compounding_frequency: slab.compounding_frequency || null,
@@ -3262,7 +3295,9 @@ useEffect(() => {
                   filteredFdRateSlabs.map((slab) => (
                     <tr key={slab._key} className="hover:bg-[var(--card-bg-opaque)]">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[var(--text-primary)]">
-                        {slab.tenure_min_months} - {slab.tenure_max_months} months
+                        {String(slab.tenure_unit || 'months').toLowerCase() === 'days'
+                          ? `${slab.tenure_min_days} - ${slab.tenure_max_days} days`
+                          : `${slab.tenure_min_months} - ${slab.tenure_max_months} months`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                         {slab.payout_frequency_type}
@@ -3343,31 +3378,76 @@ useEffect(() => {
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Min Tenure (months) <span className="text-red-500">*</span>
+                        Tenure Unit <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="fdSlabTenureUnit"
+                            value="months"
+                            checked={(fdSlabFormData.tenure_unit || 'months') === 'months'}
+                            onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_unit: e.target.value })}
+                            className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Months</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="fdSlabTenureUnit"
+                            value="days"
+                            checked={(fdSlabFormData.tenure_unit || 'months') === 'days'}
+                            onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_unit: e.target.value })}
+                            className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Days</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Min Tenure ({(fdSlabFormData.tenure_unit || 'months') === 'days' ? 'days' : 'months'}) <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
                         required
                         min="1"
-                        value={fdSlabFormData.tenure_min_months}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_min_months: parseInt(e.target.value) })}
+                        value={(fdSlabFormData.tenure_unit || 'months') === 'days' ? (fdSlabFormData.tenure_min_days ?? '') : (fdSlabFormData.tenure_min_months ?? '')}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10)
+                          if ((fdSlabFormData.tenure_unit || 'months') === 'days') {
+                            setFdSlabFormData({ ...fdSlabFormData, tenure_min_days: Number.isFinite(v) ? v : 0 })
+                          } else {
+                            setFdSlabFormData({ ...fdSlabFormData, tenure_min_months: Number.isFinite(v) ? v : 0 })
+                          }
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Max Tenure (months) <span className="text-red-500">*</span>
+                        Max Tenure ({(fdSlabFormData.tenure_unit || 'months') === 'days' ? 'days' : 'months'}) <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
                         required
                         min="1"
-                        value={fdSlabFormData.tenure_max_months}
-                        onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, tenure_max_months: parseInt(e.target.value) })}
+                        value={(fdSlabFormData.tenure_unit || 'months') === 'days' ? (fdSlabFormData.tenure_max_days ?? '') : (fdSlabFormData.tenure_max_months ?? '')}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10)
+                          if ((fdSlabFormData.tenure_unit || 'months') === 'days') {
+                            setFdSlabFormData({ ...fdSlabFormData, tenure_max_days: Number.isFinite(v) ? v : 0 })
+                          } else {
+                            setFdSlabFormData({ ...fdSlabFormData, tenure_max_months: Number.isFinite(v) ? v : 0 })
+                          }
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
-                    <div>
+                  </div>
+
+                  <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Payout Frequency <span className="text-red-500">*</span>
                         {selectedFdScheme?.is_cumulative && (
@@ -3395,7 +3475,6 @@ useEffect(() => {
                         </p>
                       )}
                     </div>
-                  </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">

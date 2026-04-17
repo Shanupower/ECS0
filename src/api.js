@@ -179,7 +179,7 @@ export const api={
   getMonthlyCCSI:(t,q)=>req('/api/stats/monthly-cc-si',{token:t,query:q}),
   
   // Branch endpoints
-  listBranches:(t)=>req('/api/branches',{token:t}),
+  listBranches:(t,q)=>req('/api/branches',{token:t,query:q}),
   getBranch:(t,code)=>req(`/api/branches/${code}`,{token:t}),
   getBranchStats:(t,code,q)=>req(`/api/branches/${code}/stats`,{token:t,query:q}),
   getGlobalBranchStats:(t,q)=>req('/api/stats/branches',{token:t,query:q}),

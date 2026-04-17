@@ -60,6 +60,7 @@ export default function BranchDashboard() {
   const [branchEmployees, setBranchEmployees] = useState([])
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
   const [includePending, setIncludePending] = useState(true)
+  const [dateBasis, setDateBasis] = useState('receipt') // 'receipt' | 'transaction'
   const formatDateForInput = (date) => {
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -82,6 +83,7 @@ export default function BranchDashboard() {
 
   const userBranchCode = user?.branch_code || (user?.branch && branches.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code) || null
   const userBranchInfo = userBranchCode ? branches.find(b => b.branch_code === userBranchCode) : null
+  const shouldShowMissingBranchBanner = isMyBranchView && !isAdmin && !userBranchCode
 
   const loadBranchData = async () => {
     if (!token) return
@@ -90,7 +92,7 @@ export default function BranchDashboard() {
     setError('')
     
     try {
-      const branchesData = await api.listBranches(token)
+      const branchesData = await api.listBranches(token, { includeInactive: '1' })
       setBranches(Array.isArray(branchesData) ? branchesData : [])
       
       if (isMyBranchView) {
@@ -105,9 +107,9 @@ export default function BranchDashboard() {
           const branchObj = branchesData.find(b => b.branch_code === branchCode)
           setSelectedBranch(branchObj || { branch_code: branchCode, branch_name: 'Unknown Branch' })
           const [stats, empPerf, receiptsRes] = await Promise.all([
-            api.getBranchStats(token, branchCode, { includePending: includePending ? '1' : '0', from: dateRange.from, to: dateRange.to }),
-            api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, branch_code: branchCode, includePending: includePending ? '1' : '0' }).catch(() => []),
-            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, size: '10', sort: 'created_at:desc' }).catch(() => ({ items: [], data: [] }))
+            api.getBranchStats(token, branchCode, { includePending: includePending ? '1' : '0', from: dateRange.from, to: dateRange.to, date_basis: dateBasis }),
+            api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, branch_code: branchCode, includePending: includePending ? '1' : '0', date_basis: dateBasis }).catch(() => []),
+            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, size: '10', sort: 'created_at:desc' }).catch(() => ({ items: [], data: [] }))
           ])
           setBranchStats(stats)
           setGlobalStats(null)
@@ -126,6 +128,7 @@ export default function BranchDashboard() {
           includePending: includePending ? '1' : '0',
           from: dateRange.from,
           to: dateRange.to,
+          date_basis: dateBasis,
           viewMode: 'all'
         })
         setGlobalStats(globalStatsData)
@@ -135,6 +138,7 @@ export default function BranchDashboard() {
           const empPerfData = await api.getEmployeePerformance(token, {
             from: dateRange.from,
             to: dateRange.to,
+            date_basis: dateBasis,
             includePending: includePending ? '1' : '0'
           })
           setEmployeePerformance(Array.isArray(empPerfData) ? empPerfData : [])
@@ -157,7 +161,8 @@ export default function BranchDashboard() {
       const stats = await api.getBranchStats(token, branchCode, {
         includePending: includePending ? '1' : '0',
         from: dateRange.from,
-        to: dateRange.to
+        to: dateRange.to,
+        date_basis: dateBasis
       })
       setBranchStats(stats)
     } catch (err) {
@@ -193,7 +198,8 @@ export default function BranchDashboard() {
       const stats = await api.getBranchStats(token, branchCode, {
         includePending: includePending ? '1' : '0',
         from: dateRange.from,
-        to: dateRange.to
+        to: dateRange.to,
+        date_basis: dateBasis
       })
       setDetailedBranchStats(stats)
       
@@ -203,7 +209,8 @@ export default function BranchDashboard() {
           from: dateRange.from,
           to: dateRange.to,
           branch_code: branchCode,
-          includePending: includePending ? '1' : '0'
+          includePending: includePending ? '1' : '0',
+          date_basis: dateBasis
         })
         setBranchEmployees(Array.isArray(empPerf) ? empPerf : [])
       } catch (err) {
@@ -217,6 +224,7 @@ export default function BranchDashboard() {
           branch_code: branchCode,
           from: dateRange.from,
           to: dateRange.to,
+          date_basis: dateBasis,
           size: 10,
           sort: 'created_at:desc'
         })
@@ -239,11 +247,11 @@ export default function BranchDashboard() {
     if (selectedBranchForDetails) {
       loadDetailedBranchStats(selectedBranchForDetails.branch_code)
     }
-  }, [dateRange.from, dateRange.to, includePending])
+  }, [dateRange.from, dateRange.to, dateBasis, includePending])
 
   useEffect(() => {
     loadBranchData()
-  }, [token, includePending, dateRange.from, dateRange.to, scope])
+  }, [token, includePending, dateRange.from, dateRange.to, dateBasis, scope])
 
   const handlePeriodSelect = (period) => {
     setSelectedPeriod(period)
@@ -509,6 +517,33 @@ export default function BranchDashboard() {
               Include Pending
             </span>
           </label>
+          <div className="flex items-center gap-2 pl-4 border-l border-[var(--stroke)] shrink-0">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">Date basis</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDateBasis('receipt')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  dateBasis === 'receipt'
+                    ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--accent)]'
+                    : 'border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]'
+                }`}
+              >
+                Receipt
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateBasis('transaction')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  dateBasis === 'transaction'
+                    ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--accent)]'
+                    : 'border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]'
+                }`}
+              >
+                Transaction
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-2 pl-4 border-l border-[var(--stroke)] w-full sm:w-auto">
             <span className="text-xs font-medium text-[var(--text-secondary)] shrink-0">Period</span>
             {['today', 'week', 'month', 'quarter', 'year'].map((p) => (
@@ -559,6 +594,19 @@ export default function BranchDashboard() {
           <FiMapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p className="font-medium text-[var(--text-primary)]">No branch assigned</p>
           <p className="mt-1">Switch to <button type="button" onClick={() => setScope('all_branches')} className="text-[var(--accent)] hover:underline">All branches</button> to see network performance, or assign yourself a branch in User Management.</p>
+        </div>
+      )}
+
+      {/* Missing branch mapping (employee/manager my_branch view) */}
+      {isMyBranchView && shouldShowMissingBranchBanner && !selectedBranch && !loading && (
+        <div className="border border-[var(--warn)]/50 bg-[var(--warn-muted)] text-[var(--text-primary)] px-4 py-3 rounded-lg flex items-start gap-3">
+          <FiAlertCircle className="h-5 w-5 mt-0.5 text-[var(--warn)]" />
+          <div className="min-w-0">
+            <div className="font-semibold">Branch assignment missing</div>
+            <div className="text-sm text-[var(--text-secondary)]">
+              Your account doesn’t have a valid branch mapped, so branch client data may appear empty. Please contact an admin to assign your branch.
+            </div>
+          </div>
         </div>
       )}
 

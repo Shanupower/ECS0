@@ -37,6 +37,7 @@ export default function BranchManagement() {
   const [selectedBranchForInsights, setSelectedBranchForInsights] = useState(null)
   const [branchInsightsData, setBranchInsightsData] = useState(null)
   const [loadingInsights, setLoadingInsights] = useState(false)
+  const [insightsError, setInsightsError] = useState('')
   const branchEditFormRef = useRef(null)
 
   const isAdmin = user?.role === 'admin'
@@ -54,6 +55,34 @@ export default function BranchManagement() {
     }
   }, [isAdmin, token])
 
+  useEffect(() => {
+    if (!token || !selectedBranchForInsights?.branch_code) return
+
+    let cancelled = false
+    const loadInsights = async () => {
+      setLoadingInsights(true)
+      setInsightsError('')
+      setBranchInsightsData(null)
+      try {
+        const data = await api.getBranchStats(token, selectedBranchForInsights.branch_code)
+        if (cancelled) return
+        setBranchInsightsData(data)
+      } catch (err) {
+        if (cancelled) return
+        console.error('Failed to load branch insights:', err)
+        setInsightsError(err?.message || 'Failed to load performance insights')
+      } finally {
+        if (cancelled) return
+        setLoadingInsights(false)
+      }
+    }
+
+    loadInsights()
+    return () => {
+      cancelled = true
+    }
+  }, [token, selectedBranchForInsights?.branch_code])
+
   const loadData = async () => {
     if (!token) return
     
@@ -62,7 +91,7 @@ export default function BranchManagement() {
     
     try {
       const [branchesData, usersData] = await Promise.all([
-        api.listBranches(token),
+        api.listBranches(token, { includeInactive: '1' }),
         api.listUsers(token)
       ])
       
@@ -382,6 +411,8 @@ export default function BranchManagement() {
                           </button>
                           <button
                             onClick={() => {
+                              setInsightsError('')
+                              setBranchInsightsData(null)
                               setSelectedBranchForInsights(branch)
                             }}
                             className="p-2 rounded-lg text-[var(--info)] hover:bg-[var(--info-muted)]/40 transition-colors duration-200"
@@ -498,6 +529,8 @@ export default function BranchManagement() {
                         </button>
                         <button
                           onClick={() => {
+                            setInsightsError('')
+                            setBranchInsightsData(null)
                             setSelectedBranchForInsights(branch)
                           }}
                           className="px-3 py-2 rounded-lg bg-[var(--info-muted)] text-[var(--info)] hover:bg-[var(--info-muted)]/80 transition-colors"
@@ -557,6 +590,7 @@ export default function BranchManagement() {
                   onClick={() => {
                     setSelectedBranchForInsights(null)
                     setBranchInsightsData(null)
+                    setInsightsError('')
                   }}
                   className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
@@ -568,6 +602,14 @@ export default function BranchManagement() {
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                   <span className="ml-2 text-gray-600 dark:text-dark-400">Loading insights...</span>
+                </div>
+              ) : insightsError ? (
+                <div className="px-4 py-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 flex items-start gap-2">
+                  <FiAlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <div className="font-medium">Performance Insights failed to load</div>
+                    <div className="mt-0.5">{insightsError}</div>
+                  </div>
                 </div>
               ) : branchInsightsData ? (
                 <div className="space-y-6">

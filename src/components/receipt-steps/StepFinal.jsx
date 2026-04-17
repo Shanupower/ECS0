@@ -1014,6 +1014,12 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                       <div className="font-semibold text-[var(--text-primary)]">{data.stp_target_scheme_name}</div>
                     </div>
                   )}
+                  {(data.stp_original_amount || data.stpOriginalAmount) && (
+                    <div className="bg-[var(--card-bg)] rounded-card p-4">
+                      <div className="text-helper text-[var(--text-muted)]">Total Original Scheme Amount</div>
+                      <div className="font-semibold text-[var(--success)]">{fmtAmt(data.stp_original_amount || data.stpOriginalAmount)}</div>
+                    </div>
+                  )}
                   {data.stp_frequency && (
                     <div className="bg-[var(--card-bg)] rounded-card p-4">
                       <div className="text-helper text-[var(--text-muted)]">STP Frequency</div>

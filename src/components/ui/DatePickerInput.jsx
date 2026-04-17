@@ -496,11 +496,7 @@ export default function DatePickerInput({
                       'h-9 rounded-lg border text-xs transition-colors',
                       inView ? 'bg-[var(--card-bg-opaque)] border-[var(--stroke)] text-[var(--text-primary)]' : 'bg-[var(--card-bg)] border-[var(--stroke)] text-[var(--text-muted)] opacity-70',
                       selected ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]' : '',
-                      isToday && inView && selectable
-                        ? selected
-                          ? 'ring-2 ring-[var(--success)] ring-offset-2 ring-offset-[var(--card-bg)]'
-                          : 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--card-bg)] font-semibold'
-                        : '',
+                      isToday && inView && selectable && !selected ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--card-bg)] font-semibold' : '',
                       !selectable ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--card-hover)]',
                     ].join(' ')}
                     aria-label={`Select ${yyyyMmDd}${isToday ? ' (today)' : ''}`}
