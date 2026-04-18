@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../../api'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 
@@ -30,6 +30,11 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
   const [tenureQuickSelectOptions, setTenureQuickSelectOptions] = useState([]) // { value, label } for buttons (specific + ranges)
   const [availableRateSlabs, setAvailableRateSlabs] = useState([]) // All matching rate slabs (specific + ranges)
   const [fullScheme, setFullScheme] = useState(scheme) // Store full scheme with rate_slabs
+  /** Which tenure units exist in rate slabs for the selected payout frequency (for UI: show days/months/both). */
+  const [tenureUnitAvailability, setTenureUnitAvailability] = useState({ hasDays: true, hasMonths: true })
+  const skipAutoTenureFromSlabsRef = useRef(
+    initialData?.tenureUnit != null && String(initialData.tenureUnit).trim() !== ''
+  )
 
   // Fetch full scheme with rate_slabs if not already included
   useEffect(() => {
@@ -72,6 +77,38 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       setRenewalAdditionalAmount('')
     }
   }, [fdTransactionType])
+
+  // Infer days vs months from slabs for this payout frequency; auto-pick unit when only one exists
+  useEffect(() => {
+    if (!payoutFrequency) return
+    const schemeToUse = fullScheme || scheme
+    const slabs = schemeToUse?.rate_slabs
+    if (!Array.isArray(slabs) || slabs.length === 0) {
+      setTenureUnitAvailability({ hasDays: true, hasMonths: true })
+      return
+    }
+    const norm = (s) => String(s ?? '').trim()
+    const normalizeUnit = (u) => (String(u || 'months').trim().toLowerCase() === 'days' ? 'days' : 'months')
+    const matchingSlabs = slabs.filter((slab) => {
+      if (slab.is_active === false) return false
+      const slabFreq = norm(slab.payout_frequency_type)
+      const selectedFreq = norm(payoutFrequency)
+      const matchesFrequency =
+        slabFreq === selectedFreq ||
+        (slabFreq && selectedFreq && slabFreq.toLowerCase() === selectedFreq.toLowerCase())
+      return matchesFrequency
+    })
+    const hasDays = matchingSlabs.some((s) => normalizeUnit(s.tenure_unit) === 'days')
+    const hasMonths = matchingSlabs.some((s) => normalizeUnit(s.tenure_unit) === 'months')
+    setTenureUnitAvailability({ hasDays, hasMonths })
+
+    if (skipAutoTenureFromSlabsRef.current) {
+      skipAutoTenureFromSlabsRef.current = false
+      return
+    }
+    if (hasDays && !hasMonths) setTenureUnit('days')
+    else if (hasMonths && !hasDays) setTenureUnit('months')
+  }, [fullScheme, scheme, payoutFrequency])
 
   // Extract available tenures from rate slabs based on payout frequency
   // Build quick-select options for both specific tenures and range slabs so all slabs are visible
@@ -389,36 +426,58 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
         {/* Tenure */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {isGovtScheme ? 'Scheme Tenure' : 'Tenure'} <span className="text-red-500">*</span>
+            {isGovtScheme ? 'Scheme Tenure' : 'Tenure'}{' '}
+            {tenureUnitAvailability.hasDays && tenureUnitAvailability.hasMonths
+              ? ''
+              : tenureUnitAvailability.hasDays
+                ? '(days)'
+                : tenureUnitAvailability.hasMonths
+                  ? '(months)'
+                  : ''}{' '}
+            <span className="text-red-500">*</span>
           </label>
 
-          <div className="mb-2 flex items-center gap-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="fdTenureUnit"
-                value="months"
-                checked={tenureUnit === 'months'}
-                onChange={(e) => setTenureUnit(e.target.value)}
-                className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Months</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="fdTenureUnit"
-                value="days"
-                checked={tenureUnit === 'days'}
-                onChange={(e) => setTenureUnit(e.target.value)}
-                className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Days</span>
-            </label>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              (rate slab matching uses this unit)
-            </span>
-          </div>
+          {tenureUnitAvailability.hasDays && tenureUnitAvailability.hasMonths ? (
+            <div className="mb-2 flex items-center gap-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="fdTenureUnit"
+                  value="months"
+                  checked={tenureUnit === 'months'}
+                  onChange={(e) => setTenureUnit(e.target.value)}
+                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Months</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="fdTenureUnit"
+                  value="days"
+                  checked={tenureUnit === 'days'}
+                  onChange={(e) => setTenureUnit(e.target.value)}
+                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Days</span>
+              </label>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                (rate slabs include both day and month bands)
+              </span>
+            </div>
+          ) : !tenureUnitAvailability.hasDays && !tenureUnitAvailability.hasMonths ? (
+            <div className="mb-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+              No rate slabs for this payout frequency. Choose another frequency or update scheme slabs.
+            </div>
+          ) : (
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              Rate slabs for this scheme use{' '}
+              <strong className="text-gray-700 dark:text-gray-300">
+                {tenureUnitAvailability.hasDays ? 'days' : 'months'}
+              </strong>{' '}
+              only.
+            </p>
+          )}
           
           {/* Show all available tenures as quick-select buttons (specific + range slabs) */}
           {tenureQuickSelectOptions.length > 0 && tenureQuickSelectOptions.length <= 40 && (
