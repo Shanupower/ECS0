@@ -15,7 +15,8 @@ import {
   FiShield,
   FiSearch,
   FiChevronDown,
-  FiDatabase
+  FiDatabase,
+  FiTarget
 } from 'react-icons/fi'
 
 export default function UserManagementPage() {
@@ -35,17 +36,20 @@ export default function UserManagementPage() {
     mobile: '',
     branch: '',
     role: 'employee',
-    password: ''
+    password: '',
+    personal_monthly_target: ''
   })
   const [fieldErrors, setFieldErrors] = useState({})
 
   const isAdmin = user?.role === 'admin'
+  const isManager = user?.role === 'manager'
+  const canManageUsers = isAdmin || isManager
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!canManageUsers) return
     loadUsers()
     loadBranches()
-  }, [token, isAdmin])
+  }, [token, isAdmin, isManager])
 
   const loadUsers = async () => {
     if (!token) return
@@ -54,7 +58,9 @@ export default function UserManagementPage() {
     setError('')
     
     try {
-      const result = await api.listUsers(token)
+      const result = isManager
+        ? await api.listUsers(token, { scope: 'branch' })
+        : await api.listUsers(token)
       setUsers(Array.isArray(result) ? result : [])
     } catch (err) {
       setError(err.message || 'Failed to load users')
@@ -92,6 +98,11 @@ export default function UserManagementPage() {
           trimmedData[key] = typeof value === 'string' ? value.trim() : value
         }
       }
+      if (trimmedData.personal_monthly_target === '' || trimmedData.personal_monthly_target == null) {
+        trimmedData.personal_monthly_target = null
+      } else {
+        trimmedData.personal_monthly_target = Number(trimmedData.personal_monthly_target)
+      }
       await api.createUser(token, trimmedData)
       await loadUsers()
       setShowCreateForm(false)
@@ -123,14 +134,31 @@ export default function UserManagementPage() {
           trimmedData[key] = typeof value === 'string' ? value.trim() : value
         }
       }
-      
-      const newPassword = trimmedData.password
-      delete trimmedData.password
 
-      await api.updateUser(token, editingUser.id, trimmedData)
-      
-      if (newPassword) {
-        await api.changePassword(token, editingUser.id, newPassword)
+      // Managers can only update personal target.
+      if (isManager) {
+        const payload = {
+          personal_monthly_target:
+            trimmedData.personal_monthly_target === '' || trimmedData.personal_monthly_target == null
+              ? null
+              : Number(trimmedData.personal_monthly_target)
+        }
+        await api.updateUser(token, editingUser.id, payload)
+      } else {
+        if (trimmedData.personal_monthly_target === '' || trimmedData.personal_monthly_target == null) {
+          trimmedData.personal_monthly_target = null
+        } else {
+          trimmedData.personal_monthly_target = Number(trimmedData.personal_monthly_target)
+        }
+        
+        const newPassword = trimmedData.password
+        delete trimmedData.password
+
+        await api.updateUser(token, editingUser.id, trimmedData)
+        
+        if (newPassword) {
+          await api.changePassword(token, editingUser.id, newPassword)
+        }
       }
       
       await loadUsers()
@@ -195,7 +223,8 @@ export default function UserManagementPage() {
       mobile: '',
       branch: '',
       role: 'employee',
-      password: ''
+      password: '',
+      personal_monthly_target: ''
     })
     setFieldErrors({})
   }
@@ -224,7 +253,11 @@ export default function UserManagementPage() {
       mobile: user.mobile || '',
       branch: getBranchFormValue(user.branch, user.branch_code),
       role: user.role || 'employee',
-      password: ''
+      password: '',
+      personal_monthly_target:
+        user.personal_monthly_target != null && user.personal_monthly_target !== ''
+          ? String(user.personal_monthly_target)
+          : ''
     })
   }
 
@@ -277,12 +310,12 @@ export default function UserManagementPage() {
     )
   })
 
-  if (!isAdmin) {
+  if (!canManageUsers) {
     return (
       <div className="text-center py-12">
         <div className="inline-flex items-center px-6 py-4 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg)] text-[var(--error)]">
           <FiAlertCircle className="w-5 h-5 mr-2" />
-          Access denied. Admin privileges required.
+          Access denied. Admin or Branch Manager privileges required.
         </div>
       </div>
     )
@@ -308,14 +341,16 @@ export default function UserManagementPage() {
             <FiRefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
           </button>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="inline-flex items-center px-3 py-2 sm:px-4 border border-transparent text-xs sm:text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-          >
-            <FiPlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Create User</span>
-            <span className="sm:hidden">Create</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="inline-flex items-center px-3 py-2 sm:px-4 border border-transparent text-xs sm:text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              <FiPlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Create User</span>
+              <span className="sm:hidden">Create</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -399,6 +434,7 @@ export default function UserManagementPage() {
                         : 'border-[var(--stroke)]'
                     } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                     required
+                    disabled={isManager}
                   />
                 </div>
                 {fieldErrors.emp_code && (
@@ -430,6 +466,7 @@ export default function UserManagementPage() {
                       : 'border-[var(--stroke)]'
                   } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                   required
+                  disabled={isManager}
                 />
                 {fieldErrors.name && (
                   <p className="mt-1 text-sm text-[var(--error)] flex items-center">
@@ -439,6 +476,7 @@ export default function UserManagementPage() {
                 )}
               </div>
               
+              {!isManager && (
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label>
                 <div className="relative">
@@ -473,7 +511,9 @@ export default function UserManagementPage() {
                   </p>
                 )}
               </div>
+              )}
 
+              {!isManager && (
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Employee Phone Number</label>
                 <input
@@ -504,7 +544,9 @@ export default function UserManagementPage() {
                   </p>
                 )}
               </div>
+              )}
               
+              {!isManager && (
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch</label>
                 <div className="relative">
@@ -558,7 +600,31 @@ export default function UserManagementPage() {
                   </p>
                 )}
               </div>
+              )}
               
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2 flex items-center gap-2">
+                  <FiTarget className="w-4 h-4 text-[var(--text-muted)]" />
+                  Personal monthly target (optional)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  value={formData.personal_monthly_target}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, personal_monthly_target: e.target.value }))
+                  }
+                  className="w-full p-3 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none"
+                  placeholder="Leave blank to use branch monthly target on dashboards"
+                />
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Used for personal dashboard and performance reports. If empty, the branch monthly target applies.
+                </p>
+              </div>
+
+              {!isManager && (
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Role</label>
                 <div className="relative">
@@ -576,7 +642,9 @@ export default function UserManagementPage() {
                   </select>
                 </div>
               </div>
+              )}
               
+              {!isManager && (
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Password {editingUser && '(leave blank to keep current)'}
@@ -613,13 +681,14 @@ export default function UserManagementPage() {
                   </p>
                 )}
               </div>
+              )}
               
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
                   className="flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
                 >
-                  {editingUser ? 'Update User' : 'Create User'}
+                  {editingUser ? (isManager ? 'Save Target' : 'Update User') : 'Create User'}
                 </button>
                 <button
                   type="button"
@@ -671,6 +740,12 @@ export default function UserManagementPage() {
                         <div><span className="font-medium">Email:</span> {user.email}</div>
                         <div><span className="font-medium">Phone:</span> {user.mobile || '—'}</div>
                         <div><span className="font-medium">Branch:</span> {getUserBranchDisplay(user.branch)}</div>
+                        <div>
+                          <span className="font-medium">Personal target:</span>{' '}
+                          {user.personal_monthly_target != null && user.personal_monthly_target !== ''
+                            ? `₹${Number(user.personal_monthly_target).toLocaleString('en-IN')}`
+                            : '—'}
+                        </div>
                         <div><span className="font-medium">Created:</span> {formatDate(user.created_at)}</div>
                       </div>
                     </div>
@@ -682,20 +757,24 @@ export default function UserManagementPage() {
                         <FiEdit className="w-4 h-4 mr-1.5" />
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleDeleteUserRelatedData(user.id)}
-                        className="inline-flex items-center px-3 py-2 border border-[var(--warn)]/60 text-xs font-medium rounded-md text-[var(--warn)] bg-[var(--warn-muted)] hover:bg-[var(--warn-muted)]/80"
-                      >
-                        <FiDatabase className="w-4 h-4 mr-1.5" />
-                        Clean Data
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="inline-flex items-center px-3 py-2 border border-[var(--error)]/60 text-xs font-medium rounded-md text-[var(--error)] bg-[var(--error-muted)] hover:bg-[var(--error-muted)]/80"
-                      >
-                        <FiTrash2 className="w-4 h-4 mr-1.5" />
-                        Delete
-                      </button>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => handleDeleteUserRelatedData(user.id)}
+                            className="inline-flex items-center px-3 py-2 border border-[var(--warn)]/60 text-xs font-medium rounded-md text-[var(--warn)] bg-[var(--warn-muted)] hover:bg-[var(--warn-muted)]/80"
+                          >
+                            <FiDatabase className="w-4 h-4 mr-1.5" />
+                            Clean Data
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="inline-flex items-center px-3 py-2 border border-[var(--error)]/60 text-xs font-medium rounded-md text-[var(--error)] bg-[var(--error-muted)] hover:bg-[var(--error-muted)]/80"
+                          >
+                            <FiTrash2 className="w-4 h-4 mr-1.5" />
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -713,6 +792,7 @@ export default function UserManagementPage() {
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Email</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Phone</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Branch</th>
+                  <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Personal target</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Role</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Created</th>
                   <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
@@ -743,6 +823,11 @@ export default function UserManagementPage() {
                     <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-[var(--text-secondary)] truncate">
                       {getUserBranchDisplay(user.branch)}
                     </td>
+                    <td className="px-4 lg:px-6 py-3 lg:py-4 text-sm text-right text-[var(--text-secondary)] tabular-nums">
+                      {user.personal_monthly_target != null && user.personal_monthly_target !== ''
+                        ? `₹${Number(user.personal_monthly_target).toLocaleString('en-IN')}`
+                        : '—'}
+                    </td>
                     <td className="px-4 lg:px-6 py-3 lg:py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
                         user.role === 'admin' 
@@ -767,32 +852,36 @@ export default function UserManagementPage() {
                           <FiEdit className="w-3 h-3 mr-1" />
                           <span className="hidden lg:inline">Edit</span>
                         </button>
-                        <button
-                          onClick={() => {
-                            const newPassword = prompt('Enter new password:')
-                            if (newPassword) {
-                              handleChangePassword(user.id, newPassword)
-                            }
-                          }}
-                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--success)]/60 text-xs font-medium rounded-md text-[var(--success)] bg-[var(--success-muted)] hover:bg-[var(--success-muted)]/80"
-                        >
-                          <FiKey className="w-3 h-3 mr-1" />
-                          <span className="hidden lg:inline">Password</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUserRelatedData(user.id)}
-                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--warn)]/60 text-xs font-medium rounded-md text-[var(--warn)] bg-[var(--warn-muted)] hover:bg-[var(--warn-muted)]/80"
-                        >
-                          <FiDatabase className="w-3 h-3 mr-1" />
-                          <span className="hidden lg:inline">Clean Data</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--error)]/60 text-xs font-medium rounded-md text-[var(--error)] bg-[var(--error-muted)] hover:bg-[var(--error-muted)]/80"
-                        >
-                          <FiTrash2 className="w-3 h-3 mr-1" />
-                          <span className="hidden lg:inline">Delete</span>
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => {
+                                const newPassword = prompt('Enter new password:')
+                                if (newPassword) {
+                                  handleChangePassword(user.id, newPassword)
+                                }
+                              }}
+                              className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--success)]/60 text-xs font-medium rounded-md text-[var(--success)] bg-[var(--success-muted)] hover:bg-[var(--success-muted)]/80"
+                            >
+                              <FiKey className="w-3 h-3 mr-1" />
+                              <span className="hidden lg:inline">Password</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUserRelatedData(user.id)}
+                              className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--warn)]/60 text-xs font-medium rounded-md text-[var(--warn)] bg-[var(--warn-muted)] hover:bg-[var(--warn-muted)]/80"
+                            >
+                              <FiDatabase className="w-3 h-3 mr-1" />
+                              <span className="hidden lg:inline">Clean Data</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="inline-flex items-center px-2 py-1 lg:px-3 border border-[var(--error)]/60 text-xs font-medium rounded-md text-[var(--error)] bg-[var(--error-muted)] hover:bg-[var(--error-muted)]/80"
+                            >
+                              <FiTrash2 className="w-3 h-3 mr-1" />
+                              <span className="hidden lg:inline">Delete</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

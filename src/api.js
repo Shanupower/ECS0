@@ -129,7 +129,7 @@ export const api={
   // User endpoints
   me:(t)=>req('/api/users/me',{token:t}),
   updateMyProfile:(t,data)=>req('/api/users/me',{method:'PATCH',token:t,json:data}),
-  listUsers:(t)=>req('/api/users',{token:t}),
+  listUsers:(t,q)=>req('/api/users',{token:t,query:q}),
   listAssignableUsers:(t)=>req('/api/users/assignable',{token:t}),
   createUser:(t,data)=>req('/api/users',{method:'POST',token:t,json:data}),
   updateUser:(t,id,data)=>req(`/api/users/${id}`,{method:'PATCH',token:t,json:data}),

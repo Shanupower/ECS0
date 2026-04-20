@@ -42,6 +42,50 @@ const COLORS = [
   '#84CC16'  // Lime
 ]
 
+/** Prorate a monthly target across calendar months overlapping [fromStr, toStr] (YYYY-MM-DD, inclusive). */
+function scaleMonthlyTargetToDateRange(monthlyAmount, fromStr, toStr) {
+  let m = monthlyAmount
+  if (m == null) m = 0
+  else if (typeof m !== 'number') {
+    const s = String(m).replace(/,/g, '').trim()
+    const n = Number(s)
+    m = Number.isFinite(n) ? n : 0
+  } else if (!Number.isFinite(m)) m = 0
+  if (!(m > 0)) return m
+  if (!fromStr || !toStr) return m
+
+  const parseLocalNoon = (iso) => {
+    const parts = String(iso).split('-').map((x) => parseInt(x, 10))
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null
+    const [y, mo, d] = parts
+    return new Date(y, mo - 1, d, 12, 0, 0)
+  }
+
+  const from = parseLocalNoon(fromStr)
+  const to = parseLocalNoon(toStr)
+  if (!from || !to || from > to) return 0
+
+  let total = 0
+  let cur = new Date(from.getFullYear(), from.getMonth(), 1, 12, 0, 0)
+  const lastMonthStart = new Date(to.getFullYear(), to.getMonth(), 1, 12, 0, 0)
+
+  while (cur <= lastMonthStart) {
+    const y = cur.getFullYear()
+    const monthIdx = cur.getMonth()
+    const monthStart = new Date(y, monthIdx, 1, 12, 0, 0)
+    const monthEnd = new Date(y, monthIdx + 1, 0, 12, 0, 0)
+    const daysInMonth = monthEnd.getDate()
+    const rangeStart = from > monthStart ? from : monthStart
+    const rangeEnd = to < monthEnd ? to : monthEnd
+    if (rangeStart <= rangeEnd) {
+      const overlapDays = Math.floor((rangeEnd - rangeStart) / 86400000) + 1
+      total += m * (overlapDays / daysInMonth)
+    }
+    cur.setMonth(cur.getMonth() + 1)
+  }
+  return total
+}
+
 export default function BranchDashboard() {
   const { token, user } = useAuth()
   const [branches, setBranches] = useState([])
@@ -747,12 +791,49 @@ export default function BranchDashboard() {
                 Team performance
               </h3>
               <ul className="space-y-2">
-                {employeePerformance.slice(0, 10).map((emp, i) => (
-                  <li key={emp.emp_code || i} className="flex justify-between items-center py-2 border-b border-[var(--stroke)] last:border-0">
-                    <span className="font-medium text-[var(--text-primary)]">#{i + 1} {emp.employee_name || emp.emp_code}</span>
-                    <span className="text-[var(--text-secondary)]">{formatCurrency(emp.total_investment)}</span>
-                  </li>
-                ))}
+                {employeePerformance.slice(0, 10).map((emp, i) => {
+                  const branchMonthly =
+                    selectedBranch?.monthly_target != null && selectedBranch?.monthly_target !== ''
+                      ? Number(selectedBranch.monthly_target)
+                      : null
+                  const personalT = emp.personal_target != null ? Number(emp.personal_target) : null
+                  const effectiveMonthly =
+                    emp.effective_target != null
+                      ? Number(emp.effective_target)
+                      : personalT != null
+                        ? personalT
+                        : branchMonthly
+                  const periodTarget =
+                    effectiveMonthly != null && effectiveMonthly > 0
+                      ? scaleMonthlyTargetToDateRange(effectiveMonthly, dateRange.from, dateRange.to)
+                      : 0
+                  const cc = emp.total_cc != null ? Number(emp.total_cc) : 0
+                  const pct =
+                    periodTarget > 0 ? Math.min(100, Math.round((cc / periodTarget) * 100)) : null
+                  return (
+                    <li
+                      key={emp.emp_code || i}
+                      className="flex justify-between items-start gap-3 py-2 border-b border-[var(--stroke)] last:border-0"
+                    >
+                      <span className="font-medium text-[var(--text-primary)] min-w-0">
+                        #{i + 1} {emp.employee_name || emp.emp_code}
+                      </span>
+                      <span className="text-[var(--text-secondary)] text-right shrink-0 text-sm">
+                        <span className="block tabular-nums">Inv {formatCurrency(emp.total_investment)}</span>
+                        <span className="block tabular-nums text-xs mt-0.5">
+                          CC {formatCurrency(cc)}
+                          {effectiveMonthly != null && (
+                            <>
+                              {' '}
+                              · target {formatCurrency(effectiveMonthly)}
+                              {pct != null ? ` (${pct}%)` : ''}
+                            </>
+                          )}
+                        </span>
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}

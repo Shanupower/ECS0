@@ -44,6 +44,50 @@ const DONUT_COLORS = [
   '#ca8a04', '#c026d3', '#4f46e5', '#65a30d', '#db2777', '#0f766e'
 ]
 
+/** Prorate a monthly target across calendar months overlapping [fromStr, toStr] (YYYY-MM-DD, inclusive). */
+function scaleMonthlyTargetToDateRange(monthlyAmount, fromStr, toStr) {
+  let m = monthlyAmount
+  if (m == null) m = 0
+  else if (typeof m !== 'number') {
+    const s = String(m).replace(/,/g, '').trim()
+    const n = Number(s)
+    m = Number.isFinite(n) ? n : 0
+  } else if (!Number.isFinite(m)) m = 0
+  if (!(m > 0)) return m
+  if (!fromStr || !toStr) return m
+
+  const parseLocalNoon = (iso) => {
+    const parts = String(iso).split('-').map((x) => parseInt(x, 10))
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null
+    const [y, mo, d] = parts
+    return new Date(y, mo - 1, d, 12, 0, 0)
+  }
+
+  const from = parseLocalNoon(fromStr)
+  const to = parseLocalNoon(toStr)
+  if (!from || !to || from > to) return 0
+
+  let total = 0
+  let cur = new Date(from.getFullYear(), from.getMonth(), 1, 12, 0, 0)
+  const lastMonthStart = new Date(to.getFullYear(), to.getMonth(), 1, 12, 0, 0)
+
+  while (cur <= lastMonthStart) {
+    const y = cur.getFullYear()
+    const monthIdx = cur.getMonth()
+    const monthStart = new Date(y, monthIdx, 1, 12, 0, 0)
+    const monthEnd = new Date(y, monthIdx + 1, 0, 12, 0, 0)
+    const daysInMonth = monthEnd.getDate()
+    const rangeStart = from > monthStart ? from : monthStart
+    const rangeEnd = to < monthEnd ? to : monthEnd
+    if (rangeStart <= rangeEnd) {
+      const overlapDays = Math.floor((rangeEnd - rangeStart) / 86400000) + 1
+      total += m * (overlapDays / daysInMonth)
+    }
+    cur.setMonth(cur.getMonth() + 1)
+  }
+  return total
+}
+
 const WIDGET_LABELS = {
   kpi_cards: 'KPI cards',
   overdue_tasks: 'Overdue tasks',
@@ -76,13 +120,15 @@ export default function DashboardPage() {
   const [issuesSnapshot, setIssuesSnapshot] = useState([])
   const [issuesSnapshotTotal, setIssuesSnapshotTotal] = useState(0)
   const [investorLocations, setInvestorLocations] = useState(null)
-  // Used by the "Target vs actual" widget to keep the denominator (branch target)
-  // consistent with the numerator (branch-level CC) when admins view "Personal".
-  const [targetBranchActualCc, setTargetBranchActualCc] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCustomizeModal, setShowCustomizeModal] = useState(false)
   const [customizeSelection, setCustomizeSelection] = useState([])
+  const [showBranchBreakdownModal, setShowBranchBreakdownModal] = useState(false)
+  const [branchBreakdownLoading, setBranchBreakdownLoading] = useState(false)
+  const [branchBreakdownError, setBranchBreakdownError] = useState('')
+  const [branchBreakdownBranch, setBranchBreakdownBranch] = useState(null)
+  const [branchBreakdownEmployees, setBranchBreakdownEmployees] = useState([])
   const currentYear = new Date().getFullYear()
   const [dateRange, setDateRange] = useState({
     from: `${currentYear}-01-01`,
@@ -123,7 +169,6 @@ export default function DashboardPage() {
     
     setLoading(true)
     setError('')
-    setTargetBranchActualCc(null)
     setIssuesSnapshotTotal(0)
     
     try {
@@ -158,21 +203,6 @@ export default function DashboardPage() {
       const summaryData = await api.statsSummary(token, queryParams)
       setSummary(summaryData)
 
-      // For "Target vs actual", branch_target is branch-level, but in Admin "Personal"
-      // view we filter actuals to a single employee. Fetch branch-level actuals so
-      // the progress bar reflects the same scope as the target.
-      if (viewMode === 'personal') {
-        try {
-          // Branch target is the denominator; use branch-level actuals even when "personal" view is selected.
-          const branchSummaryData = await api.statsSummary(token, { ...queryParams, viewMode: 'branch' })
-          setTargetBranchActualCc(branchSummaryData?.collection_credit_earned ?? null)
-        } catch (e) {
-          // If the extra fetch fails, fall back to the original numerator.
-          console.warn('Failed to fetch branch actual CC for Target vs actual:', e)
-          setTargetBranchActualCc(null)
-        }
-      }
-      
       // Load category statistics
       const categoryData = await api.statsByCategory(token, queryParams)
       setCategoryStats(categoryData)
@@ -291,20 +321,50 @@ export default function DashboardPage() {
 
   const navigate = useNavigate()
 
-  const usesBranchActualForTarget = viewMode === 'personal' && targetBranchActualCc != null
-  const targetActualCc = usesBranchActualForTarget
-    ? targetBranchActualCc
-    : (summary?.collection_credit_earned || 0)
-  const targetActualCcLabel = usesBranchActualForTarget
-    ? 'Actual CC (branch):'
-    : 'Actual CC (selected scope):'
+  const openBranchBreakdown = async (branch) => {
+    const branchCode = branch?.branch_code || branch?.branch || branch?.branch_name
+    if (!branchCode) return
+    setBranchBreakdownBranch(branch)
+    setShowBranchBreakdownModal(true)
+    setBranchBreakdownEmployees([])
+    setBranchBreakdownError('')
+    setBranchBreakdownLoading(true)
+    try {
+      const rows = await api.getEmployeePerformance(token, {
+        from: dateRange.from,
+        to: dateRange.to,
+        branch_code: String(branchCode),
+        includePending: includePending ? '1' : '0',
+        date_basis: dateBasis
+      })
+      setBranchBreakdownEmployees(Array.isArray(rows) ? rows : [])
+    } catch (e) {
+      setBranchBreakdownError(e?.message || 'Failed to load branch breakdown')
+      setBranchBreakdownEmployees([])
+    } finally {
+      setBranchBreakdownLoading(false)
+    }
+  }
 
-  const targetNum = toSafeNumber(summary?.branch_target)
+  const monthlyTargetBasis = useMemo(() => {
+    if (summary?.effective_target != null) return toSafeNumber(summary.effective_target)
+    return toSafeNumber(summary?.branch_target)
+  }, [summary])
+
+  const periodTargetNum = useMemo(
+    () => scaleMonthlyTargetToDateRange(monthlyTargetBasis, dateRange.from, dateRange.to),
+    [monthlyTargetBasis, dateRange.from, dateRange.to]
+  )
+
+  // Personal view: compare personal CC (same scope as KPIs) to personal target or branch target fallback.
+  const targetActualCc = summary?.collection_credit_earned || 0
+  const targetActualCcLabel = 'Actual CC (selected scope):'
+
   const actualNum = toSafeNumber(targetActualCc)
-  const targetProgressPct = targetNum > 0
-    ? (actualNum >= targetNum
+  const targetProgressPct = periodTargetNum > 0
+    ? (actualNum >= periodTargetNum
         ? 100
-        : Math.min(100, Math.max(0, (actualNum / targetNum) * 100)))
+        : Math.min(100, Math.max(0, (actualNum / periodTargetNum) * 100)))
     : 0
 
   // (intentionally no debug logging; target vs actual is visible via the bar itself)
@@ -342,14 +402,15 @@ export default function DashboardPage() {
   const allBranchesTargetSummary = useMemo(() => {
     if (!branchStats?.branches?.length) return null
     const branches = branchStats.branches
-    const totalTarget =
+    const monthlySum =
       branchStats.total_monthly_target != null && branchStats.total_monthly_target !== ''
         ? toSafeNumber(branchStats.total_monthly_target)
         : branches.reduce((s, b) => s + toSafeNumber(b.total_target), 0)
+    const totalTarget = scaleMonthlyTargetToDateRange(monthlySum, dateRange.from, dateRange.to)
     const totalCc = toSafeNumber(branchStats.total_collection_credit)
     const overallPct = totalTarget > 0 ? Math.min(100, Math.max(0, (totalCc / totalTarget) * 100)) : 0
-    return { branches, totalTarget, totalCc, overallPct }
-  }, [branchStats])
+    return { branches, totalTarget, totalCc, overallPct, monthlySum }
+  }, [branchStats, dateRange.from, dateRange.to])
 
   return (
     <div className="space-y-6">
@@ -589,7 +650,7 @@ export default function DashboardPage() {
 
       {!loading && !error && summary && (
         <div className="space-y-6">
-          {showWidget('target_vs_actual') && summary.branch_target != null && (
+          {showWidget('target_vs_actual') && (summary.effective_target != null || summary.branch_target != null) && monthlyTargetBasis > 0 && (
             <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
               <div className="flex items-center gap-2 mb-2">
                 <FiTarget className="w-5 h-5 text-[var(--accent)]" />
@@ -597,8 +658,19 @@ export default function DashboardPage() {
               </div>
               <div>
                 <div className="flex justify-between text-small mb-1">
-                  <span className="text-[var(--text-muted)]">Branch monthly target</span>
-                  <span className="font-medium text-[var(--accent)]">{formatCurrency(summary.branch_target)}</span>
+                  <span className="text-[var(--text-muted)]">
+                    Target for selected period
+                    {viewMode === 'personal' && summary?.personal_target != null && (
+                      <span className="block text-[10px] text-[var(--text-muted)]/90 mt-0.5">Basis: personal monthly</span>
+                    )}
+                    {viewMode === 'personal' && summary?.personal_target == null && summary?.allocated_target != null && (
+                      <span className="block text-[10px] text-[var(--text-muted)]/90 mt-0.5">Basis: allocated from branch pool</span>
+                    )}
+                    {viewMode === 'personal' && summary?.personal_target == null && summary?.allocated_target == null && summary?.branch_target != null && (
+                      <span className="block text-[10px] text-[var(--text-muted)]/90 mt-0.5">Basis: branch monthly (allocation unavailable)</span>
+                    )}
+                  </span>
+                  <span className="font-medium text-[var(--accent)]">{formatCurrency(periodTargetNum)}</span>
                 </div>
                 <div className="h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
                   <div
@@ -815,9 +887,16 @@ export default function DashboardPage() {
               </div>
               <ul className="space-y-1">
                 {topEmployees.slice(0, 4).map((emp, i) => (
-                  <li key={emp.emp_code || i} className="flex justify-between text-xs py-0.5">
+                  <li key={emp.emp_code || i} className="flex justify-between gap-2 text-xs py-0.5">
                     <span className="text-[var(--text-primary)] truncate">#{i + 1} {emp.employee_name || emp.emp_code}</span>
-                    <span className="text-[var(--text-muted)] ml-2 shrink-0">{formatCurrency(emp.total_investment)}</span>
+                    <span className="text-[var(--text-muted)] ml-2 shrink-0 text-right">
+                      <span className="block">{formatCurrency(emp.total_investment)}</span>
+                      {emp.effective_target != null && (
+                        <span className="block text-[10px] text-[var(--text-muted)]">
+                          Target {formatCurrency(emp.effective_target)}
+                        </span>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -1123,13 +1202,15 @@ export default function DashboardPage() {
 
               {/* Aggregated target vs actual (CC) */}
               <div className="mb-6 rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <FiTarget className="w-4 h-4 text-[var(--accent)]" />
-                  <span className="text-sm font-semibold text-[var(--text-primary)]">Target summary (all branches)</span>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <FiTarget className="w-4 h-4 text-[var(--accent)]" />
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">Target summary (all branches)</span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-small">
                   <div>
-                    <div className="text-[var(--text-muted)] mb-0.5">Combined monthly target</div>
+                    <div className="text-[var(--text-muted)] mb-0.5">Combined target (period)</div>
                     <div className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(allBranchesTargetSummary.totalTarget)}</div>
                   </div>
                   <div>
@@ -1144,6 +1225,9 @@ export default function DashboardPage() {
                         : '—'}
                     </div>
                   </div>
+                </div>
+                <div className="mt-2 text-xs text-[var(--text-muted)]">
+                  Target basis: Branch monthly
                 </div>
                 {allBranchesTargetSummary.totalTarget > 0 && (
                   <div className="mt-3 h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
@@ -1162,14 +1246,19 @@ export default function DashboardPage() {
               <div className="max-h-[560px] overflow-y-auto pr-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {allBranchesTargetSummary.branches.map((branch, index) => {
-                    const tgt = toSafeNumber(branch.total_target)
+                    const monthlyBranchTarget = toSafeNumber(branch.total_target)
+                    const tgt = scaleMonthlyTargetToDateRange(
+                      monthlyBranchTarget,
+                      dateRange.from,
+                      dateRange.to
+                    )
                     const cc = toSafeNumber(branch.commissions ?? branch.total_cc)
                     const branchPct = tgt > 0 ? Math.min(100, Math.max(0, (cc / tgt) * 100)) : null
                     return (
                       <button
                         key={branch.branch_code || branch.branch || index}
                         type="button"
-                        onClick={() => (branch.branch_code || branch.branch) && navigate(`/transactions?branch=${encodeURIComponent(branch.branch_code || branch.branch)}`)}
+                        onClick={() => openBranchBreakdown(branch)}
                         className="text-left rounded-card border border-[var(--stroke)] bg-[var(--card-hover)] p-4 hover:shadow-card hover:bg-[var(--card-bg)] transition-all cursor-pointer"
                       >
                         <div className="flex items-center justify-between mb-3">
@@ -1185,7 +1274,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-small gap-2">
-                            <span className="text-[var(--text-muted)] shrink-0">Monthly target</span>
+                            <span className="text-[var(--text-muted)] shrink-0">Target (period)</span>
                             <span className="font-medium text-[var(--text)] text-right">{formatCurrency(tgt)}</span>
                           </div>
                           <div className="flex justify-between text-small gap-2">
@@ -1222,6 +1311,141 @@ export default function DashboardPage() {
               </div>
             </Card>
           )}
+        </div>
+      )}
+
+      {showBranchBreakdownModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Branch breakdown"
+          onClick={() => setShowBranchBreakdownModal(false)}
+        >
+          <div
+            className="w-full max-w-5xl max-h-[85vh] flex flex-col rounded-2xl border border-[var(--stroke)] bg-[var(--card-bg-opaque)] shadow-[0_24px_48px_rgba(0,0,0,0.12)] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--stroke)] bg-[var(--card-hover)]/50">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                  {branchBreakdownBranch?.branch || branchBreakdownBranch?.branch_name || 'Branch'}
+                </div>
+                <div className="text-xs text-[var(--text-muted)]">
+                  Period: {dateRange.from} → {dateRange.to} · Basis: pool split (active users)
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border border-[var(--stroke)] text-sm text-[var(--text-primary)] hover:bg-[var(--card-hover)]"
+                onClick={() => setShowBranchBreakdownModal(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-6 overflow-auto">
+              {branchBreakdownError && (
+                <div className="mb-4 border border-[var(--error)]/60 bg-[var(--error-muted)] text-[var(--error)] px-4 py-3 rounded-lg">
+                  {branchBreakdownError}
+                </div>
+              )}
+
+              {branchBreakdownLoading ? (
+                <div className="text-center py-10 text-[var(--text-muted)]">Loading…</div>
+              ) : (
+                <>
+                  {(() => {
+                    const first = branchBreakdownEmployees?.[0] || null
+                    const monthly = toSafeNumber(first?.branch_monthly_target)
+                    const sumPersonal = toSafeNumber(first?.sum_personal_targets)
+                    const remaining = first?.remaining_pool != null ? toSafeNumber(first.remaining_pool) : (monthly - sumPersonal)
+                    const unset = Number(first?.unset_count || 0)
+                    const allocated = first?.allocated_target != null ? toSafeNumber(first.allocated_target) : (unset > 0 ? remaining / unset : 0)
+                    const periodBranchTarget = scaleMonthlyTargetToDateRange(monthly, dateRange.from, dateRange.to)
+                    return (
+                      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
+                          <div className="text-xs text-[var(--text-muted)]">Branch target (monthly)</div>
+                          <div className="font-semibold text-[var(--text-primary)]">{formatCurrency(monthly)}</div>
+                        </div>
+                        <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
+                          <div className="text-xs text-[var(--text-muted)]">Branch target (period)</div>
+                          <div className="font-semibold text-[var(--text-primary)]">{formatCurrency(periodBranchTarget)}</div>
+                        </div>
+                        <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
+                          <div className="text-xs text-[var(--text-muted)]">Personal targets (sum)</div>
+                          <div className="font-semibold text-[var(--text-primary)]">{formatCurrency(sumPersonal)}</div>
+                        </div>
+                        <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
+                          <div className="text-xs text-[var(--text-muted)]">Unset users</div>
+                          <div className="font-semibold text-[var(--text-primary)]">{unset}</div>
+                        </div>
+                        <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
+                          <div className="text-xs text-[var(--text-muted)]">Allocated / unset (monthly)</div>
+                          <div className="font-semibold text-[var(--text-primary)]">{formatCurrency(allocated)}</div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  <div className="overflow-x-auto rounded-card border border-[var(--stroke)]">
+                    <table className="w-full text-sm">
+                      <thead className="bg-[var(--card-hover)]/50">
+                        <tr className="text-left text-xs text-[var(--text-muted)]">
+                          <th className="px-4 py-3">Employee</th>
+                          <th className="px-4 py-3 text-right">Target (period, CC)</th>
+                          <th className="px-4 py-3 text-right">Achieved CC</th>
+                          <th className="px-4 py-3 text-right">Achieved Investments</th>
+                          <th className="px-4 py-3 text-right">% (CC)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--stroke)]">
+                        {(branchBreakdownEmployees || []).map((e, idx) => {
+                          const effectiveMonthly = toSafeNumber(e.effective_target)
+                          const targetPeriod = scaleMonthlyTargetToDateRange(effectiveMonthly, dateRange.from, dateRange.to)
+                          const cc = toSafeNumber(e.total_cc)
+                          const inv = toSafeNumber(e.total_investment)
+                          const pct = targetPeriod > 0 ? Math.min(999, (cc / targetPeriod) * 100) : null
+                          const label = e.employee_name || e.emp_code || `Employee ${idx + 1}`
+                          const basis = e.personal_target != null ? 'personal' : 'allocated'
+                          return (
+                            <tr key={e.emp_code || e.id || idx} className="hover:bg-[var(--card-hover)]/30">
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-[var(--text-primary)]">{label}</div>
+                                <div className="text-xs text-[var(--text-muted)]">
+                                  {e.emp_code ? `Code: ${e.emp_code}` : ''}{e.emp_code && e.role ? ' · ' : ''}{e.role ? `Role: ${e.role}` : ''}{(e.personal_target != null || e.allocated_target != null) ? ` · Basis: ${basis}` : ''}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-[var(--text-primary)] tabular-nums">
+                                {formatCurrency(targetPeriod)}
+                              </td>
+                              <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
+                                {formatCurrency(cc)}
+                              </td>
+                              <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
+                                {formatCurrency(inv)}
+                              </td>
+                              <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
+                                {pct == null ? '—' : `${pct.toFixed(0)}%`}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {(!branchBreakdownEmployees || branchBreakdownEmployees.length === 0) && (
+                          <tr>
+                            <td className="px-4 py-6 text-center text-[var(--text-muted)]" colSpan={5}>
+                              No active users found for this branch.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

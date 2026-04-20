@@ -448,84 +448,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               </div>
             ) : null}
             
-            {/* NCD/Bond-specific display (exclude FD headers) */}
-            {(data.product_category === 'BOND' || data.product_category === 'NCD') ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {data.bond_issuer_name && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Issuer</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.bond_issuer_name} ({data.bond_issuer_type})</div>
-                  </div>
-                )}
-                {data.bond_scheme_name && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Scheme</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.bond_scheme_name}</div>
-                    {(data.bond_category || data.bond_sub_category) && (
-                      <div className="text-caption text-[var(--text-muted)] mt-1">
-                        {data.bond_category && <span>{data.bond_category}</span>}
-                        {data.bond_category && data.bond_sub_category && <span className="mx-1">•</span>}
-                        {data.bond_sub_category && <span>{data.bond_sub_category}</span>}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {data.bond_isin && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">ISIN</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.bond_isin}</div>
-                  </div>
-                )}
-                {data.bond_transaction_type && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Transaction Type</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.bond_transaction_type}</div>
-                  </div>
-                )}
-                {data.bond_number_of_units && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Number of Units</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.bond_number_of_units}</div>
-                  </div>
-                )}
-                {data.bond_investment_amount && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Investment Amount</div>
-                    <div className="text-body font-semibold text-[var(--success)]">{fmtAmt(data.bond_investment_amount)}</div>
-                  </div>
-                )}
-                {data.bond_coupon_rate && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Coupon Rate</div>
-                    <div className="text-body font-semibold text-[var(--success)]">{data.bond_coupon_rate}% p.a.</div>
-                  </div>
-                )}
-                {data.bond_face_value && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Face Value</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">₹{data.bond_face_value}</div>
-                  </div>
-                )}
-                {data.bond_transaction_date && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Transaction Date</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{fmtDate(data.bond_transaction_date)}</div>
-                  </div>
-                )}
-                {data.bond_maturity_date && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Maturity Date</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{fmtDate(data.bond_maturity_date)}</div>
-                  </div>
-                )}
-                {data.bond_application_number && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Application Number</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.bond_application_number}</div>
-                  </div>
-                )}
-              </div>
-            ) : data.product_category === 'MISC' ? (
+            {data.product_category === 'MISC' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.service_name && (
                   <div className="bg-[var(--card-bg)] rounded-card p-4">
@@ -540,7 +463,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                   </div>
                 )}
               </div>
-            ) : data.product_category !== 'FD' && data.product_category !== 'BOND' && data.product_category !== 'INS' && (
+            ) : data.product_category !== 'FD' && data.product_category !== 'BOND' && data.product_category !== 'NCD' && data.product_category !== 'INS' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-[var(--card-bg)] rounded-card p-4">
                 <div className="text-helper text-[var(--text-muted)]">Product Type</div>
@@ -855,9 +778,9 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                 </div>
             )}
             
-            {/* NCD/Bond Details Section */}
-            {data.product_category === 'BOND' && (
-              <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
+            {/* NCD/Bond Details (purple section — single source for BOND/NCD preview) */}
+            {(data.product_category === 'BOND' || data.product_category === 'NCD') && (data.bond_issuer_name || data.bond_scheme_name) && (
+              <div className="p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
                 <h4 className="text-body font-semibold text-[var(--text-primary)] mb-3 flex items-center">
                   <span className="w-2 h-2 bg-purple-600 rounded-full mr-2"></span>
                   NCD/Bond Details
