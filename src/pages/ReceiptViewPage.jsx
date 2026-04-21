@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { getCategoryDisplayName, getReceiptProductCategoryLabel } from '../utils/categoryMapping'
 import { normalizeReceiptFields } from '../utils/receiptNormalizer'
+import RelatedTasks from './tasks/RelatedTasks'
 
 export default function ReceiptViewPage() {
   const { id } = useParams()
@@ -1145,6 +1146,13 @@ export default function ReceiptViewPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">No documents found</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Related tasks for this receipt */}
+        {id && (
+          <div className="mt-6">
+            <RelatedTasks entityType="receipt" entityId={id} title="Receipt tasks" />
           </div>
         )}
       </div>

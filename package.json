@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "chrono-node": "^2.9.0",
     "framer-motion": "^11.0.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.544.0",
@@ -17,7 +18,8 @@
     "react-icons": "^5.5.0",
     "react-router-dom": "^6.20.1",
     "react-simple-maps": "^3.0.0",
-    "recharts": "^2.7.2"
+    "recharts": "^2.7.2",
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

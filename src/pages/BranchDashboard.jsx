@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { SegmentedControl } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
+import { useBranchWorkspace } from './branch-workspace/BranchWorkspaceContext'
+import KpiStat from '../components/branch-hub/KpiStat'
+import { formatCompactINR as fmtCompactINR } from '../components/branch-hub/utils'
 import { 
   FiTrendingUp, 
   FiFileText, 
@@ -24,7 +28,9 @@ import {
   FiClock,
   FiMail,
   FiPhone,
-  FiHome
+  FiHome,
+  FiLayers,
+  FiZap,
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 
@@ -86,8 +92,26 @@ function scaleMonthlyTargetToDateRange(monthlyAmount, fromStr, toStr) {
   return total
 }
 
+function initialScopeFromUrl() {
+  if (typeof window === 'undefined') return 'my_branch'
+  const s = new URLSearchParams(window.location.search).get('scope')
+  if (s === 'all_branches' || s === 'all') return 'all_branches'
+  return 'my_branch'
+}
+
 export default function BranchDashboard() {
   const { token, user } = useAuth()
+  const [, setSearchParams] = useSearchParams()
+  const {
+    embedded,
+    refreshSignal,
+    scope: wsScope,
+    setScope: wsSetScope,
+    canSwitchScope: wsCanSwitch,
+    includePending: wsIncludePending,
+    setIncludePending: wsSetIncludePending,
+    focusedBranchCode: wsFocusedBranchCode,
+  } = useBranchWorkspace()
   const [branches, setBranches] = useState([])
   const [selectedBranch, setSelectedBranch] = useState(null)
   const [branchStats, setBranchStats] = useState(null)
@@ -103,7 +127,9 @@ export default function BranchDashboard() {
   const [loadingBranchDetails, setLoadingBranchDetails] = useState(false)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
-  const [includePending, setIncludePending] = useState(true)
+  const [localIncludePending, setLocalIncludePending] = useState(true)
+  const includePending = embedded ? !!wsIncludePending : localIncludePending
+  const setIncludePending = embedded ? (wsSetIncludePending || (() => {})) : setLocalIncludePending
   const [dateBasis, setDateBasis] = useState('receipt') // 'receipt' | 'transaction'
   const formatDateForInput = (date) => {
     const year = date.getFullYear()
@@ -118,12 +144,20 @@ export default function BranchDashboard() {
     to: `${currentYear}-12-31`
   })
   const [selectedPeriod, setSelectedPeriod] = useState('year')
-  const [scope, setScope] = useState('my_branch') // 'my_branch' | 'all_branches' (admin only)
+  const [localScope, setLocalScope] = useState(initialScopeFromUrl) // 'my_branch' | 'all_branches' (admin only)
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
-  const showScopeToggle = isAdmin
+  const showScopeToggle = isAdmin && !embedded // workspace provides the toggle when embedded
+  // When embedded, follow the workspace scope; otherwise use our own local state.
+  const scope = embedded && wsCanSwitch ? wsScope : localScope
+  const setScope = embedded && wsCanSwitch ? wsSetScope : setLocalScope
   const isMyBranchView = scope === 'my_branch' || isManager
+
+  useEffect(() => {
+    if (embedded) return
+    if (!isAdmin && localScope === 'all_branches') setLocalScope('my_branch')
+  }, [embedded, isAdmin, localScope])
 
   const userBranchCode = user?.branch_code || (user?.branch && branches.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code) || null
   const userBranchInfo = userBranchCode ? branches.find(b => b.branch_code === userBranchCode) : null
@@ -140,7 +174,12 @@ export default function BranchDashboard() {
       setBranches(Array.isArray(branchesData) ? branchesData : [])
       
       if (isMyBranchView) {
-        const branchCode = isManager ? (user?.branch_code || branchesData.find(b => String(b.branch_name).toLowerCase() === String(user?.branch).toLowerCase())?.branch_code) : user?.branch_code || (user?.branch && branchesData.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code)
+        // Admin in embedded my_branch uses the workspace-picked branch; everyone else uses their own.
+        const branchCode = isAdmin && embedded && wsFocusedBranchCode
+          ? wsFocusedBranchCode
+          : (isManager
+              ? (user?.branch_code || branchesData.find(b => String(b.branch_name).toLowerCase() === String(user?.branch).toLowerCase())?.branch_code)
+              : (user?.branch_code || (user?.branch && branchesData.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code)))
         if (!branchCode && isAdmin) {
           setGlobalStats(null)
           setBranchStats(null)
@@ -153,9 +192,11 @@ export default function BranchDashboard() {
           const [stats, empPerf, receiptsRes] = await Promise.all([
             api.getBranchStats(token, branchCode, { includePending: includePending ? '1' : '0', from: dateRange.from, to: dateRange.to, date_basis: dateBasis }),
             api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, branch_code: branchCode, includePending: includePending ? '1' : '0', date_basis: dateBasis }).catch(() => []),
-            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, size: '10', sort: 'created_at:desc' }).catch(() => ({ items: [], data: [] }))
+            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, size: '10', sort: 'created_at:desc', includePending: includePending ? '1' : '0' }).catch(() => ({ items: [], data: [] }))
           ])
-          setBranchStats(stats)
+          // Normalize: /api/branches/:code/stats returns { branch, statistics }.
+          // This dashboard expects a flat stats object (total_receipts, total_investments, total_cc, ...).
+          setBranchStats(stats?.statistics ?? stats)
           setGlobalStats(null)
           setEmployeePerformance(Array.isArray(empPerf) ? empPerf : [])
           const rec = receiptsRes?.items ?? receiptsRes?.data ?? []
@@ -208,7 +249,7 @@ export default function BranchDashboard() {
         to: dateRange.to,
         date_basis: dateBasis
       })
-      setBranchStats(stats)
+      setBranchStats(stats?.statistics ?? stats)
     } catch (err) {
       console.error('Failed to load branch stats:', err)
     }
@@ -270,7 +311,8 @@ export default function BranchDashboard() {
           to: dateRange.to,
           date_basis: dateBasis,
           size: 10,
-          sort: 'created_at:desc'
+          sort: 'created_at:desc',
+          includePending: includePending ? '1' : '0'
         })
         const receiptsData = receipts.data || receipts.items || receipts || []
         setBranchRecentReceipts(Array.isArray(receiptsData) ? receiptsData.slice(0, 10) : [])
@@ -295,7 +337,12 @@ export default function BranchDashboard() {
 
   useEffect(() => {
     loadBranchData()
-  }, [token, includePending, dateRange.from, dateRange.to, dateBasis, scope])
+  }, [token, includePending, dateRange.from, dateRange.to, dateBasis, scope, wsFocusedBranchCode])
+
+  useEffect(() => {
+    if (!embedded || !refreshSignal) return
+    loadBranchData()
+  }, [embedded, refreshSignal])
 
   const handlePeriodSelect = (period) => {
     setSelectedPeriod(period)
@@ -514,53 +561,107 @@ export default function BranchDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
-          </h1>
-          <p className="text-[var(--text-secondary)] mt-1">
-            {isMyBranchView ? (selectedBranch ? 'Your branch team performance metrics' : isAdmin ? 'No branch assigned. Switch to All branches or assign yourself a branch.' : 'Your branch team performance metrics') : 'Overview of all branch performance'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
+      <div
+        className={
+          embedded
+            ? 'rounded-xl border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2.5 flex flex-wrap items-center gap-3'
+            : 'flex flex-col sm:flex-row sm:items-center justify-between gap-4'
+        }
+      >
+        {!embedded && (
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-[var(--accent-muted)] flex items-center justify-center shrink-0">
+              <FiBarChart className="w-5 h-5 text-[var(--accent)]" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] truncate">
+                {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
+              </h1>
+              <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
+                {isMyBranchView
+                  ? selectedBranch
+                    ? 'Branch performance · investments & collection credit (aligned with Branch Power Tool)'
+                    : isAdmin
+                      ? 'No branch assigned. Switch to All branches or assign yourself a branch.'
+                      : 'Branch performance · investments & collection credit'
+                  : 'Network view · all branches (admin)'}
+              </p>
+            </div>
+          </div>
+        )}
+        <div className={embedded ? 'flex flex-wrap items-center gap-3 w-full' : 'flex flex-wrap items-center gap-4'}>
           {showScopeToggle && (
             <SegmentedControl
               options={[{ value: 'my_branch', label: 'My branch' }, { value: 'all_branches', label: 'All branches' }]}
               value={scope}
-              onChange={(v) => setScope(v)}
+              onChange={(v) => {
+                setScope(v)
+                if (isAdmin) {
+                  setSearchParams(
+                    (prev) => {
+                      const next = new URLSearchParams(prev)
+                      if (v === 'all_branches') next.set('scope', 'all_branches')
+                      else next.delete('scope')
+                      return next
+                    },
+                    { replace: true }
+                  )
+                }
+              }}
             />
           )}
-          <button
-            onClick={loadBranchData}
-            disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-[var(--stroke)] rounded-lg text-sm font-medium bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50 transition-colors duration-200"
-          >
-            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <label className="flex items-center space-x-3 cursor-pointer group pl-4 border-l border-[var(--stroke)] shrink-0">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={includePending}
-                onChange={e => setIncludePending(e.target.checked)}
-                className="sr-only"
-              />
-              <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
-                includePending ? 'bg-[var(--accent)]' : 'bg-neutral-200 dark:bg-neutral-600'
-              }`}>
-                <div className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-blue-600 shadow transition-transform duration-200 ease-in-out ${
-                  includePending ? 'translate-x-5' : 'translate-x-0'
-                }`} />
+          {!embedded && (isManager || isAdmin) && (
+            <Link
+              to="/branches?section=operations"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-muted)] text-[var(--accent)] hover:bg-[var(--accent-muted)]/80"
+            >
+              <FiZap className="w-4 h-4" />
+              Branch Power Tool
+            </Link>
+          )}
+          {!embedded && isAdmin && (
+            <Link
+              to="/branches?section=admin"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] hover:text-[var(--text-primary)]"
+            >
+              <FiLayers className="w-4 h-4" />
+              Branch Management
+            </Link>
+          )}
+          {!embedded && (
+            <button
+              onClick={loadBranchData}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-[var(--stroke)] rounded-lg text-sm font-medium bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50 transition-colors duration-200"
+            >
+              <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          )}
+          {!embedded && (
+            <label className="flex items-center space-x-3 cursor-pointer group pl-4 border-l border-[var(--stroke)] shrink-0">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={includePending}
+                  onChange={e => setIncludePending(e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
+                  includePending ? 'bg-[var(--accent)]' : 'bg-neutral-200 dark:bg-neutral-600'
+                }`}>
+                  <div className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-blue-600 shadow transition-transform duration-200 ease-in-out ${
+                    includePending ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </div>
               </div>
-            </div>
-            <span className="text-sm font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
-              Include Pending
-            </span>
-          </label>
+              <span className="text-sm font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
+                Include Pending
+              </span>
+            </label>
+          )}
           <div className="flex items-center gap-2 pl-4 border-l border-[var(--stroke)] shrink-0">
             <span className="text-xs font-medium text-[var(--text-secondary)]">Date basis</span>
             <div className="flex gap-2">
@@ -654,130 +755,69 @@ export default function BranchDashboard() {
         </div>
       )}
 
-      {/* Single-branch stats (my_branch view) */}
+      {/* Single-branch outcomes (my_branch view) — Investments / Collection Credit / Service Income */}
       {isMyBranchView && selectedBranch && branchStats && (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6`}>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{branchStats.total_receipts ?? 0}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-lg flex items-center justify-center">
-                <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)]" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Investments</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(branchStats.total_investments || branchStats.total_collections)}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-lg flex items-center justify-center">
-                <FiTrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--success)]" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Collection Credit</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(branchStats.total_cc || branchStats.commissions)}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-lg flex items-center justify-center">
-                <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--warn)]" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Employees</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{employeePerformance.length}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiStat
+            title="Total Investments"
+            value={Number(branchStats.total_investments || branchStats.total_collections || 0)}
+            format={fmtCompactINR}
+            icon={FiTrendingUp}
+            iconBg="bg-[var(--success-muted)]"
+            iconColor="text-[var(--success)]"
+            definition="Total invested amount for this branch in the selected range."
+          />
+          <KpiStat
+            title="Collection Credit"
+            value={Number(branchStats.collection_credit ?? branchStats.total_cc ?? branchStats.commissions ?? 0)}
+            format={fmtCompactINR}
+            icon={FiAward}
+            iconBg="bg-[var(--warn-muted)]"
+            iconColor="text-[var(--warn)]"
+            definition="Collection credit attributed to this branch for the selected filters."
+          />
+          <KpiStat
+            title="Service Income"
+            value={Number(branchStats.service_income ?? branchStats.total_si ?? 0)}
+            format={fmtCompactINR}
+            icon={FiPercent}
+            iconBg="bg-[var(--info-muted)]"
+            iconColor="text-blue-600 dark:text-blue-400"
+            definition="Service income earned by this branch in the selected range."
+          />
         </div>
       )}
 
-      {/* Global Statistics (all_branches view) */}
+      {/* Network outcomes (all_branches view) — Investments / Collection Credit / Service Income only. Roster lives in Administration tab. */}
       {globalStats && !isMyBranchView && (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${globalStats.total_service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Branches</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {globalStats.total_branches || 0}
-                </div>
-              </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                  <FiMapPin className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-                </div>
-            </div>
-          </div>
-          
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Investments</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {formatCurrency(globalStats.total_investments || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-lg flex items-center justify-center">
-                <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold">₹</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {formatNumber(globalStats.total_receipts || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Collection/Credit</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {formatCurrency(globalStats?.total_collection_credit || globalStats?.total_commissions || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-lg flex items-center justify-center">
-                <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </div>
-          
-          {globalStats.total_service_income !== undefined && (
-            <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Service Income</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                    {formatCurrency(globalStats.total_service_income || 0)}
-                  </div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiStat
+            title="Total Investments"
+            value={Number(globalStats.total_investments || 0)}
+            format={fmtCompactINR}
+            icon={FiTrendingUp}
+            iconBg="bg-[var(--success-muted)]"
+            iconColor="text-[var(--success)]"
+            definition="Total invested amount across all branches in the selected range."
+          />
+          <KpiStat
+            title="Collection Credit"
+            value={Number(globalStats?.total_collection_credit || globalStats?.total_commissions || 0)}
+            format={fmtCompactINR}
+            icon={FiAward}
+            iconBg="bg-[var(--warn-muted)]"
+            iconColor="text-[var(--warn)]"
+            definition="Collection credit attributed across the network."
+          />
+          <KpiStat
+            title="Service Income"
+            value={Number(globalStats.total_service_income || 0)}
+            format={fmtCompactINR}
+            icon={FiPercent}
+            iconBg="bg-[var(--info-muted)]"
+            iconColor="text-blue-600 dark:text-blue-400"
+            definition="Service income earned across the network."
+          />
         </div>
       )}
 
@@ -1176,7 +1216,7 @@ export default function BranchDashboard() {
                   <div className="flex justify-between text-sm">
                     <span className="text-[var(--text-secondary)]">Collection/Credit:</span>
                     <span className="font-medium text-[var(--text-primary)]">
-                      {formatCurrency(branch.commissions || 0)}
+                      {formatCurrency(branch.collection_credit ?? branch.total_cc ?? branch.commissions ?? 0)}
                     </span>
                   </div>
                 </div>

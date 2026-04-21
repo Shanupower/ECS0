@@ -4,6 +4,7 @@ import { Sidebar, TopHeader } from './create-receipt'
 import ReportIssueModal from './ReportIssueModal'
 import ChangePasswordModal from './ChangePasswordModal'
 import ProfileModal from './ProfileModal'
+import HandoffBanner from './HandoffBanner'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { FiMenu } from 'react-icons/fi'
@@ -42,27 +43,25 @@ export default function DashboardLayout() {
     }
   }, [user?.role, token])
 
-  // Load overdue + due-today task count for Tasks nav badge
+  // Load overdue + due-today task count for Tasks nav badge via unified stats.
   useEffect(() => {
     if (!token) return
     const loadTasksReminderCount = async () => {
       try {
-        const today = new Date().toISOString().slice(0, 10)
-        const [overdueRes, dueTodayRes] = await Promise.all([
-          api.listTasks(token, { overdue: '1', limit: '1', page: '1' }),
-          api.listTasks(token, {
-            due_from: today,
-            due_to: today,
-            status: 'pending,in_progress',
-            limit: '1',
-            page: '1',
-          }),
-        ])
-        const overdueTotal = overdueRes.total ?? (overdueRes.items?.length ?? 0)
-        const dueTodayTotal = dueTodayRes.total ?? (dueTodayRes.items?.length ?? 0)
-        setTasksReminderCount(overdueTotal + dueTodayTotal)
+        const stats = await api.getTasksStats(token)
+        setTasksReminderCount((stats?.overdue || 0) + (stats?.due_today || 0))
       } catch {
-        setTasksReminderCount(0)
+        try {
+          const [overdueRes, dueTodayRes] = await Promise.all([
+            api.listTasks(token, { due: 'overdue', limit: '1', page: '1' }),
+            api.listTasks(token, { due: 'today', limit: '1', page: '1' })
+          ])
+          const overdueTotal = overdueRes.total ?? (overdueRes.items?.length ?? 0)
+          const dueTodayTotal = dueTodayRes.total ?? (dueTodayRes.items?.length ?? 0)
+          setTasksReminderCount(overdueTotal + dueTodayTotal)
+        } catch {
+          setTasksReminderCount(0)
+        }
       }
     }
     loadTasksReminderCount()
@@ -95,6 +94,7 @@ export default function DashboardLayout() {
           />
 
           <main ref={mainRef} className="flex-1 min-h-0 overflow-auto bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)]">
+            <HandoffBanner />
             <div className="flex items-center gap-3 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 lg:hidden border-b border-[var(--dashboard-border)] bg-[var(--dashboard-card)]">
               <button
                 type="button"

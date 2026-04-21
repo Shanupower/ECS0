@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Shield, AlertCircle, Bell, User, LogOut, MapPin } from 'lucide-react'
-import { cn } from '../../utils/cn'
+import { Shield, AlertCircle, User, LogOut, MapPin } from 'lucide-react'
 import DarkModeToggle from '../DarkModeToggle'
 import { GlobalSearch } from './GlobalSearch'
+import NotificationBell from '../NotificationBell'
 
 interface TopHeaderProps {
   isAdmin?: boolean
@@ -79,14 +79,7 @@ export function TopHeader({
           <span className="hidden sm:inline">Report Issue</span>
         </button>
         <DarkModeToggle className="hidden sm:block flex-shrink-0" />
-        <button
-          type="button"
-          className="p-2 rounded-lg text-[var(--dashboard-muted)] hover:text-[var(--dashboard-text)] hover:bg-[var(--dashboard-border)]/50 transition-colors relative flex-shrink-0"
-          aria-label="Notifications"
-        >
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--dashboard-primary)]" aria-hidden />
-        </button>
+        <NotificationBell />
         <div className="relative flex-shrink-0" ref={dropdownRef}>
             <button
               type="button"

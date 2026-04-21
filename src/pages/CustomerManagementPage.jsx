@@ -21,6 +21,8 @@ import {
   FiX
 } from 'react-icons/fi'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
+import CustomerTimeline from '../components/CustomerTimeline'
+import RelatedTasks from './tasks/RelatedTasks'
 
 export default function CustomerManagementPage() {
   const { user, token } = useAuth()
@@ -2121,6 +2123,13 @@ function ViewCustomerModal({ customer, onClose }) {
                   )
                 })}
               </div>
+            </div>
+          )}
+
+          {customer?.investor_id && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-4">
+              <RelatedTasks entityType="customer" entityId={customer.investor_id} title="Open tasks" />
+              <CustomerTimeline investorId={customer.investor_id} />
             </div>
           )}
 
