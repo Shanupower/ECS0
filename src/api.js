@@ -177,6 +177,10 @@ export const api={
   statsByCategory:(t,q)=>req('/api/stats/by-category',{token:t,query:q}),
   statsByDay:(t,q)=>req('/api/stats/by-day',{token:t,query:q}),
   getMonthlyCCSI:(t,q)=>req('/api/stats/monthly-cc-si',{token:t,query:q}),
+  getStatsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
+  getStatsByCategory:(t,q)=>req('/api/stats/by-category',{token:t,query:q}),
+  getStatsByDay:(t,q)=>req('/api/stats/by-day',{token:t,query:q}),
+  getMonthlyCcSi:(t,q)=>req('/api/stats/monthly-cc-si',{token:t,query:q}),
   
   // Branch endpoints
   listBranches:(t,q)=>req('/api/branches',{token:t,query:q}),
@@ -185,8 +189,12 @@ export const api={
   getGlobalBranchStats:(t,q)=>req('/api/stats/branches',{token:t,query:q}),
   getEmployeePerformance:(t,q)=>req('/api/stats/employees/performance',{token:t,query:q}),
   getInvestorLocations:(t,q)=>req('/api/stats/investor-locations',{token:t,query:q}),
+  getBranchQueueMetrics:(t,q)=>req('/api/stats/branch-queue-metrics',{token:t,query:q}),
   getBranchReceipts:(t,code,q)=>req(`/api/branches/${code}/receipts`,{token:t,query:q}),
   createBranchReceipt:(t,code,data,files)=>files && files.length > 0 ? reqWithFiles(`/api/branches/${code}/receipts`,{method:'POST',token:t,formData:createReceiptFormData(data,files)}) : req(`/api/branches/${code}/receipts`,{method:'POST',token:t,json:data}),
+
+  // Audit (branch manager power tool)
+  getBranchAuditEvents:(t,q)=>req('/api/audit/branch',{token:t,query:q}),
   
   // Branch management endpoints (admin only)
   createBranch:(t,data)=>req('/api/branches',{method:'POST',token:t,json:data}),
@@ -213,12 +221,29 @@ export const api={
   deleteBranch:(t,code)=>req(`/api/branches/${code}`,{method:'DELETE',token:t}),
   assignUsersToBranch:(t,code,userIds)=>req(`/api/branches/${code}/users`,{method:'POST',token:t,json:{user_ids:userIds}}),
 
-  // Tasks endpoints
+  // Tasks endpoints (redesigned)
   listTasks:(t,q)=>req('/api/tasks',{token:t,query:q}),
+  searchTasks:(t,body)=>req('/api/tasks/search',{method:'POST',token:t,json:body}),
+  getTasksStats:(t)=>req('/api/tasks/stats',{token:t}),
+  getMyTasks:(t)=>req('/api/tasks/my',{token:t}),
+  getTasksByEntity:(t,type,id)=>req(`/api/tasks/entity/${type}/${id}`,{token:t}),
   getTask:(t,id)=>req(`/api/tasks/${id}`,{token:t}),
   createTask:(t,data)=>req('/api/tasks',{method:'POST',token:t,json:data}),
   updateTask:(t,id,data)=>req(`/api/tasks/${id}`,{method:'PATCH',token:t,json:data}),
+  bulkUpdateTasks:(t,ids,patch)=>req('/api/tasks/bulk-update',{method:'POST',token:t,json:{ids,patch}}),
   deleteTask:(t,id)=>req(`/api/tasks/${id}`,{method:'DELETE',token:t}),
+  listSubtasks:(t,id)=>req(`/api/tasks/${id}/subtasks`,{token:t}),
+  createSubtask:(t,id,data)=>req(`/api/tasks/${id}/subtasks`,{method:'POST',token:t,json:data}),
+  listTaskWatchers:(t,id)=>req(`/api/tasks/${id}/watchers`,{token:t}),
+  addTaskWatcher:(t,id,userId)=>req(`/api/tasks/${id}/watchers`,{method:'POST',token:t,json:{user_id:userId}}),
+  removeTaskWatcher:(t,id,uid)=>req(`/api/tasks/${id}/watchers/${uid}`,{method:'DELETE',token:t}),
+  listTaskComments:(t,id)=>req(`/api/tasks/${id}/comments`,{token:t}),
+  createTaskComment:(t,id,data)=>req(`/api/tasks/${id}/comments`,{method:'POST',token:t,json:data}),
+  deleteTaskComment:(t,id,cid)=>req(`/api/tasks/${id}/comments/${cid}`,{method:'DELETE',token:t}),
+  listTaskActivities:(t,id)=>req(`/api/tasks/${id}/activities`,{token:t}),
+  listTaskAttachments:(t,id)=>req(`/api/tasks/${id}/attachments`,{token:t}),
+  uploadTaskAttachments:(t,id,files)=>reqWithFiles(`/api/tasks/${id}/attachments`,{method:'POST',token:t,formData:createFormData({},files)}),
+  deleteTaskAttachment:(t,id,aid)=>req(`/api/tasks/${id}/attachments/${aid}`,{method:'DELETE',token:t}),
 
   // Leads endpoints
   listLeads:(t,q)=>req('/api/leads',{token:t,query:q}),
@@ -227,6 +252,46 @@ export const api={
   updateLead:(t,id,data)=>req(`/api/leads/${id}`,{method:'PATCH',token:t,json:data}),
   convertLeadToCustomer:(t,id,data)=>req(`/api/leads/${id}/convert`,{method:'POST',token:t,json:data}),
   deleteLead:(t,id)=>req(`/api/leads/${id}`,{method:'DELETE',token:t}),
+  reactivateLead:(t,id)=>req(`/api/leads/${id}/reactivate`,{method:'POST',token:t,json:{}}),
+  listLeadActivities:(t,id)=>req(`/api/leads/${id}/activities`,{token:t}),
+  createLeadActivity:(t,id,data)=>req(`/api/leads/${id}/activities`,{method:'POST',token:t,json:data}),
+
+  // Portfolio review bulk + history
+  bulkUpdatePortfolioReview:(t,body)=>req('/api/customers/portfolio-review/bulk-update',{method:'POST',token:t,json:body}),
+  getCustomerReviewHistory:(t,id)=>req(`/api/customers/${id}/review-history`,{token:t}),
+  getCustomerTimeline:(t,id,q)=>req(`/api/customers/${id}/timeline`,{token:t,query:q}),
+
+  // App config
+  getAppConfig:(t)=>req('/api/app-config',{token:t}),
+  updateAppConfig:(t,body)=>req('/api/app-config',{method:'PUT',token:t,json:body}),
+
+  // Notifications (in-app bell)
+  listNotifications:(t,q)=>req('/api/notifications',{token:t,query:q}),
+  markNotificationsRead:(t,ids)=>req('/api/notifications/mark-read',{method:'POST',token:t,json:{ids}}),
+  deleteNotification:(t,id)=>req(`/api/notifications/${id}`,{method:'DELETE',token:t}),
+
+  // Task reports (aggregated)
+  getTasksReports:(t,q)=>req('/api/tasks/reports',{token:t,query:q}),
+
+  // Shift hand-offs
+  createHandoff:(t,body)=>req('/api/handoffs',{method:'POST',token:t,json:body}),
+  listHandoffInbox:(t)=>req('/api/handoffs/inbox',{token:t}),
+  acknowledgeHandoff:(t,id)=>req(`/api/handoffs/${id}/acknowledge`,{method:'POST',token:t,json:{}}),
+  getHandoffSuggestion:(t)=>req('/api/handoffs/suggest-eod',{token:t}),
+
+  // Task templates
+  listTaskTemplates:(t)=>req('/api/task-templates',{token:t}),
+  createTaskTemplate:(t,data)=>req('/api/task-templates',{method:'POST',token:t,json:data}),
+  updateTaskTemplate:(t,id,data)=>req(`/api/task-templates/${id}`,{method:'PATCH',token:t,json:data}),
+  deleteTaskTemplate:(t,id)=>req(`/api/task-templates/${id}`,{method:'DELETE',token:t}),
+  runTaskTemplate:(t,id)=>req(`/api/task-templates/${id}/run`,{method:'POST',token:t,json:{}}),
+
+  // Task AI (Phase 4 — heuristics + pluggable LLM)
+  aiSummarizeTask:(t,task_id)=>req('/api/task-ai/summarize',{method:'POST',token:t,json:{task_id}}),
+  aiSuggestAssignee:(t,body)=>req('/api/task-ai/suggest-assignee',{method:'POST',token:t,json:body}),
+  aiSuggestRule:(t,prompt)=>req('/api/task-ai/suggest-rule',{method:'POST',token:t,json:{prompt}}),
+  aiScheduleTask:(t,body)=>req('/api/task-ai/schedule',{method:'POST',token:t,json:body}),
+  aiNlFilter:(t,prompt)=>req('/api/task-ai/nl-filter',{method:'POST',token:t,json:{prompt}}),
 
   // Export endpoints
   exportReceipts:(t,q)=>req('/api/export/receipts',{token:t,query:q}),

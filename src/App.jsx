@@ -2,11 +2,11 @@ import React from 'react'
 import { Routes,Route,Navigate,useLocation } from 'react-router-dom'
 import { AuthProvider,useAuth } from './context/AuthContext'
 import { DarkModeProvider } from './context/DarkModeContext'
+import { AppConfigProvider } from './context/AppConfigContext'
 import DashboardLayout from './components/DashboardLayout.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
-import BranchDashboard from './pages/BranchDashboard.jsx'
-import AdminBranchManagement from './pages/AdminBranchManagement.jsx'
+import BranchWorkspace from './pages/BranchWorkspace.jsx'
 import ReceiptsPage from './pages/ReceiptsPage.jsx'
 import ReceiptViewPage from './pages/ReceiptViewPage.jsx'
 import TransactionsPage from './pages/TransactionsPage.jsx'
@@ -16,8 +16,10 @@ import SchemeManagementPage from './pages/SchemeManagementPage.jsx'
 import IssuesPage from './pages/IssuesPage.jsx'
 import MyIssuesPage from './pages/MyIssuesPage.jsx'
 import TasksPage from './pages/TasksPage.jsx'
+import TasksReportsPage from './pages/TasksReportsPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
 import PortfolioReviewPage from './pages/PortfolioReviewPage.jsx'
+import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 
@@ -67,13 +69,29 @@ function AppContent() {
             path="dashboard" 
             element={<PageTransition><DashboardPage/></PageTransition>}
           />
-          <Route 
-            path="branches" 
-            element={<PageTransition><BranchRoute><BranchDashboard/></BranchRoute></PageTransition>}
+          <Route
+            path="branches"
+            element={
+              <PageTransition>
+                <BranchRoute>
+                  <BranchWorkspace />
+                </BranchRoute>
+              </PageTransition>
+            }
           />
-          <Route 
-            path="admin/branches" 
-            element={<PageTransition><AdminRoute><AdminBranchManagement/></AdminRoute></PageTransition>}
+          <Route
+            path="branch-manager"
+            element={<Navigate to="/branches?section=operations" replace />}
+          />
+          <Route
+            path="admin/branches"
+            element={
+              <PageTransition>
+                <AdminRoute>
+                  <Navigate to="/branches?section=admin" replace />
+                </AdminRoute>
+              </PageTransition>
+            }
           />
           <Route 
             path="receipts" 
@@ -112,12 +130,20 @@ function AppContent() {
             element={<PageTransition><TasksPage/></PageTransition>}
           />
           <Route 
+            path="tasks/reports" 
+            element={<PageTransition><TasksReportsPage/></PageTransition>}
+          />
+          <Route 
             path="leads" 
             element={<PageTransition><LeadsPage/></PageTransition>}
           />
           <Route 
             path="portfolio-review" 
             element={<PageTransition><ClientRoute><PortfolioReviewPage/></ClientRoute></PageTransition>}
+          />
+          <Route
+            path="settings"
+            element={<PageTransition><BranchRoute><SystemSettingsPage/></BranchRoute></PageTransition>}
           />
         </Route>
       </Routes>
@@ -129,9 +155,11 @@ function AppContent() {
 export default function App(){
   return <DarkModeProvider>
     <AuthProvider>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
+      <AppConfigProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </AppConfigProvider>
     </AuthProvider>
   </DarkModeProvider>
 }

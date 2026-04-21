@@ -42,19 +42,17 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount) {
 
   const operations = [
     { to: '/tasks', label: 'Tasks', icon: ClipboardList, badge: tasksReminderCount },
+    ...(isAdmin || isManager ? [{ to: '/tasks/reports', label: 'Task Reports', icon: BarChart3 }] : []),
     { to: '/portfolio-review', label: 'Portfolio Review', icon: BarChart3 },
   ]
 
   const management = [
     ...(isAdmin ? [
-      { to: '/branches', label: 'Branch Dashboard', icon: BarChart3 },
-      { to: '/admin/branches', label: 'Branch Management', icon: Building2 },
+      { to: '/branches', label: 'Branches', icon: Building2 },
       { to: '/users', label: 'User Management', icon: UserCog },
       { to: '/schemes', label: 'Scheme Management', icon: Database },
     ] : []),
-    ...(isManager ? [
-      { to: '/branches', label: 'Branch Dashboard', icon: BarChart3, disabled: true, comingSoon: true },
-    ] : []),
+    ...(isManager ? [{ to: '/branches', label: 'Branches', icon: Building2 }] : []),
   ]
 
   const support = [
