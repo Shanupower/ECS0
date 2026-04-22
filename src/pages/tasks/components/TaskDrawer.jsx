@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   FiX, FiCalendar, FiFlag, FiTag, FiUser, FiClock, FiPaperclip, FiMessageSquare,
   FiActivity, FiLink2, FiTrash2, FiPlus, FiChevronRight, FiRepeat, FiArchive,
@@ -22,6 +23,7 @@ const TABS = [
 export default function TaskDrawer({ taskId, onClose }) {
   const { token, user } = useAuth()
   const cfg = useAppConfig()
+  const navigate = useNavigate()
   const tasksCtx = useTasks()
   const { updateTask, deleteTask, assignableUsers, patchLocal } = tasksCtx
 
@@ -48,13 +50,21 @@ export default function TaskDrawer({ taskId, onClose }) {
       try {
         const t = await api.getTask(token, taskId)
         if (cancelled) return
+        // Approval tasks belong to the receipt approval workflow. Redirect to
+        // the receipt page where the action bar lives instead of showing the
+        // generic task drawer. Deep links (?taskId=X) land here too.
+        if (t?.kind === 'receipt_approval' && t?.receipt_id) {
+          if (typeof onClose === 'function') onClose()
+          navigate(`/receipts/${t.receipt_id}`, { replace: true })
+          return
+        }
         setTask(t)
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
     return () => { cancelled = true }
-  }, [taskId, token])
+  }, [taskId, token, navigate, onClose])
 
   useEffect(() => {
     if (!taskId || !token) return

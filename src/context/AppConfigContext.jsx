@@ -40,7 +40,14 @@ const DEFAULTS = {
   task_labels: [],
   task_sla_tiers: [],
   task_event_rules: [],
-  task_default_view: 'list'
+  task_default_view: 'list',
+
+  // Receipt approval workflow (v2)
+  receipt_intake_team_id: null,
+  receipt_final_status_label: 'Completed',
+  feature_flags: {
+    receipts_approval_v2: false
+  }
 }
 
 const AppConfigCtx = createContext({ config: DEFAULTS, loading: false, reload: () => {}, update: async () => {} })
@@ -64,6 +71,11 @@ function mergeConfig(cfg) {
     if (!Array.isArray(next[k])) next[k] = DEFAULTS[k]
   }
   if (!next.task_default_view) next.task_default_view = DEFAULTS.task_default_view
+  next.feature_flags = {
+    ...DEFAULTS.feature_flags,
+    ...((cfg && cfg.feature_flags && typeof cfg.feature_flags === 'object') ? cfg.feature_flags : {})
+  }
+  if (!next.receipt_final_status_label) next.receipt_final_status_label = DEFAULTS.receipt_final_status_label
   return next
 }
 

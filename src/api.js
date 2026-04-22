@@ -9,13 +9,14 @@ export function setTokenExpirationCallback(callback) {
 
 function authHeaders(token){ return token ? { Authorization: `Bearer ${token}` } : {} }
 
-async function req(path,{method='GET',token,json,query}={}){
+async function req(path,{method='GET',token,json,query,headers}={}){
   const qs = query ? '?' + new URLSearchParams(query).toString() : ''
   const res = await fetch(BASE+path+qs,{
     method,
     headers:{
       ...(json?{'Content-Type':'application/json'}:{}),
-      ...authHeaders(token)
+      ...authHeaders(token),
+      ...(headers || {})
     },
     body: json?JSON.stringify(json):undefined
   })
@@ -151,7 +152,10 @@ export const api={
   getReceiptMedia:(t,id)=>req(`/api/receipts/${id}/media`,{token:t}),
   downloadReceiptMedia:(t,id,mediaId)=>req(`/api/receipts/${id}/media/${mediaId}`,{token:t}),
   downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
-  uploadReceiptMedia:(t,id,files)=>reqWithFiles(`/api/receipts/${id}/media`,{method:'POST',token:t,formData:createFormData({},files)}),
+  // `meta` is an optional plain object whose fields are posted alongside the
+  // files as form fields. Use it to tag approval-evidence uploads, e.g.
+  // { category: 'approval_evidence', cycle_id, team_id, team_name, uploaded_during }.
+  uploadReceiptMedia:(t,id,files,meta)=>reqWithFiles(`/api/receipts/${id}/media`,{method:'POST',token:t,formData:createFormData(meta||{},files)}),
   createReceiptDraft:(t,data)=>req('/api/receipt-drafts',{method:'POST',token:t,json:data}),
   getReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{token:t}),
   listReceiptDrafts:(t)=>req('/api/receipt-drafts',{token:t}),
@@ -514,5 +518,48 @@ export const api={
   // Misc Services Schemes endpoints
   getMiscServicesScheme:(t)=>req('/api/misc-services-schemes',{token:t}),
   updateMiscServicesScheme:(t,data)=>req('/api/misc-services-schemes',{method:'PUT',token:t,json:data}),
-  calculateMiscServicesCCSI:(t,price)=>req('/api/misc-services-schemes/calculate-cc-si',{method:'POST',token:t,json:{price}})
+  calculateMiscServicesCCSI:(t,price)=>req('/api/misc-services-schemes/calculate-cc-si',{method:'POST',token:t,json:{price}}),
+
+  // -------------------------------------------------------------------------
+  // Receipt approval workflow (v2) — teams + engine actions.
+  // See backend: services/receipt-stage-engine.js, routes/teams.js
+  // -------------------------------------------------------------------------
+  listTeams:(t,q)=>req('/api/teams',{token:t,query:q}),
+  getTeam:(t,id)=>req(`/api/teams/${id}`,{token:t}),
+  createTeam:(t,data)=>req('/api/teams',{method:'POST',token:t,json:data}),
+  updateTeam:(t,id,data)=>req(`/api/teams/${id}`,{method:'PATCH',token:t,json:data}),
+  deleteTeam:(t,id)=>req(`/api/teams/${id}`,{method:'DELETE',token:t}),
+  getTeamWorkload:(t,id)=>req(`/api/teams/${id}/workload`,{token:t}),
+
+  // Each action accepts an optional array of `attachment_ids` referencing files
+  // already uploaded via `uploadReceiptMedia` with category 'approval_evidence'.
+  submitReceipt:(t,id,attachmentIds)=>req(`/api/receipts/${id}/submit`,{method:'POST',token:t,json:{attachment_ids:attachmentIds||[]}}),
+  routeReceipt:(t,id,nextTeamId,comment,attachmentIds)=>req(`/api/receipts/${id}/route`,{method:'POST',token:t,json:{next_team_id:nextTeamId,comment:comment||null,attachment_ids:attachmentIds||[]}}),
+  completeReceipt:(t,id,comment,attachmentIds)=>req(`/api/receipts/${id}/complete`,{method:'POST',token:t,json:{comment:comment||null,attachment_ids:attachmentIds||[]}}),
+  rejectReceipt:(t,id,comment,attachmentIds)=>req(`/api/receipts/${id}/reject`,{method:'POST',token:t,json:{comment,attachment_ids:attachmentIds||[]}}),
+  getReceiptApprovalHistory:(t,id)=>req(`/api/receipts/${id}/history`,{token:t}),
+  // Admin-only override wrapper around PATCH /status with required audit reason.
+  // shape: { complete?, reject?, next_team_id?, comment?, status? }
+  adminOverrideReceipt:(t,id,payload,reason)=>req(`/api/receipts/${id}/status`,{
+    method:'PATCH', token:t, json:payload, headers:{ 'x-admin-reason': reason }
+  }),
+
+  // Convenience helper used by approval modals: uploads `files` as approval
+  // evidence tagged with the current cycle/team/stage and returns the array
+  // of new file IDs that can be passed to the action endpoints.
+  uploadApprovalEvidence:async (t,receiptId,files,{cycleId,teamId,teamName,uploadedDuring})=>{
+    if (!files || !files.length) return []
+    const meta = {
+      category: 'approval_evidence',
+      cycle_id: cycleId || '',
+      team_id: teamId || '',
+      team_name: teamName || '',
+      uploaded_during: uploadedDuring || ''
+    }
+    const res = await reqWithFiles(`/api/receipts/${receiptId}/media`, {
+      method: 'POST', token: t, formData: createFormData(meta, files)
+    })
+    const uploaded = Array.isArray(res?.files) ? res.files : []
+    return uploaded.map(f => String(f.id)).filter(Boolean)
+  }
 }

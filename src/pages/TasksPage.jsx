@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FiCheckSquare, FiList, FiGrid, FiCalendar, FiSearch, FiPlus, FiRefreshCw,
   FiFilter, FiChevronDown, FiUser, FiFlag, FiTag, FiAlertOctagon, FiClock,
@@ -28,6 +28,7 @@ import { isOverdue, priorityMeta, statusMeta, toneFor, COMPLETED_STATUSES } from
 function TasksPageInner() {
   const { token, user } = useAuth()
   const cfg = useAppConfig()
+  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const {
     filters, setFilter, tasks, total, stats, loading, error, reload,
@@ -113,7 +114,16 @@ function TasksPageInner() {
   const dismissUndo = (id) => setUndoStack(prev => prev.filter(e => e.id !== id))
 
   // ----- Actions -----
-  const openDrawer = (task) => setTaskId(task._key)
+  // Approval tasks belong to the receipt-approval workflow — open the receipt
+  // so the user can Approve / Route / Reject from the action bar instead of
+  // landing in the generic task drawer (which is read-mostly for approvals).
+  const openDrawer = (task) => {
+    if (task?.kind === 'receipt_approval' && task?.receipt_id) {
+      navigate(`/receipts/${task.receipt_id}`)
+      return
+    }
+    setTaskId(task._key)
+  }
   const closeDrawer = () => setTaskId(null)
 
   const handleQuickAdd = (prefill) => {

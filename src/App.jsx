@@ -20,6 +20,8 @@ import TasksReportsPage from './pages/TasksReportsPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
 import PortfolioReviewPage from './pages/PortfolioReviewPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
+import TeamsAdminPage from './pages/TeamsAdminPage.jsx'
+import ApprovalsQueuePage from './pages/ApprovalsQueuePage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 
@@ -144,6 +146,14 @@ function AppContent() {
           <Route
             path="settings"
             element={<PageTransition><BranchRoute><SystemSettingsPage/></BranchRoute></PageTransition>}
+          />
+          <Route
+            path="teams"
+            element={<PageTransition><AdminRoute><TeamsAdminPage/></AdminRoute></PageTransition>}
+          />
+          <Route
+            path="approvals"
+            element={<PageTransition><ApprovalsQueuePage/></PageTransition>}
           />
         </Route>
       </Routes>

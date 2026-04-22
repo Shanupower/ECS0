@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Label } from 'recharts'
 import { useAuth } from '../context/AuthContext'
+import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
 import CSVExport from '../components/CSVExport'
 import { Card, Button, SegmentedControl, Switch, Skeleton } from '../components/ui'
@@ -109,6 +110,9 @@ const WIDGET_LABELS = {
 
 export default function DashboardPage() {
   const { token, user, refreshUser } = useAuth()
+  const cfg = useAppConfig()
+  const approvalFlagOn = !!cfg?.feature_flags?.receipts_approval_v2
+  const [approvalsCount, setApprovalsCount] = useState(0)
   const [summary, setSummary] = useState(null)
   const [categoryStats, setCategoryStats] = useState([])
   const [dailyStats, setDailyStats] = useState([])
@@ -275,6 +279,49 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboardData()
   }, [token, dateRange, dateBasis, includePending, viewMode])
+
+  // Approvals widget: count open receipt_approval tasks on teams the user
+  // belongs to. /api/tasks is role-scoped (admin sees all, managers see their
+  // branch, employees see assignee/assigned_by/watcher), which can surface
+  // approval tasks on teams the user isn't on — so we cross-check team_id
+  // against the user's own team memberships (matching the queue page).
+  useEffect(() => {
+    if (!token || !approvalFlagOn) { setApprovalsCount(0); return }
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [tRes, teamsList] = await Promise.all([
+          api.listTasks(token, { limit: '500', page: '1', archived: 'false' }),
+          api.listTeams(token).catch(() => [])
+        ])
+        const items = Array.isArray(tRes?.items) ? tRes.items : (Array.isArray(tRes) ? tRes : [])
+        const myUid = user?.id ?? user?._key ?? user?.sub ?? null
+        const myTeamIds = new Set()
+        if (myUid != null && Array.isArray(teamsList)) {
+          for (const t of teamsList) {
+            const memberIds = Array.isArray(t.member_ids)
+              ? t.member_ids
+              : (Array.isArray(t.members) ? t.members.map(m => m?.id) : [])
+            const lead = t.lead_user_id ?? t.lead?.id ?? null
+            const teamKey = String(t.id || t._key)
+            if (memberIds.some(mid => String(mid) === String(myUid))) myTeamIds.add(teamKey)
+            else if (lead != null && String(lead) === String(myUid)) myTeamIds.add(teamKey)
+          }
+        }
+        const openSet = new Set(['backlog', 'todo', 'in_progress', 'in_review', 'blocked'])
+        const open = items.filter((t) =>
+          t.kind === 'receipt_approval'
+          && openSet.has(t.status)
+          && t.team_id
+          && myTeamIds.has(String(t.team_id))
+        )
+        if (!cancelled) setApprovalsCount(open.length)
+      } catch { if (!cancelled) setApprovalsCount(0) }
+    }
+    load()
+    const interval = setInterval(load, 60000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [token, approvalFlagOn, user?.id, user?._key, user?.sub])
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -874,6 +921,24 @@ export default function DashboardPage() {
                 </Link>
               </div>
               <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{issuesSnapshotTotal}</p>
+            </Card>
+          )}
+
+          {approvalFlagOn && (
+            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
+                    <FiCheckSquare className="h-4 w-4 text-[var(--accent)]" />
+                  </div>
+                  <h3 className="text-base font-semibold text-[var(--text-primary)]">My pending approvals</h3>
+                </div>
+                <Link to="/approvals" className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]">
+                  View queue
+                </Link>
+              </div>
+              <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{approvalsCount}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">Receipts waiting on your team.</p>
             </Card>
           )}
 

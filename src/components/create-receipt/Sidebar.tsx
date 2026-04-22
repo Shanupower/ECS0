@@ -16,14 +16,17 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
+  UsersRound,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
+import { useAppConfig } from '../../context/AppConfigContext'
 
 const SIDEBAR_WIDTH = 240
 const SIDEBAR_COLLAPSED_WIDTH = 64
 
 /** Build nav groups based on role. admin sees all; manager sees limited management; employee sees no management. */
-function getNavGroups(role, pendingIssuesCount, tasksReminderCount) {
+function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlagOn) {
   const isAdmin = role === 'admin'
   const isManager = role === 'manager'
   const isEmployee = role === 'employee'
@@ -42,6 +45,7 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount) {
 
   const operations = [
     { to: '/tasks', label: 'Tasks', icon: ClipboardList, badge: tasksReminderCount },
+    ...(approvalFlagOn ? [{ to: '/approvals', label: 'Approvals', icon: ShieldCheck }] : []),
     ...(isAdmin || isManager ? [{ to: '/tasks/reports', label: 'Task Reports', icon: BarChart3 }] : []),
     { to: '/portfolio-review', label: 'Portfolio Review', icon: BarChart3 },
   ]
@@ -50,6 +54,7 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount) {
     ...(isAdmin ? [
       { to: '/branches', label: 'Branches', icon: Building2 },
       { to: '/users', label: 'User Management', icon: UserCog },
+      ...(approvalFlagOn ? [{ to: '/teams', label: 'Approval Teams', icon: UsersRound }] : []),
       { to: '/schemes', label: 'Scheme Management', icon: Database },
     ] : []),
     ...(isManager ? [{ to: '/branches', label: 'Branches', icon: Building2 }] : []),
@@ -79,7 +84,9 @@ export function Sidebar({
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
-  const navGroups = getNavGroups(userRole, pendingIssuesCount, tasksReminderCount)
+  const cfg = useAppConfig()
+  const approvalFlagOn = !!cfg?.feature_flags?.receipts_approval_v2
+  const navGroups = getNavGroups(userRole, pendingIssuesCount, tasksReminderCount, approvalFlagOn)
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH
 
   return (

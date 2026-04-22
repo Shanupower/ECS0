@@ -242,7 +242,99 @@ export default function SystemSettingsPage() {
           priorities={draft.task_priorities || []}
         />
       </Section>
+
+      <Section title="Receipt approvals (v2)">
+        <ReceiptApprovalSection draft={draft} setDraft={setDraft} />
+      </Section>
     </div>
+  )
+}
+
+function ReceiptApprovalSection({ draft, setDraft }) {
+  const { token } = useAuth()
+  const [teams, setTeams] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    setLoading(true)
+    api.listTeams(token)
+      .then((list) => { if (!cancelled) setTeams(Array.isArray(list) ? list : []) })
+      .catch(() => { if (!cancelled) setTeams([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [token])
+
+  const flags = draft.feature_flags || {}
+  const flagOn = !!flags.receipts_approval_v2
+  const intakeId = draft.receipt_intake_team_id || ''
+  const activeTeams = teams.filter((t) => t.is_active !== false)
+  const intakeTeamObj = teams.find((t) => String(t.id || t._key) === String(intakeId))
+  const intakeValid = !!intakeTeamObj && intakeTeamObj.is_active !== false
+
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-[var(--text-secondary)]">Intake team</label>
+        <select
+          value={intakeId}
+          onChange={(e) => setDraft({ ...draft, receipt_intake_team_id: e.target.value || null })}
+          className="w-full max-w-md px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-sm text-[var(--text-primary)]"
+        >
+          <option value="">— None —</option>
+          {activeTeams.map((t) => (
+            <option key={t.id || t._key} value={t.id || t._key}>{t.name}</option>
+          ))}
+          {/* Include the currently-set team even if inactive, so it's still visible */}
+          {intakeId && !activeTeams.some((t) => String(t.id || t._key) === String(intakeId)) && (
+            <option value={intakeId}>{(intakeTeamObj && intakeTeamObj.name) || intakeId} (inactive)</option>
+          )}
+        </select>
+        <p className="text-[11px] text-[var(--text-muted)]">
+          New receipts are routed to this team on first submit. Required before enabling the workflow.
+          {loading ? ' Loading teams…' : teams.length === 0 ? ' No teams yet — create one in the Teams page.' : ''}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5 mt-3">
+        <label className="text-xs font-medium text-[var(--text-secondary)]">Final-status label</label>
+        <input
+          type="text"
+          value={draft.receipt_final_status_label || 'Completed'}
+          onChange={(e) => setDraft({ ...draft, receipt_final_status_label: e.target.value })}
+          className="w-full max-w-md px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-sm text-[var(--text-primary)]"
+          placeholder="Completed"
+        />
+        <p className="text-[11px] text-[var(--text-muted)]">Label used on a receipt once all teams have approved it.</p>
+      </div>
+
+      <div className="mt-4 p-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-hover)]/40">
+        <label className="flex items-start gap-3 select-none">
+          <input
+            type="checkbox"
+            checked={flagOn}
+            disabled={!flagOn && !intakeValid}
+            onChange={(e) => setDraft({ ...draft, feature_flags: { ...flags, receipts_approval_v2: e.target.checked } })}
+            className="mt-1"
+          />
+          <span>
+            <span className="block text-sm font-medium text-[var(--text-primary)]">
+              Enable team-based receipt approval workflow
+            </span>
+            <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
+              When on, receipts move through configured teams before completion and an <b>approval task</b> is created for each stage.
+              Admins keep the legacy status override (now behind an “Admin override” disclosure on the receipt).
+            </span>
+            {!flagOn && !intakeValid && (
+              <span className="block text-[11px] text-[var(--error)] mt-1">
+                Pick a valid active intake team before enabling this flag.
+              </span>
+            )}
+          </span>
+        </label>
+      </div>
+    </>
   )
 }
 
