@@ -5,6 +5,7 @@ import {
   FiDownload, FiTrash2, FiImage
 } from 'react-icons/fi'
 import { Button, Card, Input } from '../ui'
+import { useEscapeClose } from '../../hooks/useEscapeClose'
 
 /** @typedef {{ id: string, name: string, is_active?: boolean }} Team */
 
@@ -217,6 +218,8 @@ export function TeamPickerModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEscapeClose(open && !busy, onClose)
+
   useEffect(() => {
     if (open) { setTeamId(''); setComment(defaultComment); setFiles([]); setError('') }
   }, [open, defaultComment])
@@ -307,6 +310,8 @@ export function RejectModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEscapeClose(open && !busy, onClose)
+
   useEffect(() => { if (open) { setComment(''); setFiles([]); setError('') } }, [open])
 
   if (!open) return null
@@ -371,6 +376,8 @@ export function SubmitForApprovalModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEscapeClose(open && !busy, onClose)
+
   useEffect(() => { if (open) { setComment(''); setFiles([]); setError('') } }, [open])
 
   if (!open) return null
@@ -433,6 +440,8 @@ export function CompleteApprovalModal({
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  useEscapeClose(open && !busy, onClose)
 
   useEffect(() => { if (open) { setComment(''); setFiles([]); setError('') } }, [open])
 
@@ -656,6 +665,8 @@ export function AdminOverrideModal({
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  useEscapeClose(open && !busy, onClose)
 
   useEffect(() => {
     if (open) {

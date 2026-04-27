@@ -92,7 +92,7 @@ export default function KanbanView({
             }}
             onDragLeave={() => setDragOver(prev => (prev === col.key ? null : prev))}
             onDrop={(e) => onColumnDrop(e, col)}
-            className={`flex-shrink-0 w-72 rounded-xl border bg-[var(--card-bg)]/60 p-2 flex flex-col max-h-full ${
+            className={`flex-shrink-0 w-72 rounded-xl border bg-[var(--card-bg-opaque)] p-2 flex flex-col max-h-full ${
               dragOver === col.key ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/30' : 'border-[var(--stroke)]'
             }`}
           >

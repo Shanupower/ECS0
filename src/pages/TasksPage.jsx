@@ -245,9 +245,10 @@ function TasksPageInner() {
     <button
       key={key}
       onClick={() => setFilter({ view: key })}
+      style={view === key ? { backgroundColor: 'var(--accent)', borderColor: 'var(--accent)', color: '#ffffff' } : undefined}
       className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-colors ${
         view === key
-          ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+          ? 'font-medium'
           : 'border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]'
       }`}
       title={label}
@@ -302,42 +303,45 @@ function TasksPageInner() {
           </select>
         )}
 
-        <div className={`relative ml-auto w-full sm:w-72 transition-all ${searchFocused ? 'sm:w-96' : ''}`}>
-          <FiSearch className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
-          <input
-            ref={searchInputRef}
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            placeholder="Search tasks… (/)"
-            className="w-full pl-7 pr-2 py-1.5 text-sm rounded-md border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
-          />
-        </div>
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0 justify-end">
+          <div className={`relative flex-1 min-w-[160px] max-w-md transition-all ${searchFocused ? 'sm:max-w-xl' : ''}`}>
+            <FiSearch className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
+            <input
+              ref={searchInputRef}
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Search tasks… (/)"
+              className="w-full pl-7 pr-2 py-1.5 text-sm rounded-md border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+            />
+          </div>
 
-        <AiFilterButton setFilter={setFilter} />
-        <SavedViews filters={filters} onApply={handleApplyView} />
-        <button
-          onClick={reload}
-          disabled={loading}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--stroke)] text-xs text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
-          title="Refresh"
-        >
-          <FiRefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </button>
-        <button
-          onClick={() => setHelpOpen(true)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--stroke)] text-xs text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
-          title="Shortcuts"
-        >
-          <FiHelpCircle className="w-3 h-3" />
-        </button>
-        <button
-          onClick={() => handleQuickAdd()}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--accent)] text-white text-xs font-medium hover:bg-[var(--accent-hover)]"
-        >
-          <FiPlus className="w-3.5 h-3.5" /> New task
-        </button>
+          <AiFilterButton setFilter={setFilter} />
+          <SavedViews filters={filters} onApply={handleApplyView} />
+          <button
+            onClick={reload}
+            disabled={loading}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--stroke)] text-xs text-[var(--text-secondary)] hover:bg-[var(--card-hover)] shrink-0"
+            title="Refresh"
+          >
+            <FiRefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--stroke)] text-xs text-[var(--text-secondary)] hover:bg-[var(--card-hover)] shrink-0"
+            title="Shortcuts"
+          >
+            <FiHelpCircle className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => handleQuickAdd()}
+            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm shrink-0 hover:brightness-110"
+          >
+            <FiPlus className="w-3.5 h-3.5" /> New task
+          </button>
+        </div>
       </div>
 
       {/* Quick filter chips */}

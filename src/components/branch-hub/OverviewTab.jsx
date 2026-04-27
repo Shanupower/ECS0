@@ -43,6 +43,7 @@ import {
   receiptEmpCode,
   receiptDate,
   receiptCustomerName,
+  scaleMonthlyTargetToDateRange,
 } from './utils'
 
 export default function OverviewTab({
@@ -60,7 +61,6 @@ export default function OverviewTab({
   branchCode = null,
   compare,
   branchMonthlyTarget,
-  personalTargetsSum,
   dateRange,
   includePending = true,
   dateBasis = 'receipt',
@@ -146,11 +146,27 @@ export default function OverviewTab({
   }, [employeePerformance])
 
   const targetGauge = useMemo(() => {
-    const target = Number(branchMonthlyTarget || 0)
+    const monthly = Number(branchMonthlyTarget || 0)
+    const target = scaleMonthlyTargetToDateRange(monthly, dateRange?.from, dateRange?.to) || monthly
     const achieved = Number(s.total_investments || 0)
     const pct = target > 0 ? Math.min(100, (achieved / target) * 100) : 0
-    return { target, achieved, pct }
-  }, [branchMonthlyTarget, s.total_investments])
+    return { target, achieved, pct, monthly }
+  }, [branchMonthlyTarget, s.total_investments, dateRange?.from, dateRange?.to])
+
+  const scaledPersonalTargetsSum = useMemo(() => {
+    if (!Array.isArray(employees)) return 0
+    return employees.reduce((sum, u) => {
+      const m = Number(u.personal_monthly_target) || 0
+      if (!m) return sum
+      return sum + scaleMonthlyTargetToDateRange(m, dateRange?.from, dateRange?.to)
+    }, 0)
+  }, [employees, dateRange?.from, dateRange?.to])
+
+  const branchTargetForHealth = useMemo(() => {
+    const m = Number(branchMonthlyTarget || 0)
+    if (!m) return 0
+    return scaleMonthlyTargetToDateRange(m, dateRange?.from, dateRange?.to)
+  }, [branchMonthlyTarget, dateRange?.from, dateRange?.to])
 
   const activity = useMemo(() => buildActivityStream(recentReceipts), [recentReceipts])
 
@@ -297,7 +313,7 @@ export default function OverviewTab({
           <NetworkHealthCard branches={branchBreakdown} />
         ) : (
           <BranchHealthCard
-            branchMonthlyTarget={branchMonthlyTarget}
+            branchMonthlyTarget={branchTargetForHealth}
             totalInvestments={Number(s.total_investments || 0)}
             staleLeadsCount={Number(queueMetrics?.stale_leads ?? 0)}
             staleCustomersCount={Number(queueMetrics?.stale_customers ?? 0)}
@@ -330,12 +346,12 @@ export default function OverviewTab({
               label={networkMode ? 'Network' : 'Branch'}
               value={targetGauge.target ? formatCompactINR(targetGauge.target) : '—'}
             />
-            <MiniStat label="Allocated" value={formatCompactINR(personalTargetsSum || 0)} />
+            <MiniStat label="Allocated" value={formatCompactINR(scaledPersonalTargetsSum || 0)} />
             <MiniStat
               label="Remaining"
               value={
                 targetGauge.target
-                  ? formatCompactINR(Math.max(0, targetGauge.target - (personalTargetsSum || 0)))
+                  ? formatCompactINR(Math.max(0, targetGauge.target - (scaledPersonalTargetsSum || 0)))
                   : '—'
               }
             />
@@ -523,7 +539,7 @@ export default function OverviewTab({
                 <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
                 <RTooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 <Bar dataKey="Completed" stackId="s" fill={PALETTE[2]} />
                 <Bar dataKey="Pending" stackId="s" fill={PALETTE[3]} />
               </BarChart>
@@ -538,7 +554,10 @@ export default function OverviewTab({
             <div className="space-y-2">
               {topPerformers.map((p, i) => {
                 const amount = Number(p.total_cc || p.total_investment || 0)
-                const target = Number(p.effective_target || p.personal_target || 0)
+                const monthlyTarget = Number(p.effective_target || p.personal_target || 0)
+                const target =
+                  scaleMonthlyTargetToDateRange(monthlyTarget, dateRange?.from, dateRange?.to) ||
+                  monthlyTarget
                 const pct = target > 0 ? Math.min(100, (amount / target) * 100) : 0
                 return (
                   <div

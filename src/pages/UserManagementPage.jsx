@@ -16,7 +16,9 @@ import {
   FiSearch,
   FiChevronDown,
   FiDatabase,
-  FiTarget
+  FiTarget,
+  FiEye,
+  FiEyeOff
 } from 'react-icons/fi'
 
 export default function UserManagementPage() {
@@ -40,6 +42,7 @@ export default function UserManagementPage() {
     personal_monthly_target: ''
   })
   const [fieldErrors, setFieldErrors] = useState({})
+  const [showFormPassword, setShowFormPassword] = useState(false)
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
@@ -654,7 +657,7 @@ export default function UserManagementPage() {
                     <FiKey className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
                   <input
-                    type="password"
+                    type={showFormPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={e => {
                       setFormData(prev => ({ ...prev, password: e.target.value }))
@@ -666,13 +669,22 @@ export default function UserManagementPage() {
                         })
                       }
                     }}
-                    className={`w-full pl-10 pr-4 py-3 border ${
+                    className={`w-full pl-10 pr-10 py-3 border ${
                       fieldErrors.password 
                         ? 'border-[var(--error)]' 
                         : 'border-[var(--stroke)]'
                     } bg-[var(--card-bg-opaque)] text-[var(--text-primary)] rounded-lg placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)] transition-colors duration-200 focus:outline-none`}
                     required={!editingUser}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowFormPassword(v => !v)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none"
+                    aria-label={showFormPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showFormPassword ? <FiEyeOff className="h-4 w-4" /> : <FiEye className="h-4 w-4" />}
+                  </button>
                 </div>
                 {fieldErrors.password && (
                   <p className="mt-1 text-sm text-[var(--error)] flex items-center">

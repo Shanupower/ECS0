@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { X, Upload, AlertCircle, CheckCircle2, Image as ImageIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { useEscapeClose } from '../hooks/useEscapeClose'
 
 const ReportIssueModal = ({ isOpen, onClose, initialData = null }) => {
   const { token, user } = useAuth()
+  useEscapeClose(isOpen, onClose)
   const [formData, setFormData] = useState({
     title: '',
     description: '',

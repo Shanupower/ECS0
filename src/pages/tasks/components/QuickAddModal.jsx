@@ -3,6 +3,7 @@ import * as chrono from 'chrono-node'
 import { FiX, FiCalendar, FiFlag, FiTag, FiUser, FiLink2, FiRepeat } from 'react-icons/fi'
 import { useAppConfig } from '../../../context/AppConfigContext'
 import { labelMeta, priorityMeta, toneFor } from '../utils'
+import { useEscapeClose } from '../../../hooks/useEscapeClose'
 
 /**
  * Natural-language quick add. Parses:
@@ -94,6 +95,7 @@ export default function QuickAddModal({ open, prefill, onClose, onCreate }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef(null)
+  useEscapeClose(open && !saving, onClose)
 
   useEffect(() => {
     if (!open) return

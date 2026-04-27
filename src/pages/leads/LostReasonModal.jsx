@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
 import { FiX } from 'react-icons/fi'
+import { useEscapeClose } from '../../hooks/useEscapeClose'
 
 export default function LostReasonModal({ reasons = [], leadName, onConfirm, onCancel, saving }) {
   const [selected, setSelected] = useState(reasons[0] || '')
   const [custom, setCustom] = useState('')
+  useEscapeClose(!saving, onCancel)
 
   const submit = (e) => {
     e.preventDefault()

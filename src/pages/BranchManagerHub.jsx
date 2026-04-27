@@ -16,6 +16,29 @@ import { useBranchWorkspace } from './branch-workspace/BranchWorkspaceContext'
 import GlobalFilterBar from '../components/branch-hub/GlobalFilterBar'
 import { SkeletonChart } from '../components/branch-hub/ChartCard'
 
+// Backend caps page size at 200; iterate so analytics widgets see the full dataset
+// rather than only the most-recent 200 receipts. Hard upper bound prevents runaway.
+const RECEIPT_PAGE_SIZE = 200
+const RECEIPT_PAGE_CAP = 25 // up to 5,000 receipts per filter
+
+async function fetchAllReceiptsPaged(fetchPage) {
+  const all = []
+  for (let page = 1; page <= RECEIPT_PAGE_CAP; page++) {
+    let res
+    try {
+      res = await fetchPage(page)
+    } catch {
+      break
+    }
+    const items = res?.items ?? res?.data ?? []
+    if (Array.isArray(items) && items.length) all.push(...items)
+    const total = Number(res?.total ?? 0)
+    if (!Array.isArray(items) || items.length < RECEIPT_PAGE_SIZE) break
+    if (total && all.length >= total) break
+  }
+  return all
+}
+
 const OverviewTab = lazy(() => import('../components/branch-hub/OverviewTab'))
 const EmployeesTab = lazy(() => import('../components/branch-hub/EmployeesTab'))
 const ReceiptsTab = lazy(() => import('../components/branch-hub/ReceiptsTab'))
@@ -199,9 +222,9 @@ export default function BranchManagerHub() {
           api.getStatsSummary(token, q).catch(() => null),
           api.getGlobalBranchStats(token, q).catch(() => null),
           api.listUsers(token).catch(() => []),
-          api
-            .listReceipts(token, { ...q, size: '200', sort: 'created_at:desc' })
-            .catch(() => ({ items: [], data: [] })),
+          fetchAllReceiptsPaged((page) =>
+            api.listReceipts(token, { ...q, size: String(RECEIPT_PAGE_SIZE), page: String(page), sort: 'created_at:desc' })
+          ).then((items) => ({ items })).catch(() => ({ items: [] })),
           api.getEmployeePerformance(token, q).catch(() => []),
           api.getStatsByDay(token, q).catch(() => []),
           api.getStatsByCategory(token, q).catch(() => []),
@@ -305,7 +328,9 @@ export default function BranchManagerHub() {
               ? { branch_code: bc }
               : undefined
         ),
-        api.getBranchReceipts(token, bc, { ...q, size: '200', sort: 'created_at:desc' }).catch(() => ({ items: [], data: [] })),
+        fetchAllReceiptsPaged((page) =>
+          api.getBranchReceipts(token, bc, { ...q, size: String(RECEIPT_PAGE_SIZE), page: String(page), sort: 'created_at:desc' })
+        ).then((items) => ({ items })).catch(() => ({ items: [] })),
         api.getEmployeePerformance(token, { ...q, branch_code: bc }).catch(() => []),
         api.getStatsByDay(token, { ...q, branch_code: bc }).catch(() => []),
         api.getStatsByCategory(token, { ...q, branch_code: bc }).catch(() => []),
@@ -377,11 +402,6 @@ export default function BranchManagerHub() {
   }, [embedded, refreshSignal, loadMain])
 
   // Derived values for all tabs.
-  const personalTargetsSum = useMemo(
-    () =>
-      (employees || []).reduce((sum, u) => sum + (Number(u.personal_monthly_target) || 0), 0),
-    [employees]
-  )
   const branchMonthlyTarget = networkMode
     ? Number(branchStats?.statistics?.network_monthly_target || 0) || null
     : branchInfo?.monthly_target != null && branchInfo.monthly_target !== ''
@@ -580,7 +600,6 @@ export default function BranchManagerHub() {
                   branchCode={branchCode}
                   compare={compareEnabled}
                   branchMonthlyTarget={branchMonthlyTarget}
-                  personalTargetsSum={personalTargetsSum}
                   dateRange={{ from: filters.from, to: filters.to }}
                   includePending={filters.includePending}
                   dateBasis={filters.dateBasis}
@@ -599,6 +618,7 @@ export default function BranchManagerHub() {
                   employees={filteredEmployees}
                   employeePerformance={filteredPerformance}
                   recentReceipts={filteredRecent}
+                  receiptFilterKey={`${filters.from}|${filters.to}|${filters.dateBasis}|${filters.includePending ? '1' : '0'}`}
                   branchMonthlyTarget={branchMonthlyTarget}
                   onEditTarget={startEditTarget}
                   networkMode={networkMode}

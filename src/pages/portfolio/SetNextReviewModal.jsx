@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 import DatePickerInput from '../../components/ui/DatePickerInput.jsx'
+import { useEscapeClose } from '../../hooks/useEscapeClose'
 
 function addMonthsISO(ymd, months) {
   const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number)
@@ -25,6 +26,7 @@ export default function SetNextReviewModal({
   onSave,
   onClose
 }) {
+  useEscapeClose(!saving, onClose)
   const multi = customers.length > 1
   const today = new Date().toISOString().slice(0, 10)
 

@@ -146,7 +146,7 @@ export default function CustomersTab({
                   ))}
                 </Pie>
                 <RTooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -249,7 +249,7 @@ export default function CustomersTab({
                 <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
                 <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
                 {portfolioMix.categories.map((c, i) => (
                   <Bar key={c} dataKey={c} stackId="mix" fill={colorFor(i)} />
                 ))}
@@ -291,6 +291,7 @@ function TreemapCell(props) {
   const { x, y, width, height, name, count, fill } = props
   if (width <= 0 || height <= 0) return null
   const showLabel = width > 52 && height > 28
+  const textColor = readableTextColor(fill)
   return (
     <g>
       <rect
@@ -305,7 +306,7 @@ function TreemapCell(props) {
           <text
             x={x + 8}
             y={y + 18}
-            fill="#0b0b0b"
+            fill={textColor}
             style={{ fontSize: 11, fontWeight: 600, pointerEvents: 'none' }}
           >
             {name}
@@ -314,8 +315,8 @@ function TreemapCell(props) {
             <text
               x={x + 8}
               y={y + 34}
-              fill="#0b0b0b"
-              style={{ fontSize: 10, opacity: 0.75, pointerEvents: 'none' }}
+              fill={textColor}
+              style={{ fontSize: 10, opacity: 0.85, pointerEvents: 'none' }}
             >
               {count}
             </text>
@@ -324,4 +325,16 @@ function TreemapCell(props) {
       )}
     </g>
   )
+}
+
+function readableTextColor(bgHex) {
+  if (!bgHex || typeof bgHex !== 'string') return '#ffffff'
+  const h = bgHex.replace('#', '')
+  if (h.length < 6) return '#ffffff'
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  // YIQ luminance — choose dark text for light fills, white text for dark fills.
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000
+  return yiq >= 160 ? '#1d1d1f' : '#ffffff'
 }

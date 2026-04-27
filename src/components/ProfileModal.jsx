@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { FiUser, FiMail, FiPhone, FiLock, FiX, FiAlertCircle } from 'react-icons/fi'
+import { useEscapeClose } from '../hooks/useEscapeClose'
 
 export default function ProfileModal({ isOpen, onClose }) {
   const { token, user, refreshUser, impersonator, impersonateAs, endImpersonation } = useAuth()
+  useEscapeClose(isOpen, onClose)
   const [email, setEmail] = useState('')
   const [mobile, setMobile] = useState('')
   const [profileError, setProfileError] = useState('')

@@ -21,6 +21,8 @@ import ChartCard, { EmptyState } from './branch-hub/ChartCard'
 import KpiStat from './branch-hub/KpiStat'
 import BranchRowList from './branch-hub/BranchRowList'
 import { PALETTE, formatCompactINR, formatNumber, tooltipStyle } from './branch-hub/utils'
+import DatePickerInput from './ui/DatePickerInput.jsx'
+import { useEscapeClose } from '../hooks/useEscapeClose'
 import {
   FiPlus,
   FiUsers,
@@ -74,12 +76,14 @@ export default function BranchManagement() {
 
   const isAdmin = user?.role === 'admin'
 
-  useEffect(() => {
-    if (!editingBranch) return
-    requestAnimationFrame(() => {
-      branchEditFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }, [editingBranch])
+  useEscapeClose(showCreateForm, () => setShowCreateForm(false))
+  useEscapeClose(!!editingBranch, () => setEditingBranch(null))
+  useEscapeClose(showUserAssignment, () => setShowUserAssignment(false))
+  useEscapeClose(!!selectedBranchForInsights, () => {
+    setSelectedBranchForInsights(null)
+    setBranchInsightsData(null)
+    setInsightsError('')
+  })
 
   const loadData = useCallback(async () => {
     if (!token) return
@@ -293,7 +297,7 @@ export default function BranchManagement() {
     const assignedUsers = (users || []).filter((u) => u.branch_code).length
 
     return { typePie, statusPie, assignedUsers }
-  }, [allBranches, users])
+  }, [scopedBranches, users])
 
   const topBranchesInvest = useMemo(() => {
     const rows = networkStats?.branches
@@ -388,7 +392,8 @@ export default function BranchManagement() {
                 setEditingBranch(null)
                 setShowCreateForm(true)
               }}
-              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 transition-colors duration-200"
+              style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+              className="flex items-center px-4 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 focus:ring-2 focus:ring-[var(--ring)] focus:outline-none transition-colors duration-200"
             >
               <FiPlus className="w-4 h-4 mr-2" />
               Create Branch
@@ -417,20 +422,18 @@ export default function BranchManagement() {
           <div className="flex flex-col sm:flex-row sm:items-end gap-2 w-full sm:w-auto">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] text-[var(--text-muted)] mr-1">Pulse range</span>
-              <input
-                type="date"
+              <DatePickerInput
                 value={pulseFrom.slice(0, 10)}
-                onChange={(e) => setPulseFrom(e.target.value)}
-                className="px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-                aria-label="Pulse period from"
+                onChange={(v) => setPulseFrom(v)}
+                inputClassName="px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                ariaLabel="Pulse period from"
               />
               <span className="text-[var(--text-muted)]">–</span>
-              <input
-                type="date"
+              <DatePickerInput
                 value={pulseTo.slice(0, 10)}
-                onChange={(e) => setPulseTo(e.target.value)}
-                className="px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-                aria-label="Pulse period to"
+                onChange={(v) => setPulseTo(v)}
+                inputClassName="px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                ariaLabel="Pulse period to"
               />
             </div>
             <div className="flex flex-wrap gap-1">
@@ -512,7 +515,7 @@ export default function BranchManagement() {
                   <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} interval={0} angle={-18} textAnchor="end" height={56} />
                   <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
                   <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                   <Bar dataKey="investments" name="Investments" fill={PALETTE[0]} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="cc" name="Collection credit" fill={PALETTE[1]} radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -532,7 +535,7 @@ export default function BranchManagement() {
                     ))}
                   </Pie>
                   <RTooltip contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -584,24 +587,51 @@ export default function BranchManagement() {
         </div>
       )}
 
-      {/* Create Branch Form */}
+      {/* Create Branch Modal */}
       {showCreateForm && (
-        <CreateBranchForm 
-          onSubmit={handleCreateBranch}
-          onCancel={() => setShowCreateForm(false)}
-        />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowCreateForm(false)}
+          role="presentation"
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-branch-title"
+          >
+            <CreateBranchForm
+              onSubmit={handleCreateBranch}
+              onCancel={() => setShowCreateForm(false)}
+            />
+          </div>
+        </div>
       )}
 
-      {/* Edit Branch Form */}
-      <div ref={branchEditFormRef}>
-        {editingBranch && (
-          <EditBranchForm 
-            branch={editingBranch}
-            onSubmit={(data) => handleUpdateBranch(editingBranch.branch_code, data)}
-            onCancel={() => setEditingBranch(null)}
-          />
-        )}
-      </div>
+      {/* Edit Branch Modal */}
+      {editingBranch && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setEditingBranch(null)}
+          role="presentation"
+        >
+          <div
+            ref={branchEditFormRef}
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-branch-title"
+          >
+            <EditBranchForm
+              branch={editingBranch}
+              onSubmit={(data) => handleUpdateBranch(editingBranch.branch_code, data)}
+              onCancel={() => setEditingBranch(null)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* User Assignment Modal */}
       {showUserAssignment && selectedBranch && (
@@ -809,7 +839,7 @@ function CreateBranchForm({ onSubmit, onCancel }) {
 
   return (
     <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
-      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Create New Branch</h3>
+      <h3 id="create-branch-title" className="text-lg font-semibold text-[var(--text-primary)] mb-4">Create New Branch</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -906,7 +936,8 @@ function CreateBranchForm({ onSubmit, onCancel }) {
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 transition-colors duration-200"
+            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            className="px-4 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 focus:ring-2 focus:ring-[var(--ring)] focus:outline-none transition-colors duration-200"
           >
             Create Branch
           </button>
@@ -917,15 +948,35 @@ function CreateBranchForm({ onSubmit, onCancel }) {
 }
 
 // Edit Branch Form Component
+function normalizeBranchType(value) {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (!v) return 'operational'
+  if (v === 'ho' || v === 'head office' || v === 'head_office' || v === 'headoffice') return 'head_office'
+  if (v === 'regional' || v === 'region') return 'regional'
+  if (v === 'operational' || v === 'operation' || v === 'branch') return 'operational'
+  return 'operational'
+}
+
+function buildEditFormData(branch) {
+  return {
+    branch_name: branch?.branch_name || '',
+    branch_type: normalizeBranchType(branch?.branch_type),
+    address: branch?.address || '',
+    phone: branch?.phone || '',
+    email: branch?.email || '',
+    monthly_target: branch?.monthly_target != null ? String(branch.monthly_target) : ''
+  }
+}
+
 function EditBranchForm({ branch, onSubmit, onCancel }) {
-  const [formData, setFormData] = useState({
-    branch_name: branch.branch_name || '',
-    branch_type: branch.branch_type || 'operational',
-    address: branch.address || '',
-    phone: branch.phone || '',
-    email: branch.email || '',
-    monthly_target: branch.monthly_target != null ? String(branch.monthly_target) : ''
-  })
+  const [formData, setFormData] = useState(() => buildEditFormData(branch))
+
+  // Re-initialise the form whenever a different branch row is opened. Without
+  // this, switching from one Edit row to another keeps the previous branch's
+  // values in the inputs.
+  useEffect(() => {
+    setFormData(buildEditFormData(branch))
+  }, [branch])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -940,7 +991,7 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
 
   return (
     <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)]">
-      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Edit Branch: {branch.branch_code}</h3>
+      <h3 id="edit-branch-title" className="text-lg font-semibold text-[var(--text-primary)] mb-4">Edit Branch: {branch.branch_code}</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Branch Name *</label>
@@ -1020,7 +1071,8 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 transition-colors duration-200"
+            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            className="px-4 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 focus:ring-2 focus:ring-[var(--ring)] focus:outline-none transition-colors duration-200"
           >
             Update Branch
           </button>
@@ -1036,6 +1088,8 @@ function UserAssignmentModal({ branch, users, onSubmit, onCancel }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterRole, setFilterRole] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+
+  useEscapeClose(true, onCancel)
 
   useEffect(() => {
     // Pre-select users already assigned to this branch

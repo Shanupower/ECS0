@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { FiRefreshCw, FiDownload, FiBarChart2, FiAlertOctagon, FiUser } from 'react-icons/fi'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 
 function toCsv(rows, cols) {
   const header = cols.map(c => c.label).join(',')
@@ -75,9 +76,17 @@ export default function TasksReportsPage() {
           Tasks reports
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-1 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]" />
+          <DatePickerInput
+            value={from}
+            onChange={(v) => setFrom(v)}
+            inputClassName="px-2 py-1 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+          />
           <span className="text-xs text-[var(--text-muted)]">to</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]" />
+          <DatePickerInput
+            value={to}
+            onChange={(v) => setTo(v)}
+            inputClassName="px-2 py-1 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+          />
           <input type="text" placeholder="Branch code" value={branch} onChange={(e) => setBranch(e.target.value)} className="px-2 py-1 text-sm border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)] w-28" />
           <button onClick={load} className="inline-flex items-center gap-1 px-2 py-1 text-sm border border-[var(--stroke)] rounded hover:bg-[var(--card-hover)] text-[var(--text-primary)]">
             <FiRefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh

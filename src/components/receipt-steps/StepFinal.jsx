@@ -400,53 +400,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               Investment Details
             </h3>
             
-            {/* FD-specific display */}
-            {data.product_category === 'FD' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {data.fd_issuer_name && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Issuer</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.fd_issuer_name} ({data.fd_issuer_type})</div>
-                  </div>
-                )}
-                {data.fd_scheme_name && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Scheme</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.fd_scheme_name}</div>
-                  </div>
-                )}
-                {data.fd_deposit_amount && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Deposit Amount</div>
-                    <div className="text-body font-semibold text-[var(--success)]">{fmtAmt(data.fd_deposit_amount)}</div>
-                  </div>
-                )}
-                {data.fd_tenure_months && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Tenure</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.fd_tenure_months} months</div>
-                  </div>
-                )}
-                {data.fd_payout_frequency && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Payout Frequency</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.fd_payout_frequency}</div>
-                  </div>
-                )}
-                {data.fd_total_rate_pa && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Interest Rate</div>
-                    <div className="text-body font-semibold text-[var(--success)]">{data.fd_total_rate_pa.toFixed(2)}% p.a.</div>
-                  </div>
-                )}
-                {data.fd_application_number && (
-                  <div className="bg-[var(--card-bg)] rounded-card p-4">
-                    <div className="text-helper text-[var(--text-muted)]">Application/FD Number</div>
-                    <div className="text-body font-semibold text-[var(--text-primary)]">{data.fd_application_number}</div>
-                  </div>
-                )}
-              </div>
-            ) : null}
+            {/* FD / GOVT_FD: no primary grid here — single purple block below (avoids duplicating Fixed Deposit / Government Schemes) */}
             
             {data.product_category === 'MISC' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -463,7 +417,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                   </div>
                 )}
               </div>
-            ) : data.product_category !== 'FD' && data.product_category !== 'BOND' && data.product_category !== 'NCD' && data.product_category !== 'INS' && (
+            ) : data.product_category !== 'FD' && data.product_category !== 'GOVT_FD' && data.product_category !== 'BOND' && data.product_category !== 'NCD' && data.product_category !== 'INS' && !(data.product_category === 'MF' && data.amc_name) && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-[var(--card-bg)] rounded-card p-4">
                 <div className="text-helper text-[var(--text-muted)]">Product Type</div>
@@ -648,6 +602,14 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                       Mutual Fund Details
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-[var(--card-bg)] rounded-card p-4">
+                        <div className="text-helper text-[var(--text-muted)]">Product Type</div>
+                        <div className="font-semibold text-[var(--text-primary)]">{getReceiptProductCategoryLabel(data)}</div>
+                      </div>
+                      <div className="bg-[var(--card-bg)] rounded-card p-4">
+                        <div className="text-helper text-[var(--text-muted)]">Transaction</div>
+                        <div className="font-semibold text-[var(--text-primary)]">{mfTxnTypeSafe || 'Fresh'}</div>
+                      </div>
                       {data.amc_name && (
                         <div className="bg-[var(--card-bg)] rounded-card p-4">
                           <div className="text-helper text-[var(--text-muted)]">AMC</div>
@@ -698,10 +660,16 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
                           </div>
                         </div>
                       )}
-                      {data.folio_number && (
+                      {(data.folio_number || data.folio_policy_no) && (
                         <div className="bg-[var(--card-bg)] rounded-card p-4">
                           <div className="text-helper text-[var(--text-muted)]">Folio Number</div>
-                          <div className="font-semibold text-[var(--text-primary)]">{data.folio_number}</div>
+                          <div className="font-semibold text-[var(--text-primary)]">{data.folio_number || data.folio_policy_no}</div>
+                        </div>
+                      )}
+                      {data.investment_amount && (
+                        <div className="bg-[var(--card-bg)] rounded-card p-4">
+                          <div className="text-helper text-[var(--text-muted)]">Amount</div>
+                          <div className="font-semibold text-[var(--success)]">{fmtAmt(data.investment_amount)}</div>
                         </div>
                       )}
                     </div>
@@ -710,7 +678,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               </>
             )}
             
-            {(data.product_category === 'FD' || data.product_category === 'GOVT_FD') && !data.transaction_type && data.fd_issuer_name && (
+            {(data.product_category === 'FD' || data.product_category === 'GOVT_FD') && (data.fd_issuer_name || data.fd_scheme_name) && (
                 <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg border border-purple-300 dark:border-purple-800">
                   <h4 className="text-body font-semibold text-[var(--text-primary)] mb-3 flex items-center">
                     <span className="w-2 h-2 bg-purple-600 rounded-full mr-2"></span>

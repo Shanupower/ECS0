@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { useEscapeClose } from '../hooks/useEscapeClose'
 
 // Component to load authenticated images
 const AuthenticatedImage = ({ issueId, filename, alt, className, token }) => {
@@ -136,6 +137,8 @@ export default function IssuesPage() {
   const [showFixModal, setShowFixModal] = useState(false)
   const [fixText, setFixText] = useState('')
   const [submittingFix, setSubmittingFix] = useState(false)
+  useEscapeClose(showFixModal && !submittingFix, () => setShowFixModal(false))
+  useEscapeClose(!!selectedIssue, () => setSelectedIssue(null))
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [pageSize] = useState(20)

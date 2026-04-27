@@ -10,6 +10,7 @@ import ReviewFilterChips from './portfolio/ReviewFilterChips'
 import ReviewBulkBar from './portfolio/ReviewBulkBar'
 import SetNextReviewModal from './portfolio/SetNextReviewModal'
 import ReviewHistoryDrawer from './portfolio/ReviewHistoryDrawer'
+import SearchableSelect from '../components/SearchableSelect'
 
 function todayIso() { return new Date().toISOString().slice(0, 10) }
 
@@ -31,14 +32,38 @@ function ownerLabel(customer) {
   return customer.last_reviewed_by_name || customer.last_reviewed_by_emp_code || customer.last_reviewed_by_id || '—'
 }
 
-function branchLabel(customer) {
+function rawBranchRef(customer) {
   if (Array.isArray(customer.branches) && customer.branches.length) return customer.branches[0]
   if (Array.isArray(customer.relationship_manager) && customer.relationship_manager.length) return customer.relationship_manager[0]
-  return customer.relationship_manager || '—'
+  return customer.relationship_manager || ''
 }
 
-function rmLabel(customer) {
-  return customer.relationship_manager_display || branchLabel(customer)
+function makeBranchLabel(branchNameLookup) {
+  return (customer) => {
+    const ref = rawBranchRef(customer)
+    if (!ref) return '—'
+    const key = String(ref).trim().toLowerCase()
+    return branchNameLookup.get(key) || ref || '—'
+  }
+}
+
+function makeRmLabel(userByKey) {
+  const resolve = (raw) => {
+    if (raw == null || raw === '') return null
+    const k = String(raw).trim().toLowerCase()
+    const u = userByKey?.get(k)
+    return u?.name || u?.email || null
+  }
+  return (customer) => {
+    if (customer.relationship_manager_display) return customer.relationship_manager_display
+    if (customer.last_reviewed_by_name) return customer.last_reviewed_by_name
+    const fromEmp = resolve(customer.last_reviewed_by_emp_code)
+    if (fromEmp) return fromEmp
+    const fromRm = resolve(rawBranchRef(customer))
+    if (fromRm) return fromRm
+    if (customer.last_reviewed_by_emp_code) return customer.last_reviewed_by_emp_code
+    return '—'
+  }
 }
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100]
@@ -59,7 +84,35 @@ export default function PortfolioReviewPage() {
   const [error, setError] = useState('')
   const [branchFilter, setBranchFilter] = useState('')
   const [branchOptions, setBranchOptions] = useState([])
+  const [branchRows, setBranchRows] = useState([])
   const [assignableUsers, setAssignableUsers] = useState([])
+
+  const branchNameLookup = useMemo(() => {
+    const map = new Map()
+    for (const b of branchRows) {
+      const name = b.branch_name || b.name || b.branch_code || b.code
+      if (!name) continue
+      const candidates = [b.branch_code, b.code, b._key, b.key, b.branch, b.branch_name, b.name]
+      for (const c of candidates) {
+        if (c == null || c === '') continue
+        map.set(String(c).trim().toLowerCase(), name)
+      }
+    }
+    return map
+  }, [branchRows])
+
+  const branchLabel = useMemo(() => makeBranchLabel(branchNameLookup), [branchNameLookup])
+  const rmUserLookup = useMemo(() => {
+    const m = new Map()
+    for (const u of assignableUsers || []) {
+      for (const k of [u.id, u._key, u.emp_code, u.email]) {
+        if (k == null || String(k).trim() === '') continue
+        m.set(String(k).trim().toLowerCase(), u)
+      }
+    }
+    return m
+  }, [assignableUsers])
+  const rmLabel = useMemo(() => makeRmLabel(rmUserLookup), [rmUserLookup])
 
   const [sortKey, setSortKey] = useState('next_review_due')
   const [sortDir, setSortDir] = useState('asc')
@@ -111,29 +164,61 @@ export default function PortfolioReviewPage() {
   useEffect(() => {
     if (!token) return
     api.listAssignableUsers(token).then((list) => setAssignableUsers(Array.isArray(list) ? list : [])).catch(() => {})
-    if (isAdmin) {
-      api.getGlobalBranchStats(token).then((res) => {
-        const rows = Array.isArray(res?.branches) ? res.branches : []
-        setBranchOptions(rows.map((b) => ({ value: b.branch_code || b.code || b.branch_name, label: b.branch_name || b.name || b.branch_code })))
-      }).catch(() => setBranchOptions([]))
-    }
-  }, [token, isAdmin])
+    // Branch directory is needed for the Branch / RM column lookups regardless of role.
+    api.listBranches(token).then((rows) => {
+      const list = Array.isArray(rows) ? rows : []
+      setBranchRows(list)
+      setBranchOptions(
+        list
+          .filter((b) => b.is_active !== false)
+          .map((b) => ({
+            value: b.branch_code || b._key || b.branch_name,
+            label: b.branch_name || b.branch_code,
+          }))
+      )
+    }).catch(() => {
+      setBranchRows([])
+      setBranchOptions([])
+    })
+  }, [token])
 
   const sortedItems = useMemo(() => {
     const list = [...items]
     const dir = sortDir === 'asc' ? 1 : -1
+    const getVal = (item, key) => {
+      switch (key) {
+        case 'name': return (item.name || '').toLowerCase()
+        case 'branch': {
+          const v = branchLabel(item)
+          return (v === '—' ? '' : v).toLowerCase()
+        }
+        case 'rm': {
+          const v = rmLabel(item)
+          return (v === '—' ? '' : v).toLowerCase()
+        }
+        case 'review_tier': return item.review_tier || ''
+        case 'last_reviewed_at': return item.last_reviewed_at || ''
+        case 'reviewer': return (item.last_reviewed_by_name || item.last_reviewed_by_emp_code || '').toLowerCase()
+        case 'next_review_due': return item.next_review_due || ''
+        case 'days_overdue': {
+          if (!item.next_review_due) return -1
+          return item.next_review_due < todayIso() ? Math.round((Date.now() - new Date(item.next_review_due).getTime()) / 86_400_000) : -1
+        }
+        default: return null
+      }
+    }
     list.sort((a, b) => {
-      const av = getSortValue(a, sortKey)
-      const bv = getSortValue(b, sortKey)
+      const av = getVal(a, sortKey)
+      const bv = getVal(b, sortKey)
       if (av == null && bv == null) return 0
-      if (av == null) return 1 // nulls last
+      if (av == null) return 1
       if (bv == null) return -1
       if (av < bv) return -1 * dir
       if (av > bv) return 1 * dir
       return 0
     })
     return list
-  }, [items, sortKey, sortDir])
+  }, [items, sortKey, sortDir, branchLabel, rmLabel])
 
   const selectedList = useMemo(() => sortedItems.filter((i) => selectedIds.has(i.investor_id)), [sortedItems, selectedIds])
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -285,17 +370,14 @@ export default function PortfolioReviewPage() {
             />
           </div>
           {isAdmin && (
-            <div className="relative">
-              <select
+            <div className="w-56">
+              <SearchableSelect
+                options={[{ value: '', label: 'All branches' }, ...branchOptions]}
                 value={branchFilter}
-                onChange={(e) => setBranchFilter(e.target.value)}
-                className="appearance-none h-9 pl-3 pr-8 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-              >
-                <option value="">All branches</option>
-                {branchOptions.map((b) => (
-                  <option key={b.value} value={b.value}>{b.label}</option>
-                ))}
-              </select>
+                onChange={(v) => setBranchFilter(v || '')}
+                placeholder="All branches"
+                emptyText="No branches"
+              />
             </div>
           )}
           <button
@@ -522,20 +604,3 @@ function SortableHeader({ label, onClick, indicator }) {
   )
 }
 
-function getSortValue(item, key) {
-  switch (key) {
-    case 'name': return (item.name || '').toLowerCase()
-    case 'branch': return (Array.isArray(item.branches) ? item.branches[0] : (Array.isArray(item.relationship_manager) ? item.relationship_manager[0] : item.relationship_manager) || '').toLowerCase()
-    case 'rm': return (item.relationship_manager_display || '').toLowerCase()
-    case 'review_tier': return item.review_tier || ''
-    case 'last_reviewed_at': return item.last_reviewed_at || ''
-    case 'reviewer': return (item.last_reviewed_by_name || item.last_reviewed_by_emp_code || '').toLowerCase()
-    case 'next_review_due': return item.next_review_due || ''
-    case 'days_overdue': {
-      const today = todayIso()
-      if (!item.next_review_due) return -1
-      return item.next_review_due < today ? Math.round((Date.now() - new Date(item.next_review_due).getTime()) / 86_400_000) : -1
-    }
-    default: return null
-  }
-}

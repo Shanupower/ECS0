@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { FiCalendar, FiFilter, FiMenu, FiSliders, FiBookmark, FiPlus, FiRefreshCw, FiX } from 'react-icons/fi'
 import { classNames, getPresetRange } from './utils'
+import DatePickerInput from '../ui/DatePickerInput.jsx'
 
 const PRESETS = [
   { id: 'today', label: 'Today' },
@@ -154,20 +155,18 @@ export default function GlobalFilterBar({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         <div>
           <label className="block text-[11px] font-medium text-[var(--text-muted)] mb-1">From</label>
-          <input
-            type="date"
+          <DatePickerInput
             value={from}
-            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+            onChange={(v) => setFilters((f) => ({ ...f, from: v }))}
+            inputClassName="w-full px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
           />
         </div>
         <div>
           <label className="block text-[11px] font-medium text-[var(--text-muted)] mb-1">To</label>
-          <input
-            type="date"
+          <DatePickerInput
             value={to}
-            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+            onChange={(v) => setFilters((f) => ({ ...f, to: v }))}
+            inputClassName="w-full px-2 py-1.5 text-xs rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
           />
         </div>
         {embedded ? null : (

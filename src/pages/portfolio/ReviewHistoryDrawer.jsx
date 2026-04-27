@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { FiX, FiClock } from 'react-icons/fi'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
+import { useEscapeClose } from '../../hooks/useEscapeClose'
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -12,6 +13,7 @@ export default function ReviewHistoryDrawer({ open, customer, onClose }) {
   const { token } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
+  useEscapeClose(open, onClose)
 
   useEffect(() => {
     if (!open || !customer?.investor_id || !token) return

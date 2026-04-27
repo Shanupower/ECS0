@@ -35,6 +35,7 @@ export default function EmployeesTab({
   employees,
   employeePerformance,
   recentReceipts,
+  receiptFilterKey = '',
   branchMonthlyTarget,
   onEditTarget,
   networkMode = false,
@@ -89,21 +90,47 @@ export default function EmployeesTab({
   }, [networkMode, branchBreakdown, employees, branchMonthlyTarget])
 
   const actualVsTarget = useMemo(() => {
-    return (employeePerformance || [])
-      .map((r) => {
-        const target = Number(r.effective_target || r.personal_target || 0)
-        const actual = Number(r.total_cc || r.total_investment || 0)
-        const pct = target > 0 ? Math.min(100, (actual / target) * 100) : 0
-        return {
-          name: r.employee_name || r.emp_code,
-          emp_code: r.emp_code,
-          Achieved: actual,
-          Target: target,
-          pct,
-        }
-      })
-      .sort((a, b) => b.Achieved - a.Achieved)
-      .slice(0, 12)
+    // Dedupe by emp_code (an employee can appear in multiple performance rows when
+    // they straddle branches/months) and merge their metrics.
+    const byCode = new Map()
+    ;(employeePerformance || []).forEach((r) => {
+      const code = r.emp_code || r.employee_code || ''
+      const key = code || `__row_${byCode.size}`
+      const existing = byCode.get(key)
+      if (existing) {
+        existing.Achieved += Number(r.total_cc || r.total_investment || 0)
+        const t = Number(r.effective_target || r.personal_target || 0)
+        existing.Target = Math.max(existing.Target, t)
+        if (!existing.name && r.employee_name) existing.name = r.employee_name
+      } else {
+        byCode.set(key, {
+          emp_code: code,
+          name: r.employee_name || code,
+          Achieved: Number(r.total_cc || r.total_investment || 0),
+          Target: Number(r.effective_target || r.personal_target || 0),
+        })
+      }
+    })
+    // Recharts categorises rows by `name`. Append the emp_code suffix on duplicate
+    // names so each bar gets its own slot (otherwise duplicates collapse into one).
+    const rows = Array.from(byCode.values())
+    const nameCounts = new Map()
+    rows.forEach((row) => {
+      const baseName = String(row.name || row.emp_code || 'Employee')
+      nameCounts.set(baseName, (nameCounts.get(baseName) || 0) + 1)
+    })
+    const seenAlready = new Map()
+    rows.forEach((row) => {
+      const baseName = String(row.name || row.emp_code || 'Employee')
+      if ((nameCounts.get(baseName) || 0) > 1) {
+        const idx = seenAlready.get(baseName) || 0
+        seenAlready.set(baseName, idx + 1)
+        row.name = row.emp_code ? `${baseName} (${row.emp_code})` : `${baseName} #${idx + 1}`
+      }
+      row.pct = row.Target > 0 ? Math.min(100, (row.Achieved / row.Target) * 100) : 0
+    })
+    rows.sort((a, b) => b.Achieved - a.Achieved)
+    return rows.slice(0, 12)
   }, [employeePerformance])
 
   // Compute per-employee last-14-day sparkline from recentReceipts.
@@ -169,20 +196,38 @@ export default function EmployeesTab({
   }, [networkMode, branchBreakdown])
 
   const teamMix = useMemo(() => {
+    // Build emp_code → display name map from performance rows + employee directory.
+    const nameMap = new Map()
+    ;(employeePerformance || []).forEach((r) => {
+      if (r.emp_code && r.employee_name) nameMap.set(r.emp_code, r.employee_name)
+    })
+    ;(employees || []).forEach((u) => {
+      if (u.emp_code && u.name && !nameMap.has(u.emp_code)) nameMap.set(u.emp_code, u.name)
+    })
     const byEmp = new Map()
     ;(recentReceipts || []).forEach((r) => {
       const emp = receiptEmpCode(r)
       if (!emp) return
       const cat = receiptCategory(r) || 'Other'
-      if (!byEmp.has(emp)) byEmp.set(emp, { emp_code: emp })
+      if (!byEmp.has(emp)) {
+        byEmp.set(emp, { emp_code: emp, name: nameMap.get(emp) || emp, total: 0 })
+      }
       const row = byEmp.get(emp)
-      row[cat] = (row[cat] || 0) + receiptAmount(r)
+      const amt = receiptAmount(r)
+      row[cat] = (row[cat] || 0) + amt
+      row.total += amt
     })
-    const rows = Array.from(byEmp.values()).slice(0, 10)
+    const rows = Array.from(byEmp.values())
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
     const catsSet = new Set()
-    rows.forEach((r) => Object.keys(r).forEach((k) => k !== 'emp_code' && catsSet.add(k)))
+    rows.forEach((r) =>
+      Object.keys(r).forEach(
+        (k) => k !== 'emp_code' && k !== 'name' && k !== 'total' && catsSet.add(k)
+      )
+    )
     return { rows, categories: Array.from(catsSet) }
-  }, [recentReceipts])
+  }, [recentReceipts, employeePerformance, employees, receiptFilterKey])
 
   if (loading) {
     return (
@@ -227,7 +272,7 @@ export default function EmployeesTab({
                   ))}
                 </Pie>
                 <RTooltip contentStyle={tooltipStyle} formatter={(v, _n, p) => [formatCompactINR(v), p?.payload?.name || '']} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -250,7 +295,7 @@ export default function EmployeesTab({
                 <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
                 <YAxis type="category" dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 11 }} width={120} />
                 <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 <Bar dataKey="Achieved" fill={PALETTE[0]} radius={[0, 6, 6, 0]} />
                 <Bar dataKey="Target" fill={PALETTE[3]} fillOpacity={0.4} radius={[0, 6, 6, 0]} />
               </BarChart>
@@ -325,10 +370,10 @@ export default function EmployeesTab({
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={teamMix.rows} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="emp_code" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
+                <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
                 <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 {teamMix.categories.map((c, i) => (
                   <Bar key={c} dataKey={c} stackId="mix" fill={colorFor(i)} />
                 ))}

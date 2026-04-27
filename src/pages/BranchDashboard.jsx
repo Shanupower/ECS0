@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
@@ -7,7 +7,38 @@ import { SegmentedControl } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import { useBranchWorkspace } from './branch-workspace/BranchWorkspaceContext'
 import KpiStat from '../components/branch-hub/KpiStat'
-import { formatCompactINR as fmtCompactINR } from '../components/branch-hub/utils'
+import {
+  formatCompactINR as fmtCompactINR,
+  tooltipStyle as chartTooltipStyle,
+  receiptAmount,
+  receiptDate,
+} from '../components/branch-hub/utils'
+
+const RECEIPT_PAGE_SIZE = 200
+const RECEIPT_PAGE_CAP = 25
+
+async function fetchAllReceiptsPaged(token, queryBase) {
+  const all = []
+  for (let page = 1; page <= RECEIPT_PAGE_CAP; page++) {
+    let res
+    try {
+      res = await api.listReceipts(token, {
+        ...queryBase,
+        size: String(RECEIPT_PAGE_SIZE),
+        page: String(page),
+        sort: 'created_at:desc',
+      })
+    } catch {
+      break
+    }
+    const items = res?.items ?? res?.data ?? []
+    if (Array.isArray(items) && items.length) all.push(...items)
+    const total = Number(res?.total ?? 0)
+    if (!Array.isArray(items) || items.length < RECEIPT_PAGE_SIZE) break
+    if (total && all.length >= total) break
+  }
+  return all
+}
 import { 
   FiTrendingUp, 
   FiFileText, 
@@ -101,6 +132,7 @@ function initialScopeFromUrl() {
 
 export default function BranchDashboard() {
   const { token, user } = useAuth()
+  const navigate = useNavigate()
   const [, setSearchParams] = useSearchParams()
   const {
     embedded,
@@ -127,6 +159,7 @@ export default function BranchDashboard() {
   const [loadingBranchDetails, setLoadingBranchDetails] = useState(false)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
+  const [networkReceiptsForTrend, setNetworkReceiptsForTrend] = useState([])
   const [localIncludePending, setLocalIncludePending] = useState(true)
   const includePending = embedded ? !!wsIncludePending : localIncludePending
   const setIncludePending = embedded ? (wsSetIncludePending || (() => {})) : setLocalIncludePending
@@ -185,6 +218,7 @@ export default function BranchDashboard() {
           setBranchStats(null)
           setEmployeePerformance([])
           setBranchRecentReceipts([])
+          setNetworkReceiptsForTrend([])
           setSelectedBranch(null)
         } else if (branchCode) {
           const branchObj = branchesData.find(b => b.branch_code === branchCode)
@@ -201,11 +235,13 @@ export default function BranchDashboard() {
           setEmployeePerformance(Array.isArray(empPerf) ? empPerf : [])
           const rec = receiptsRes?.items ?? receiptsRes?.data ?? []
           setBranchRecentReceipts(Array.isArray(rec) ? rec.slice(0, 10) : [])
+          setNetworkReceiptsForTrend([])
         } else {
           setBranchStats(null)
           setGlobalStats(null)
           setEmployeePerformance([])
           setBranchRecentReceipts([])
+          setNetworkReceiptsForTrend([])
           setSelectedBranch(null)
         }
       } else {
@@ -229,6 +265,17 @@ export default function BranchDashboard() {
           setEmployeePerformance(Array.isArray(empPerfData) ? empPerfData : [])
         } catch {
           setEmployeePerformance([])
+        }
+        try {
+          const receiptList = await fetchAllReceiptsPaged(token, {
+            from: dateRange.from,
+            to: dateRange.to,
+            date_basis: dateBasis,
+            includePending: includePending ? '1' : '0',
+          })
+          setNetworkReceiptsForTrend(Array.isArray(receiptList) ? receiptList : [])
+        } catch {
+          setNetworkReceiptsForTrend([])
         }
         setBranchRecentReceipts([])
       }
@@ -418,6 +465,49 @@ export default function BranchDashboard() {
 
     return lookup
   }, [branches])
+
+  // Revenue Trend: bucket the backend monthly CC+SI aggregate by YYYY-MM, gap-fill
+  // any missing months in the selected range with zero so the line is continuous.
+  const revenueTrendData = useMemo(() => {
+    const ymKey = (d) => {
+      if (!d) return null
+      const dt = new Date(d)
+      if (Number.isNaN(dt.getTime())) return null
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+    }
+    const monthLabel = (key) => {
+      const [y, m] = key.split('-').map((n) => parseInt(n, 10))
+      if (!Number.isFinite(y) || !Number.isFinite(m)) return key
+      return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+    }
+    const monthKeysBetween = (startKey, endKey) => {
+      if (!startKey || !endKey) return []
+      const [sy, sm] = startKey.split('-').map((n) => parseInt(n, 10))
+      const [ey, em] = endKey.split('-').map((n) => parseInt(n, 10))
+      const out = []
+      let y = sy
+      let m = sm
+      while (y < ey || (y === ey && m <= em)) {
+        out.push(`${y}-${String(m).padStart(2, '0')}`)
+        m += 1
+        if (m > 12) { m = 1; y += 1 }
+      }
+      return out
+    }
+    const startKey = ymKey(dateRange.from)
+    const endKey = ymKey(dateRange.to)
+    const buckets = new Map()
+    for (const k of monthKeysBetween(startKey, endKey)) {
+      buckets.set(k, { month: monthLabel(k), key: k, investments: 0 })
+    }
+    ;(networkReceiptsForTrend || []).forEach((r) => {
+      const d = receiptDate(r) || (r.created_at ? String(r.created_at).slice(0, 10) : '')
+      const key = ymKey(d)
+      if (!key || !buckets.has(key)) return
+      buckets.get(key).investments += receiptAmount(r)
+    })
+    return Array.from(buckets.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+  }, [networkReceiptsForTrend, dateRange.from, dateRange.to])
 
   const getBranchDisplayName = (branchStat) => {
     if (!branchStat) return 'Unknown Branch'
@@ -924,20 +1014,20 @@ export default function BranchDashboard() {
                       <stop offset="95%" stopColor="#DC2626" stopOpacity={0.7}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
                   <XAxis 
                     dataKey="name" 
-                    stroke="#9CA3AF"
+                    stroke="var(--text-muted)"
                     angle={-45}
                     textAnchor="end"
                     height={80}
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    tickLine={{ stroke: '#E5E7EB' }}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                    tickLine={{ stroke: 'var(--stroke)' }}
                   />
                   <YAxis 
-                    stroke="#9CA3AF"
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    tickLine={{ stroke: '#E5E7EB' }}
+                    stroke="var(--text-muted)"
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                    tickLine={{ stroke: 'var(--stroke)' }}
                     tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
                   />
                   <Tooltip 
@@ -947,15 +1037,9 @@ export default function BranchDashboard() {
                       name === 'receipts' ? 'Receipts' : 
                       name === 'users' ? 'Users' : 'Collection/Credit'
                     ]}
-                    contentStyle={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                      border: 'none',
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                      padding: '12px 16px'
-                    }}
-                    labelStyle={{ color: '#111827', fontWeight: 600, marginBottom: '4px' }}
-                    cursor={{ fill: 'rgba(239, 68, 68, 0.05)' }}
+                    contentStyle={chartTooltipStyle}
+                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                    cursor={{ fill: 'var(--card-hover)' }}
                   />
                   <Bar 
                     dataKey="investments" 
@@ -1020,28 +1104,22 @@ export default function BranchDashboard() {
                     </Pie>
                     <Tooltip 
                       formatter={(value) => [formatCurrency(value), 'Investment']}
-                      contentStyle={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                        padding: '12px 16px'
-                      }}
-                      labelStyle={{ color: '#111827', fontWeight: 600, marginBottom: '4px' }}
+                      contentStyle={chartTooltipStyle}
+                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex flex-col gap-2 max-w-xs w-full">
                   {getBranchDistributionData().slice(0, 6).map((entry, index) => (
-                    <div key={`legend-${index}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
+                    <div key={`legend-${index}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card-hover)] transition-colors">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div 
                           className="w-3 h-3 rounded-full flex-shrink-0" 
                           style={{ backgroundColor: COLORS[index % COLORS.length] }}
                         />
-                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{entry.name}</span>
+                        <span className="text-sm text-[var(--text-primary)] truncate">{entry.name}</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white ml-2">{entry.percentage}%</span>
+                      <span className="text-sm font-semibold text-[var(--text-primary)] ml-2">{entry.percentage}%</span>
                     </div>
                   ))}
                 </div>
@@ -1066,49 +1144,32 @@ export default function BranchDashboard() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)]">Revenue Trend</h3>
-                <p className="text-xs text-[var(--text-secondary)]">Investment trends over time</p>
+                <p
+                  className="text-xs text-[var(--text-secondary)]"
+                  title="Sum of receipt investment amounts (same fields as receipt cards) bucketed by calendar month, within the selected date range. Uses receipts loaded for analytics (paged up to 5,000)."
+                >
+                  Receipt amounts by month · {dateRange.from || '—'} → {dateRange.to || '—'}
+                </p>
               </div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={(() => {
-              // Group by month for trend analysis
-              const monthMap = new Map()
-              const branches = globalStats.branches || []
-              branches.forEach(branch => {
-                // Simulate monthly data (in real implementation, this would come from API)
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-                months.forEach((month, idx) => {
-                  const key = `${month}-2024`
-                  if (!monthMap.has(key)) {
-                    monthMap.set(key, { month, investments: 0 })
-                  }
-                  const entry = monthMap.get(key)
-                  entry.investments += (branch.total_investments || 0) / 6 // Distribute evenly for demo
-                })
-              })
-              return Array.from(monthMap.values())
-            })()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+            <LineChart data={revenueTrendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
               <XAxis 
                 dataKey="month" 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
               />
               <YAxis 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
               />
               <Tooltip 
-                formatter={(value) => [formatCurrency(value), 'Investments']}
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                  padding: '12px 16px'
-                }}
+                formatter={(value) => [formatCurrency(value), 'Receipt amount']}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
               />
               <Line 
                 type="monotone" 
@@ -1142,29 +1203,24 @@ export default function BranchDashboard() {
                 { category: 'Bonds', value: globalStats.total_investments * 0.1 }
               ]
             })()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
               <XAxis 
                 dataKey="category" 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 angle={-45}
                 textAnchor="end"
                 height={80}
               />
               <YAxis 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
               />
               <Tooltip 
                 formatter={(value) => [formatCurrency(value), 'Investment']}
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                  padding: '12px 16px'
-                }}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
               />
               <Bar dataKey="value" fill="#EF4444" radius={[8, 8, 0, 0]} />
             </BarChart>
@@ -1402,29 +1458,24 @@ export default function BranchDashboard() {
                                   investment: data.total_investments || 0,
                                   count: data.total_receipts || 0
                                 }))}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                                  <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
                                   <XAxis 
                                     dataKey="category" 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     angle={-45}
                                     textAnchor="end"
                                     height={80}
                                   />
                                   <YAxis 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
                                   />
                                   <Tooltip 
                                     formatter={(value) => [formatCurrency(value), 'Investment']}
-                                    contentStyle={{
-                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                      border: 'none',
-                                      borderRadius: '12px',
-                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                                      padding: '12px 16px'
-                                    }}
+                                    contentStyle={chartTooltipStyle}
+                                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
                                   />
                                   <Bar dataKey="investment" fill="#EF4444" radius={[8, 8, 0, 0]} />
                                 </BarChart>
@@ -1445,16 +1496,16 @@ export default function BranchDashboard() {
                                   investment: day.total_investments || 0,
                                   receipts: day.total_receipts || 0
                                 }))}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                                  <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
                                   <XAxis 
                                     dataKey="date" 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     tickFormatter={(value) => new Date(value).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                                   />
                                   <YAxis 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
                                   />
                                   <Tooltip 
@@ -1463,13 +1514,8 @@ export default function BranchDashboard() {
                                       name === 'investment' ? 'Investment' : 'Receipts'
                                     ]}
                                     labelFormatter={(label) => `Date: ${new Date(label).toLocaleDateString('en-IN')}`}
-                                    contentStyle={{
-                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                      border: 'none',
-                                      borderRadius: '12px',
-                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                                      padding: '12px 16px'
-                                    }}
+                                    contentStyle={chartTooltipStyle}
+                                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
                                   />
                                   <Line 
                                     type="monotone" 
@@ -1550,7 +1596,9 @@ export default function BranchDashboard() {
                                 </div>
                                 <button
                                   onClick={() => {
-                                    window.location.href = `/transactions?branch_code=${branch.branch_code}`
+                                    navigate(
+                                      `/transactions?branch=${encodeURIComponent(branch.branch_code)}`
+                                    )
                                   }}
                                   className="text-sm text-[var(--accent)] hover:underline"
                                 >

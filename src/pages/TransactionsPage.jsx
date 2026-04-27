@@ -138,6 +138,10 @@ export default function TransactionsPage() {
       const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3
       const d = new Date(today.getFullYear(), quarterStartMonth, 1)
       from = formatDateForInput(d)
+    } else if (value === 'halfyear') {
+      const d = new Date(today)
+      d.setMonth(d.getMonth() - 6)
+      from = formatDateForInput(d)
     } else if (value === 'year') {
       from = `${today.getFullYear()}-01-01`
     }
@@ -1466,6 +1470,7 @@ export default function TransactionsPage() {
               { value: 'week', label: 'This Week' },
               { value: 'month', label: 'This Month' },
               { value: 'quarter', label: 'This Quarter' },
+              { value: 'halfyear', label: 'Last 6 months' },
               { value: 'year', label: 'This Year' }
             ]}
             value={(() => {
@@ -1477,9 +1482,11 @@ export default function TransactionsPage() {
               const weekRange = getQuickRange('week')
               const monthRange = getQuickRange('month')
               const quarterRange = getQuickRange('quarter')
+              const halfYearRange = getQuickRange('halfyear')
               if (filters.from === weekRange.from && filters.to === weekRange.to) return 'week'
               if (filters.from === monthRange.from && filters.to === monthRange.to) return 'month'
               if (filters.from === quarterRange.from && filters.to === quarterRange.to) return 'quarter'
+              if (filters.from === halfYearRange.from && filters.to === halfYearRange.to) return 'halfyear'
               const yearStart = `${today.getFullYear()}-01-01`
               if (filters.from === yearStart && filters.to === todayStr) return 'year'
               return 'today'

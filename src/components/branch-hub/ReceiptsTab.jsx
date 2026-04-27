@@ -217,7 +217,15 @@ export default function ReceiptsTab({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <ChartCard title="Status" subtitle="Recent receipt breakdown" pngName="status.png">
+        <ChartCard
+          title="Status"
+          subtitle={
+            branchStats?.statistics?.total_receipts != null
+              ? `In range: ${formatNumber(branchStats.statistics.total_receipts)} receipts · chart from loaded rows`
+              : 'Receipt breakdown'
+          }
+          pngName="status.png"
+        >
           {statusDonut.length === 0 ? (
             <EmptyState message="No receipts" />
           ) : (
@@ -229,18 +237,22 @@ export default function ReceiptsTab({
                   ))}
                 </Pie>
                 <RTooltip contentStyle={tooltipStyle} formatter={(v, _n, p) => [formatNumber(v), p?.payload?.name]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
         <ChartCard
-          title="Ticket size"
-          subtitle="Receipts by amount bucket"
+          title="Receipt Amount Size"
+          subtitle={
+            branchStats?.statistics?.total_receipts != null
+              ? `Buckets from loaded receipts · total in range ${formatNumber(branchStats.statistics.total_receipts)}`
+              : 'Receipts by amount bucket'
+          }
           rows={ticketSize}
-          csvName="ticket-size.csv"
-          pngName="ticket-size.png"
+          csvName="receipt-amount-size.csv"
+          pngName="receipt-amount-size.png"
         >
           {ticketSize.every((b) => b.count === 0) ? (
             <EmptyState message="No receipts in range" />
@@ -363,7 +375,9 @@ function FunnelView({ items }) {
   return (
     <div className="space-y-2">
       {items.map((it, i) => {
-        const w = `${Math.max(8, (it.value / max) * 100)}%`
+        const value = Number(it.value || 0)
+        const pct = value > 0 ? (value / max) * 100 : 0
+        const w = `${pct}%`
         return (
           <div key={it.name} className="space-y-1">
             <div className="flex items-center justify-between text-[11px]">
@@ -372,14 +386,16 @@ function FunnelView({ items }) {
                 {i > 0 && items[i - 1].value > 0 && (
                   <span className="ml-1 text-[var(--text-muted)]">
                     <FiArrowRight className="inline w-3 h-3 mx-1" />
-                    {Math.round((it.value / items[i - 1].value) * 100)}%
+                    {Math.round((value / items[i - 1].value) * 100)}%
                   </span>
                 )}
               </span>
-              <span className="font-semibold tabular-nums text-[var(--text-primary)]">{it.value}</span>
+              <span className="font-semibold tabular-nums text-[var(--text-primary)]">{value}</span>
             </div>
             <div className="h-6 rounded-md bg-[var(--card-hover)] overflow-hidden">
-              <div className="h-full rounded-md" style={{ width: w, backgroundColor: it.color }} />
+              {value > 0 ? (
+                <div className="h-full rounded-md" style={{ width: w, backgroundColor: it.color }} />
+              ) : null}
             </div>
           </div>
         )

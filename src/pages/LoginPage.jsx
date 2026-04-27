@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo'
 import DarkModeToggle from '../components/DarkModeToggle'
 import { Card, Button, Input } from '../components/ui'
-import { FiUser, FiLock, FiLogIn, FiAlertCircle, FiShield } from 'react-icons/fi'
+import { FiUser, FiLock, FiLogIn, FiAlertCircle, FiShield, FiEye, FiEyeOff } from 'react-icons/fi'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [pass, setPass] = useState('')
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
 
   const submit = async (e) => {
@@ -50,15 +51,30 @@ export default function LoginPage() {
               placeholder="e.g., ADMIN or ECS497"
               required
             />
-            <div>
-              <Input
-                label="Password"
-                type="password"
-                value={pass}
-                onChange={(e) => setPass(e.target.value)}
-                placeholder="Enter your password"
-                required
-              />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="password" className="text-label text-[var(--text-secondary)]">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={pass}
+                  onChange={(e) => setPass(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="w-full rounded-input border bg-[var(--card-bg-opaque)] px-4 py-2.5 pr-11 text-body text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--placeholder)] border-[var(--stroke)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <FiEyeOff className="h-4 w-4" /> : <FiEye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             {err && (
               <div className="rounded-card border border-[var(--error)]/30 bg-[var(--error-muted)] px-4 py-3 flex items-center text-[var(--error)]">

@@ -1,5 +1,6 @@
 import React from 'react'
 import { FiAlertCircle } from 'react-icons/fi'
+import { useEscapeClose } from '../../hooks/useEscapeClose'
 
 export default function EditTargetModal({
   employee,
@@ -10,6 +11,7 @@ export default function EditTargetModal({
   saving,
   error,
 }) {
+  useEscapeClose(!!employee && !saving, onClose)
   if (!employee) return null
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -52,12 +54,13 @@ export default function EditTargetModal({
           className="w-full px-3 py-2 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm"
         />
 
-        <div className="flex gap-2 mt-4">
+        <div className="flex gap-2 mt-4 pt-3 border-t border-[var(--stroke)]">
           <button
             type="button"
             onClick={onSave}
             disabled={saving}
-            className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 text-sm"
+            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 disabled:opacity-50 text-sm"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
