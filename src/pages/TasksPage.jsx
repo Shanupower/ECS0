@@ -336,7 +336,7 @@ function TasksPageInner() {
           </button>
           <button
             onClick={() => handleQuickAdd()}
-            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            style={{ backgroundColor: 'var(--accent)', color: 'var(--text-primary)' }}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm shrink-0 hover:brightness-110"
           >
             <FiPlus className="w-3.5 h-3.5" /> New task

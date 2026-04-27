@@ -59,7 +59,7 @@ export default function EditTargetModal({
             type="button"
             onClick={onSave}
             disabled={saving}
-            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            style={{ backgroundColor: 'var(--accent)', color: 'var(--text-primary)' }}
             className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 disabled:opacity-50 text-sm"
           >
             {saving ? 'Saving…' : 'Save'}

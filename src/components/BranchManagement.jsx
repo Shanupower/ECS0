@@ -392,7 +392,7 @@ export default function BranchManagement() {
                 setEditingBranch(null)
                 setShowCreateForm(true)
               }}
-              style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+              style={{ backgroundColor: 'var(--accent)', color: 'var(--text-primary)' }}
               className="flex items-center px-4 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 focus:ring-2 focus:ring-[var(--ring)] focus:outline-none transition-colors duration-200"
             >
               <FiPlus className="w-4 h-4 mr-2" />
@@ -936,7 +936,7 @@ function CreateBranchForm({ onSubmit, onCancel }) {
           </button>
           <button
             type="submit"
-            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            style={{ backgroundColor: 'var(--accent)', color: 'var(--text-primary)' }}
             className="px-4 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 focus:ring-2 focus:ring-[var(--ring)] focus:outline-none transition-colors duration-200"
           >
             Create Branch
@@ -1071,7 +1071,7 @@ function EditBranchForm({ branch, onSubmit, onCancel }) {
           </button>
           <button
             type="submit"
-            style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+            style={{ backgroundColor: 'var(--accent)', color: 'var(--text-primary)' }}
             className="px-4 py-2 rounded-lg font-medium shadow-sm hover:brightness-110 focus:ring-2 focus:ring-[var(--ring)] focus:outline-none transition-colors duration-200"
           >
             Update Branch

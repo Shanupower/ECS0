@@ -104,7 +104,7 @@ export default function WorkspaceHeader({
             <button
               type="button"
               onClick={primaryAction.onClick}
-              style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+              style={{ backgroundColor: 'var(--accent)', color: 'var(--text-primary)' }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas)] shadow-sm transition"
             >
               {Icon ? <Icon className="w-4 h-4" aria-hidden /> : null}
