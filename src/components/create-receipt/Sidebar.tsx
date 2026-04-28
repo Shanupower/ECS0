@@ -56,7 +56,9 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlag
     ...(isAdmin ? [
       { to: '/branches', label: 'Branches', icon: Building2 },
       { to: '/users', label: 'User Management', icon: UserCog },
-      ...(approvalFlagOn ? [{ to: '/teams', label: 'Approval Teams', icon: UsersRound }] : []),
+      // Always allow admins to manage teams so they can configure intake teams
+      // before enabling the approval workflow flag.
+      { to: '/teams', label: 'Approval Teams', icon: UsersRound },
       { to: '/schemes', label: 'Scheme Management', icon: Database },
     ] : []),
     ...(isManager ? [{ to: '/branches', label: 'Branches', icon: Building2 }] : []),
