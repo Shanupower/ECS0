@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { FiSettings, FiSave, FiRefreshCw, FiAlertCircle, FiCheck, FiPlus, FiX } from 'react-icons/fi'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { FiSettings, FiSave, FiRefreshCw, FiAlertCircle, FiCheck, FiPlus, FiX, FiLoader, FiAlertTriangle } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 import { useAppConfig, useAppConfigActions, APP_CONFIG_DEFAULTS } from '../context/AppConfigContext'
 import { api } from '../api'
@@ -18,16 +18,21 @@ function validStages(list) {
 }
 
 export default function SystemSettingsPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const cfg = useAppConfig()
   const { update, reload, loading } = useAppConfigActions()
 
   const canEdit = canAccessSystemSettings(user)
+  const isAdmin = user?.role === 'admin'
 
   const [draft, setDraft] = useState(cfg)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  // Receipt-migration modal state. `migration.patch` is the intake-config
+  // patch to send to the backend; while it's set the modal is open and Save
+  // is disabled until the migration completes / is dismissed.
+  const [migration, setMigration] = useState(null) // { patch } | null
 
   // Mirror live config into draft when loaded.
   useEffect(() => { setDraft(cfg) }, [cfg])
@@ -78,11 +83,30 @@ export default function SystemSettingsPage() {
       setError('Lead stages must include "Won" and "Lost" and have at least 2 entries.')
       return
     }
+    // Snapshot intake config from the *previous* live cfg before the update,
+    // so we can decide whether to offer a receipt-migration after save succeeds.
+    const prevIntake = {
+      receipt_intake_team_id: cfg.receipt_intake_team_id || null,
+      receipt_intake_teams_by_category: normalizeIntakeMap(cfg.receipt_intake_teams_by_category)
+    }
     setSaving(true)
     try {
       await update(draft)
       setSuccess('Settings saved. Changes take effect for all users.')
       setTimeout(() => setSuccess(''), 4000)
+
+      const nextIntake = {
+        receipt_intake_team_id: draft.receipt_intake_team_id || null,
+        receipt_intake_teams_by_category: normalizeIntakeMap(draft.receipt_intake_teams_by_category)
+      }
+      if (isAdmin && hasIntakeChanged(prevIntake, nextIntake)) {
+        setMigration({
+          patch: {
+            receipt_intake_team_id: nextIntake.receipt_intake_team_id,
+            receipt_intake_teams_by_category: nextIntake.receipt_intake_teams_by_category
+          }
+        })
+      }
     } catch (err) {
       setError(err.message || 'Failed to save settings')
     } finally {
@@ -110,9 +134,9 @@ export default function SystemSettingsPage() {
           <button onClick={resetDefaults} className="px-3 py-2 text-sm text-[var(--text-secondary)] border border-[var(--stroke)] rounded-lg hover:bg-[var(--card-hover)]">
             Reset to defaults
           </button>
-          <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+          <button onClick={save} disabled={saving || !!migration} className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
             <FiSave className="w-4 h-4" />
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? 'Saving…' : migration ? 'Migration in progress…' : 'Save changes'}
           </button>
         </div>
       </div>
@@ -247,8 +271,42 @@ export default function SystemSettingsPage() {
       <Section title="Receipt approvals (v2)">
         <ReceiptApprovalSection draft={draft} setDraft={setDraft} />
       </Section>
+
+      {migration && (
+        <ReceiptMigrationModal
+          token={token}
+          patch={migration.patch}
+          onClose={() => { setMigration(null); reload() }}
+        />
+      )}
     </div>
   )
+}
+
+// Compare two normalized intake-config snapshots and return true if anything
+// the migration cares about (default team or per-category map) actually changed.
+function hasIntakeChanged(a, b) {
+  if (!a || !b) return false
+  if ((a.receipt_intake_team_id || null) !== (b.receipt_intake_team_id || null)) return true
+  const am = a.receipt_intake_teams_by_category || {}
+  const bm = b.receipt_intake_teams_by_category || {}
+  const keys = new Set([...Object.keys(am), ...Object.keys(bm)])
+  for (const k of keys) {
+    if ((am[k] || null) !== (bm[k] || null)) return true
+  }
+  return false
+}
+
+// Strip blank/null values and uppercase keys so equality checks ignore noise
+// like trimmed whitespace or a category being toggled to "" then "" again.
+function normalizeIntakeMap(raw) {
+  if (!raw || typeof raw !== 'object') return {}
+  const out = {}
+  for (const [k, v] of Object.entries(raw)) {
+    const id = v == null ? '' : String(v).trim()
+    if (id) out[String(k).trim().toUpperCase()] = id
+  }
+  return out
 }
 
 const INTAKE_PRODUCT_ROWS = [
@@ -741,6 +799,306 @@ function AiRuleDraft({ onCreate }) {
             <button onClick={() => setDraft(null)} className="text-xs px-2 py-1 rounded border border-[var(--stroke)]">Discard</button>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Receipt-migration modal
+//
+// Lifecycle:
+//   phase = 'preview'  -> fetches preview, shows summary, "Migrate now" / "Cancel"
+//   phase = 'running'  -> POSTs run, polls /run/:jobId every 2s, shows progress
+//   phase = 'done'     -> shows final summary, "OK" closes the modal
+//   phase = 'error'    -> shows error + "Close" / "Retry" (preview re-fetch)
+//
+// Closing while running is allowed (the backend job keeps running) — we just
+// stop polling and reset state. Re-opening is not auto-attempted because
+// app-config has already been saved at this point.
+// ---------------------------------------------------------------------------
+function ReceiptMigrationModal({ token, patch, onClose }) {
+  const [phase, setPhase] = useState('preview') // 'preview' | 'running' | 'done' | 'error'
+  const [preview, setPreview] = useState(null)
+  const [error, setError] = useState('')
+  const [job, setJob] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [showErrors, setShowErrors] = useState(false)
+  const pollRef = useRef(null)
+
+  // Initial preview fetch.
+  useEffect(() => {
+    let cancelled = false
+    setPhase('preview')
+    setError('')
+    setBusy(true)
+    api.previewReceiptMigration(token, patch)
+      .then((p) => { if (!cancelled) setPreview(p) })
+      .catch((err) => {
+        if (cancelled) return
+        setError(err?.message || 'Failed to load preview')
+        setPhase('error')
+      })
+      .finally(() => { if (!cancelled) setBusy(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Stop polling on unmount.
+  useEffect(() => {
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+  }, [])
+
+  const startPolling = (jobId) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const j = await api.getReceiptMigrationJob(token, jobId)
+        setJob(j)
+        if (j?.status && j.status !== 'running') {
+          clearInterval(pollRef.current)
+          pollRef.current = null
+          setPhase('done')
+        }
+      } catch (err) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+        setError(err?.message || 'Lost connection to migration job')
+        setPhase('error')
+      }
+    }, 2000)
+  }
+
+  const runMigration = async () => {
+    setBusy(true); setError('')
+    try {
+      const { job_id } = await api.startReceiptMigration(token, patch)
+      const initial = await api.getReceiptMigrationJob(token, job_id).catch(() => null)
+      setJob(initial)
+      setPhase('running')
+      startPolling(job_id)
+    } catch (err) {
+      const detail = err?.detail || err?.message || 'Failed to start migration'
+      setError(typeof detail === 'string' ? detail : JSON.stringify(detail))
+      setPhase('error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const total = job?.total ?? preview?.will_move ?? 0
+  const processed = job?.processed ?? 0
+  const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--stroke)] shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--stroke)]">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            {phase === 'running' && <FiLoader className="w-4 h-4 animate-spin text-red-500" />}
+            {phase === 'done' && <FiCheck className="w-4 h-4 text-emerald-500" />}
+            {phase === 'error' && <FiAlertTriangle className="w-4 h-4 text-amber-500" />}
+            {phase === 'preview' && 'Move existing receipts to new intake teams?'}
+            {phase === 'running' && 'Re-routing receipts…'}
+            {phase === 'done' && (job?.status === 'failed' ? 'Migration finished with errors' : 'Migration complete')}
+            {phase === 'error' && 'Migration error'}
+          </h3>
+          <button
+            onClick={onClose}
+            disabled={phase === 'running' && busy}
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50"
+            aria-label="Close"
+          >
+            <FiX className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto flex-1 space-y-3">
+          {phase === 'preview' && (
+            busy
+              ? <div className="text-sm text-[var(--text-muted)]">Calculating impact…</div>
+              : preview ? <PreviewSummary preview={preview} /> : null
+          )}
+
+          {(phase === 'running' || phase === 'done') && job && (
+            <>
+              <div>
+                <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] mb-1">
+                  <span>{processed} / {total} receipts</span>
+                  <span>{pct}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-[var(--card-hover)] overflow-hidden">
+                  <div
+                    className={`h-full ${job.status === 'failed' ? 'bg-amber-500' : 'bg-red-500'} transition-all`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2 text-[11px] text-[var(--text-secondary)]">
+                  <div>Moved: <b className="text-[var(--text-primary)]">{job.moved ?? 0}</b></div>
+                  <div>Skipped: <b className="text-[var(--text-primary)]">{job.skipped ?? 0}</b></div>
+                  <div>Errors: <b className={job.error_count ? 'text-red-500' : 'text-[var(--text-primary)]'}>{job.error_count ?? 0}</b></div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[var(--stroke)] divide-y divide-[var(--stroke)]">
+                {Object.values(job.by_team || {}).length === 0 && (
+                  <div className="px-3 py-2 text-xs text-[var(--text-muted)]">No team-level rerouting required.</div>
+                )}
+                {Object.values(job.by_team || {}).map((row) => {
+                  const tPct = row.target > 0 ? Math.round((row.moved / row.target) * 100) : 100
+                  return (
+                    <div key={row.team_id} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0">
+                        <div className="text-[var(--text-primary)] truncate">{row.team_name}</div>
+                        <div className="text-[var(--text-muted)]">
+                          {row.moved}/{row.target} moved
+                          {row.errors > 0 && <span className="text-red-500"> · {row.errors} errors</span>}
+                        </div>
+                      </div>
+                      <div className="w-20 h-1.5 rounded-full bg-[var(--card-hover)] overflow-hidden flex-shrink-0">
+                        <div className="h-full bg-red-500 transition-all" style={{ width: `${tPct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {(job.errors?.length || 0) > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowErrors((v) => !v)}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    {showErrors ? 'Hide' : 'Show'} {job.errors.length} failure{job.errors.length === 1 ? '' : 's'}
+                  </button>
+                  {showErrors && (
+                    <ul className="mt-1 text-[11px] bg-[var(--card-hover)] rounded p-2 space-y-1 max-h-40 overflow-y-auto">
+                      {job.errors.slice(0, 10).map((e, i) => (
+                        <li key={`${e._key || i}-${i}`} className="text-[var(--text-secondary)]">
+                          <code className="text-[var(--text-primary)]">{e._key || '—'}</code>
+                          <span className="text-[var(--text-muted)]"> · {e.code}</span>
+                          {e.detail && <span className="text-[var(--text-muted)]"> — {e.detail}</span>}
+                        </li>
+                      ))}
+                      {job.errors.length > 10 && (
+                        <li className="text-[var(--text-muted)] italic">+ {job.errors.length - 10} more (truncated)</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {phase === 'error' && (
+            <div className="text-sm text-red-600 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              {error || 'Something went wrong.'}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t border-[var(--stroke)] flex items-center justify-end gap-2">
+          {phase === 'preview' && (
+            <>
+              <button
+                onClick={onClose}
+                className="text-sm px-3 py-2 rounded-lg border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runMigration}
+                disabled={busy || !preview || preview.will_move === 0}
+                className="text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {preview && preview.will_move === 0 ? 'Nothing to migrate' : `Migrate ${preview?.will_move || 0} receipt${preview?.will_move === 1 ? '' : 's'}`}
+              </button>
+            </>
+          )}
+          {phase === 'running' && (
+            <button
+              onClick={onClose}
+              className="text-sm px-3 py-2 rounded-lg border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
+            >
+              Run in background
+            </button>
+          )}
+          {phase === 'done' && (
+            <button
+              onClick={onClose}
+              className="text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+            >
+              OK
+            </button>
+          )}
+          {phase === 'error' && (
+            <button
+              onClick={onClose}
+              className="text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+            >
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PreviewSummary({ preview }) {
+  const willMove = preview.will_move || 0
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div className="rounded-lg bg-[var(--card-hover)] p-2">
+          <div className="text-[var(--text-muted)]">Will move</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{willMove}</div>
+        </div>
+        <div className="rounded-lg bg-[var(--card-hover)] p-2">
+          <div className="text-[var(--text-muted)]">Already correct</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{preview.already_correct || 0}</div>
+        </div>
+        <div className="rounded-lg bg-[var(--card-hover)] p-2">
+          <div className="text-[var(--text-muted)]">Total in flight</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{preview.total || 0}</div>
+        </div>
+      </div>
+
+      {willMove > 0 && (
+        <div className="rounded-lg border border-[var(--stroke)] divide-y divide-[var(--stroke)]">
+          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--text-muted)] bg-[var(--card-hover)]/40">
+            Receipts will be re-routed to:
+          </div>
+          {(preview.by_team || []).map((row) => (
+            <div key={row.team_id} className="px-3 py-2 flex items-center justify-between text-xs">
+              <span className="text-[var(--text-primary)]">
+                {row.team_name}
+                {row.missing && <span className="ml-1 text-red-500">(missing)</span>}
+                {!row.missing && row.is_active === false && <span className="ml-1 text-amber-500">(inactive)</span>}
+              </span>
+              <span className="text-[var(--text-secondary)]">{row.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(preview.unresolved || []).length > 0 && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-[var(--text-primary)]">
+          <div className="font-medium mb-1 flex items-center gap-1.5">
+            <FiAlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            Some receipts have no resolvable team
+          </div>
+          <ul className="text-[var(--text-secondary)] space-y-0.5">
+            {preview.unresolved.map((u) => (
+              <li key={u.category}><code>{u.category}</code> · {u.count}</li>
+            ))}
+          </ul>
+          <div className="text-[var(--text-muted)] mt-1">These will be skipped during migration. Map them to a team or set a default intake team to include them.</div>
+        </div>
+      )}
+
+      {willMove === 0 && (
+        <div className="text-xs text-[var(--text-muted)]">Nothing needs to move under the new configuration.</div>
       )}
     </div>
   )

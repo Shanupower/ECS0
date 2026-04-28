@@ -544,6 +544,14 @@ export const api={
     method:'PATCH', token:t, json:payload, headers:{ 'x-admin-reason': reason }
   }),
 
+  // Receipt-migration job (admin-only). Used by System Settings when an admin
+  // changes intake-team configuration to forcibly route existing in-flight
+  // receipts to the new intake teams.
+  // patch: { receipt_intake_team_id?, receipt_intake_teams_by_category? }
+  previewReceiptMigration:(t,patch)=>req('/api/receipt-approvals/migration/preview',{method:'POST',token:t,json:patch||{}}),
+  startReceiptMigration:(t,patch)=>req('/api/receipt-approvals/migration/run',{method:'POST',token:t,json:patch||{}}),
+  getReceiptMigrationJob:(t,jobId)=>req(`/api/receipt-approvals/migration/run/${jobId}`,{token:t}),
+
   // Convenience helper used by approval modals: uploads `files` as approval
   // evidence tagged with the current cycle/team/stage and returns the array
   // of new file IDs that can be passed to the action endpoints.
