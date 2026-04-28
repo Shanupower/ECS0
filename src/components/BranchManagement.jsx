@@ -20,7 +20,14 @@ import { useBranchWorkspace } from '../pages/branch-workspace/BranchWorkspaceCon
 import ChartCard, { EmptyState } from './branch-hub/ChartCard'
 import KpiStat from './branch-hub/KpiStat'
 import BranchRowList from './branch-hub/BranchRowList'
-import { PALETTE, formatCompactINR, formatNumber, tooltipStyle } from './branch-hub/utils'
+import {
+  PALETTE,
+  formatCompactINR,
+  formatNumber,
+  tooltipStyle,
+  tooltipLabelStyle,
+  tooltipItemStyle,
+} from './branch-hub/utils'
 import DatePickerInput from './ui/DatePickerInput.jsx'
 import { useEscapeClose } from '../hooks/useEscapeClose'
 import {
@@ -514,7 +521,12 @@ export default function BranchManagement() {
                   <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} interval={0} angle={-18} textAnchor="end" height={56} />
                   <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                  <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                  <RTooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
+                    formatter={(v) => formatCompactINR(v)}
+                  />
                   <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                   <Bar dataKey="investments" name="Investments" fill={PALETTE[0]} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="cc" name="Collection credit" fill={PALETTE[1]} radius={[4, 4, 0, 0]} />
@@ -534,7 +546,7 @@ export default function BranchManagement() {
                       <Cell key={`st-${i}`} fill={d.fill} />
                     ))}
                   </Pie>
-                  <RTooltip contentStyle={tooltipStyle} />
+                  <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                   <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -550,7 +562,7 @@ export default function BranchManagement() {
                   <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 11 }} allowDecimals={false} />
                   <YAxis type="category" dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 11 }} width={100} />
-                  <RTooltip contentStyle={tooltipStyle} />
+                  <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                   <Bar dataKey="value" name="Branches" radius={[0, 6, 6, 0]}>
                     {orgPulse.typePie.map((d, i) => (
                       <Cell key={d.name} fill={d.fill || PALETTE[i % PALETTE.length]} />

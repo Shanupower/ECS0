@@ -18,15 +18,17 @@ import {
   ChevronRight,
   ShieldCheck,
   UsersRound,
+  Settings,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAppConfig } from '../../context/AppConfigContext'
+import { canAccessSystemSettings } from '../../constants/system-settings-access.js'
 
 const SIDEBAR_WIDTH = 240
 const SIDEBAR_COLLAPSED_WIDTH = 64
 
 /** Build nav groups based on role. admin sees all; manager sees limited management; employee sees no management. */
-function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlagOn) {
+function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlagOn, showSystemSettingsNav: boolean) {
   const isAdmin = role === 'admin'
   const isManager = role === 'manager'
   const isEmployee = role === 'employee'
@@ -58,6 +60,9 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlag
       { to: '/schemes', label: 'Scheme Management', icon: Database },
     ] : []),
     ...(isManager ? [{ to: '/branches', label: 'Branches', icon: Building2 }] : []),
+    ...(showSystemSettingsNav && (isAdmin || isManager)
+      ? [{ to: '/settings', label: 'System Settings', icon: Settings }]
+      : []),
   ]
 
   const support = [
@@ -76,6 +81,7 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlag
 
 export function Sidebar({
   userRole,
+  empCode,
   pendingIssuesCount = 0,
   tasksReminderCount = 0,
   mobileOpen = false,
@@ -86,7 +92,14 @@ export function Sidebar({
   const location = useLocation()
   const cfg = useAppConfig()
   const approvalFlagOn = !!cfg?.feature_flags?.receipts_approval_v2
-  const navGroups = getNavGroups(userRole, pendingIssuesCount, tasksReminderCount, approvalFlagOn)
+  const showSystemSettingsNav = canAccessSystemSettings({ role: userRole, emp_code: empCode })
+  const navGroups = getNavGroups(
+    userRole,
+    pendingIssuesCount,
+    tasksReminderCount,
+    approvalFlagOn,
+    showSystemSettingsNav
+  )
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH
 
   return (

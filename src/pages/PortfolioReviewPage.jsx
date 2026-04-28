@@ -32,6 +32,23 @@ function ownerLabel(customer) {
   return customer.last_reviewed_by_name || customer.last_reviewed_by_emp_code || customer.last_reviewed_by_id || '—'
 }
 
+function makeReviewerLabel(userByKey) {
+  const resolve = (raw) => {
+    if (raw == null || raw === '') return null
+    const k = String(raw).trim().toLowerCase()
+    const u = userByKey?.get(k)
+    return u?.name || u?.email || null
+  }
+  return (customer) => {
+    if (customer.last_reviewed_by_name) return customer.last_reviewed_by_name
+    const fromId = resolve(customer.last_reviewed_by_id)
+    if (fromId) return fromId
+    const fromEmp = resolve(customer.last_reviewed_by_emp_code)
+    if (fromEmp) return fromEmp
+    return customer.last_reviewed_by_emp_code || customer.last_reviewed_by_id || '—'
+  }
+}
+
 function rawBranchRef(customer) {
   if (Array.isArray(customer.branches) && customer.branches.length) return customer.branches[0]
   if (Array.isArray(customer.relationship_manager) && customer.relationship_manager.length) return customer.relationship_manager[0]
@@ -92,7 +109,7 @@ export default function PortfolioReviewPage() {
     for (const b of branchRows) {
       const name = b.branch_name || b.name || b.branch_code || b.code
       if (!name) continue
-      const candidates = [b.branch_code, b.code, b._key, b.key, b.branch, b.branch_name, b.name]
+      const candidates = [b.id, b.branch_code, b.code, b._key, b.key, b.branch, b.branch_name, b.name]
       for (const c of candidates) {
         if (c == null || c === '') continue
         map.set(String(c).trim().toLowerCase(), name)
@@ -113,6 +130,7 @@ export default function PortfolioReviewPage() {
     return m
   }, [assignableUsers])
   const rmLabel = useMemo(() => makeRmLabel(rmUserLookup), [rmUserLookup])
+  const reviewerLabel = useMemo(() => makeReviewerLabel(rmUserLookup), [rmUserLookup])
 
   const [sortKey, setSortKey] = useState('next_review_due')
   const [sortDir, setSortDir] = useState('asc')
@@ -172,7 +190,7 @@ export default function PortfolioReviewPage() {
         list
           .filter((b) => b.is_active !== false)
           .map((b) => ({
-            value: b.branch_code || b._key || b.branch_name,
+            value: b.id || b._key || b.branch_code || b.branch_name,
             label: b.branch_name || b.branch_code,
           }))
       )
@@ -198,7 +216,10 @@ export default function PortfolioReviewPage() {
         }
         case 'review_tier': return item.review_tier || ''
         case 'last_reviewed_at': return item.last_reviewed_at || ''
-        case 'reviewer': return (item.last_reviewed_by_name || item.last_reviewed_by_emp_code || '').toLowerCase()
+        case 'reviewer': {
+          const v = reviewerLabel(item)
+          return (v === '—' ? '' : v).toLowerCase()
+        }
         case 'next_review_due': return item.next_review_due || ''
         case 'days_overdue': {
           if (!item.next_review_due) return -1
@@ -223,6 +244,7 @@ export default function PortfolioReviewPage() {
   const selectedList = useMemo(() => sortedItems.filter((i) => selectedIds.has(i.investor_id)), [sortedItems, selectedIds])
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showBranchColumn = isAdmin && !branchFilter
+  const tableColCount = 1 /* checkbox */ + 1 /* customer */ + (showBranchColumn ? 1 : 0) + 1 /* tier */ + 1 /* last reviewed */ + 1 /* reviewer */ + 1 /* next due */ + 1 /* days over */ + 1 /* actions */
 
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -417,7 +439,6 @@ export default function PortfolioReviewPage() {
                 </th>
                 <SortableHeader label="Customer" onClick={() => toggleSort('name')} indicator={sortIndicator('name')} />
                 {showBranchColumn && <SortableHeader label="Branch" onClick={() => toggleSort('branch')} indicator={sortIndicator('branch')} />}
-                <SortableHeader label="RM" onClick={() => toggleSort('rm')} indicator={sortIndicator('rm')} />
                 <SortableHeader label="Tier" onClick={() => toggleSort('review_tier')} indicator={sortIndicator('review_tier')} />
                 <SortableHeader label="Last reviewed" onClick={() => toggleSort('last_reviewed_at')} indicator={sortIndicator('last_reviewed_at')} />
                 <SortableHeader label="Reviewer" onClick={() => toggleSort('reviewer')} indicator={sortIndicator('reviewer')} />
@@ -428,9 +449,9 @@ export default function PortfolioReviewPage() {
             </thead>
             <tbody>
               {loading && sortedItems.length === 0 ? (
-                <tr><td colSpan={10} className="px-3 py-16 text-center text-[var(--text-muted)]">Loading…</td></tr>
+                <tr><td colSpan={tableColCount} className="px-3 py-16 text-center text-[var(--text-muted)]">Loading…</td></tr>
               ) : sortedItems.length === 0 ? (
-                <tr><td colSpan={10} className="px-3 py-16 text-center text-[var(--text-muted)]">
+                <tr><td colSpan={tableColCount} className="px-3 py-16 text-center text-[var(--text-muted)]">
                   {searchQuery || branchFilter ? 'No customers match your filters.' : 'No customers in this bucket.'}
                 </td></tr>
               ) : sortedItems.map((c) => {
@@ -469,6 +490,9 @@ export default function PortfolioReviewPage() {
                         <FiExternalLink className="w-3 h-3 opacity-60" />
                       </button>
                       <div className="text-[11px] text-[var(--text-muted)]">{c.mobile || c.email || `#${c.investor_id}`}</div>
+                      <div className="text-[11px] text-[var(--text-muted)]">
+                        PAN: <span className="font-medium text-[var(--text-secondary)]">{(c.pan || c.PAN || '—')}</span>
+                      </div>
                     </td>
                     {showBranchColumn && (
                       <td className="px-3 py-3">
@@ -477,7 +501,6 @@ export default function PortfolioReviewPage() {
                         </span>
                       </td>
                     )}
-                    <td className="px-3 py-3 text-[var(--text-secondary)]">{rmLabel(c)}</td>
                     <td className="px-3 py-3">
                       {c.review_tier ? (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--card-hover)] text-[var(--text-primary)]">
@@ -486,7 +509,7 @@ export default function PortfolioReviewPage() {
                       ) : <span className="text-[var(--text-muted)]">—</span>}
                     </td>
                     <td className="px-3 py-3 text-[var(--text-secondary)]">{c.last_reviewed_at || '—'}</td>
-                    <td className="px-3 py-3 text-[var(--text-secondary)]">{ownerLabel(c)}</td>
+                    <td className="px-3 py-3 text-[var(--text-secondary)]">{reviewerLabel(c)}</td>
                     <td className="px-3 py-3">
                       <span className={c.next_review_due && c.next_review_due < todayIso() ? 'text-red-600 dark:text-red-400 font-medium' : 'text-[var(--text-secondary)]'}>
                         {c.next_review_due || '—'}

@@ -99,7 +99,7 @@ export default function CreateReceiptPage() {
 
   return (
     <div className="flex h-screen bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]">
-      <Sidebar />
+      <Sidebar userRole={user?.role} empCode={user?.emp_code} />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopHeader

@@ -22,6 +22,8 @@ import {
   formatCompactINR,
   formatNumber,
   tooltipStyle,
+  tooltipLabelStyle,
+  tooltipItemStyle,
   receiptAmount,
   receiptCategory,
   receiptEmpCode,
@@ -39,6 +41,7 @@ export default function ReceiptsTab({
   branchStats,
 }) {
   const [overtimeMode, setOvertimeMode] = useState('amount') // 'amount' | 'count'
+  const [heatmapMode, setHeatmapMode] = useState('employee') // 'employee' | 'branch'
 
   const pipeline = useMemo(() => {
     const leadsArr = Array.isArray(leads) ? leads : []
@@ -113,25 +116,57 @@ export default function ReceiptsTab({
   }, [recentReceipts])
 
   const heatmap = useMemo(() => {
-    const byEmp = new Map()
+    const rowsByKey = new Map()
     const cats = new Set()
+
+    const empCodeToName = new Map()
     ;(recentReceipts || []).forEach((r) => {
-      const emp = receiptEmpCode(r) || '—'
+      const code = receiptEmpCode(r)
+      const name =
+        r?.employee_name ||
+        r?.employee?.name ||
+        r?.employee?.employee_name ||
+        r?.employee?.full_name ||
+        r?.employeeName ||
+        ''
+      if (code && name) empCodeToName.set(String(code), String(name))
+    })
+
+    const branchLabelForReceipt = (r) => {
+      return (
+        r?.branch_name ||
+        r?.branch_code ||
+        r?.branch ||
+        r?.employee?.branch_name ||
+        r?.employee?.branch_code ||
+        r?.employee?.branch ||
+        '—'
+      )
+    }
+
+    ;(recentReceipts || []).forEach((r) => {
       const cat = receiptCategory(r) || 'Other'
       cats.add(cat)
-      if (!byEmp.has(emp)) byEmp.set(emp, { emp, total: 0 })
-      const row = byEmp.get(emp)
+
+      const empCode = receiptEmpCode(r)
+      const empName = empCode ? empCodeToName.get(String(empCode)) : null
+
+      const key = heatmapMode === 'branch' ? String(branchLabelForReceipt(r) || '—') : String(empName || empCode || '—')
+      if (!rowsByKey.has(key)) rowsByKey.set(key, { key, label: key, total: 0 })
+      const row = rowsByKey.get(key)
+
       const amt = receiptAmount(r)
       row[cat] = (row[cat] || 0) + amt
       row.total += amt
     })
+
     const catList = Array.from(cats)
-    const rows = Array.from(byEmp.values())
+    const rows = Array.from(rowsByKey.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 10)
     const maxVal = Math.max(1, ...rows.flatMap((r) => catList.map((c) => r[c] || 0)))
     return { rows, catList, maxVal }
-  }, [recentReceipts])
+  }, [recentReceipts, heatmapMode])
 
   if (loading) {
     return (
@@ -199,6 +234,8 @@ export default function ReceiptsTab({
                 />
                 <RTooltip
                   contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
                   formatter={(v) =>
                     overtimeMode === 'amount' ? formatCompactINR(v) : formatNumber(v)
                   }
@@ -236,7 +273,12 @@ export default function ReceiptsTab({
                     <Cell key={`st-${i}`} fill={d.color} />
                   ))}
                 </Pie>
-                <RTooltip contentStyle={tooltipStyle} formatter={(v, _n, p) => [formatNumber(v), p?.payload?.name]} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v, _n, p) => [formatNumber(v), p?.payload?.name]}
+                />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
@@ -262,7 +304,7 @@ export default function ReceiptsTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <RTooltip contentStyle={tooltipStyle} />
+                <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                 <Bar dataKey="count" fill={PALETTE[1]} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -316,26 +358,47 @@ export default function ReceiptsTab({
             <EmptyState message="Not enough data" />
           ) : (
             <div className="overflow-x-auto">
+              <div className="mb-2 flex items-center justify-end">
+                <div className="inline-flex rounded-lg border border-[var(--stroke)] overflow-hidden text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setHeatmapMode('employee')}
+                    className={`px-2 py-1 ${heatmapMode === 'employee' ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                  >
+                    Employee
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHeatmapMode('branch')}
+                    className={`px-2 py-1 ${heatmapMode === 'branch' ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                  >
+                    Branch
+                  </button>
+                </div>
+              </div>
               <table className="w-full text-[11px]">
                 <thead>
                   <tr>
-                    <th className="px-2 py-1 text-left text-[10px] text-[var(--text-muted)]">Emp</th>
+                    <th className="px-2 py-1 text-left text-[10px] text-[var(--text-muted)]">
+                      {heatmapMode === 'branch' ? 'Branch' : 'Employee'}
+                    </th>
                     {heatmap.catList.map((c) => (
                       <th key={c} className="px-2 py-1 text-left text-[10px] text-[var(--text-muted)]">
                         {c}
                       </th>
                     ))}
+                    <th className="px-2 py-1 text-right text-[10px] text-[var(--text-muted)]">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {heatmap.rows.map((r) => (
-                    <tr key={r.emp}>
-                      <td className="px-2 py-1 font-medium text-[var(--text-primary)] tabular-nums">{r.emp}</td>
+                    <tr key={r.key}>
+                      <td className="px-2 py-1 font-medium text-[var(--text-primary)]">{r.label}</td>
                       {heatmap.catList.map((c) => {
                         const v = r[c] || 0
                         const intensity = v > 0 ? Math.min(1, v / heatmap.maxVal) : 0
                         return (
-                          <td key={`${r.emp}-${c}`} className="px-2 py-1">
+                          <td key={`${r.key}-${c}`} className="px-2 py-1">
                             <div
                               className="rounded-md px-2 py-1 text-[10px] text-center tabular-nums"
                               style={{
@@ -350,6 +413,9 @@ export default function ReceiptsTab({
                           </td>
                         )
                       })}
+                      <td className="px-2 py-1 text-right font-semibold tabular-nums text-[var(--text-primary)]">
+                        {formatCompactINR(r.total || 0)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

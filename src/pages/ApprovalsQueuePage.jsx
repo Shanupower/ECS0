@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
 import { Card, Button, Badge, Input, EmptyState, Skeleton } from '../components/ui'
+import { canAccessSystemSettings } from '../constants/system-settings-access.js'
 
 /**
  * Queue of receipt-approval tasks pending on teams the user belongs to.
@@ -108,13 +109,16 @@ export default function ApprovalsQueuePage() {
   }, [teams])
 
   if (!approvalFlagOn) {
+    const canOpenSettings = canAccessSystemSettings(user)
     return (
       <div className="max-w-3xl mx-auto">
         <EmptyState
           icon={<FiShield className="mx-auto h-12 w-12" />}
           title="Approval workflow is disabled"
           message="Ask an administrator to configure the intake team and enable the feature flag in System Settings."
-          primaryAction={<Button variant="secondary" onClick={() => navigate('/settings')}>Open system settings</Button>}
+          primaryAction={canOpenSettings
+            ? <Button variant="secondary" onClick={() => navigate('/settings')}>Open system settings</Button>
+            : undefined}
         />
       </div>
     )

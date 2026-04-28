@@ -39,6 +39,8 @@ import {
   formatNumber,
   formatPct,
   tooltipStyle,
+  tooltipLabelStyle,
+  tooltipItemStyle,
   receiptAmount,
   receiptEmpCode,
   receiptDate,
@@ -101,6 +103,16 @@ export default function OverviewTab({
     return byDayPrev.map((r) => ({ date: r.date, amount: Number(r.amount || 0), count: Number(r.n || 0) }))
   }, [byDayPrev, compare])
 
+  // Range-scoped achieved investments. Some stats payloads can be "today-ish", so
+  // we prefer the by-day series which is always scoped to the selected range.
+  const investmentsInRange = useMemo(() => {
+    if (Array.isArray(byDay) && byDay.length) {
+      return byDay.reduce((sum, r) => sum + Number(r?.amount || 0), 0)
+    }
+    const fromStats = Number(branchStats?.statistics?.total_investments)
+    return Number.isFinite(fromStats) ? fromStats : 0
+  }, [byDay, branchStats?.statistics?.total_investments])
+
   // Merge current + previous for the area chart by index position (same-length periods).
   const mergedTrend = useMemo(() => {
     return trendSeries.map((p, i) => ({
@@ -148,10 +160,10 @@ export default function OverviewTab({
   const targetGauge = useMemo(() => {
     const monthly = Number(branchMonthlyTarget || 0)
     const target = scaleMonthlyTargetToDateRange(monthly, dateRange?.from, dateRange?.to) || monthly
-    const achieved = Number(s.total_investments || 0)
+    const achieved = Number(investmentsInRange || 0)
     const pct = target > 0 ? Math.min(100, (achieved / target) * 100) : 0
     return { target, achieved, pct, monthly }
-  }, [branchMonthlyTarget, s.total_investments, dateRange?.from, dateRange?.to])
+  }, [branchMonthlyTarget, investmentsInRange, dateRange?.from, dateRange?.to])
 
   const scaledPersonalTargetsSum = useMemo(() => {
     if (!Array.isArray(employees)) return 0
@@ -314,7 +326,7 @@ export default function OverviewTab({
         ) : (
           <BranchHealthCard
             branchMonthlyTarget={branchTargetForHealth}
-            totalInvestments={Number(s.total_investments || 0)}
+            totalInvestments={Number(investmentsInRange || 0)}
             staleLeadsCount={Number(queueMetrics?.stale_leads ?? 0)}
             staleCustomersCount={Number(queueMetrics?.stale_customers ?? 0)}
           />
@@ -377,6 +389,8 @@ export default function OverviewTab({
                 <YAxis yAxisId="right" orientation="right" stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
                 <RTooltip
                   contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
                   formatter={(v, key) =>
                     key === 'count' ? [formatNumber(v), 'Receipts'] : [formatCompactINR(v), key === 'cumulative' ? 'Cumulative' : key === 'prevAmount' ? 'Previous' : 'Daily']
                   }
@@ -449,6 +463,8 @@ export default function OverviewTab({
                 </Pie>
                 <RTooltip
                   contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
                   formatter={(v, _n, p) => [formatCompactINR(v), p?.payload?.name || 'Value']}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -472,7 +488,12 @@ export default function OverviewTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="cc" name="CC" fill={PALETTE[0]} radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -538,7 +559,7 @@ export default function OverviewTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
-                <RTooltip contentStyle={tooltipStyle} />
+                <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 <Bar dataKey="Completed" stackId="s" fill={PALETTE[2]} />
                 <Bar dataKey="Pending" stackId="s" fill={PALETTE[3]} />

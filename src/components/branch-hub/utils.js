@@ -174,12 +174,28 @@ export function colorFor(index) {
 
 // Build chart tooltip style that honors the app theme tokens.
 export const tooltipStyle = {
-  backgroundColor: 'var(--card-bg-opaque)',
-  border: '1px solid var(--stroke)',
+  // Recharts tooltips render in a portal-ish wrapper; ensure theme-contrast + stacking.
+  // We intentionally keep tooltips dark in both themes so the font can be pure white
+  // (requested) and remain readable over colorful charts.
+  backgroundColor: 'rgba(17, 22, 29, 0.96)',
+  border: '1px solid rgba(255, 255, 255, 0.14)',
   borderRadius: 8,
-  color: 'var(--text-primary)',
+  color: '#ffffff',
   fontSize: 12,
-  boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
+  boxShadow: '0 10px 35px rgba(0,0,0,0.45)',
+  zIndex: 50,
+}
+
+// Recharts renders tooltip label/items with their own styles, so we must
+// explicitly theme those too (otherwise dark mode can end up as black-on-black).
+export const tooltipLabelStyle = {
+  color: '#ffffff',
+  fontWeight: 600,
+  marginBottom: 4,
+}
+
+export const tooltipItemStyle = {
+  color: '#ffffff',
 }
 
 // Robust field readers shared across widgets.

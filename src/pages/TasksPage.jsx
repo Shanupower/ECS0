@@ -245,7 +245,7 @@ function TasksPageInner() {
     <button
       key={key}
       onClick={() => setFilter({ view: key })}
-      style={view === key ? { backgroundColor: 'var(--accent)', borderColor: 'var(--accent)', color: '#ffffff' } : undefined}
+      style={view === key ? { backgroundColor: 'var(--link-hover-bg)', borderColor: 'var(--accent)', color: 'var(--text-primary)' } : undefined}
       className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-colors ${
         view === key
           ? 'font-medium'

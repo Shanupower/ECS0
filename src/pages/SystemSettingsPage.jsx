@@ -3,6 +3,7 @@ import { FiSettings, FiSave, FiRefreshCw, FiAlertCircle, FiCheck, FiPlus, FiX } 
 import { useAuth } from '../context/AuthContext'
 import { useAppConfig, useAppConfigActions, APP_CONFIG_DEFAULTS } from '../context/AppConfigContext'
 import { api } from '../api'
+import { canAccessSystemSettings } from '../constants/system-settings-access.js'
 
 function normaliseList(raw) {
   return String(raw || '')
@@ -21,7 +22,7 @@ export default function SystemSettingsPage() {
   const cfg = useAppConfig()
   const { update, reload, loading } = useAppConfigActions()
 
-  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+  const canEdit = canAccessSystemSettings(user)
 
   const [draft, setDraft] = useState(cfg)
   const [saving, setSaving] = useState(false)
@@ -250,6 +251,16 @@ export default function SystemSettingsPage() {
   )
 }
 
+const INTAKE_PRODUCT_ROWS = [
+  { key: 'MF', label: 'Mutual Funds' },
+  { key: 'FD', label: 'Fixed Deposit' },
+  { key: 'GOVT_FD', label: 'Government Schemes' },
+  { key: 'INS', label: 'Insurance' },
+  { key: 'BOND', label: 'Bonds (BOND)' },
+  { key: 'NCD', label: 'Bonds/NCD (NCD)' },
+  { key: 'MISC', label: 'Misc Services' }
+]
+
 function ReceiptApprovalSection({ draft, setDraft }) {
   const { token } = useAuth()
   const [teams, setTeams] = useState([])
@@ -269,14 +280,30 @@ function ReceiptApprovalSection({ draft, setDraft }) {
   const flags = draft.feature_flags || {}
   const flagOn = !!flags.receipts_approval_v2
   const intakeId = draft.receipt_intake_team_id || ''
+  const byCat = draft.receipt_intake_teams_by_category && typeof draft.receipt_intake_teams_by_category === 'object'
+    ? draft.receipt_intake_teams_by_category
+    : {}
   const activeTeams = teams.filter((t) => t.is_active !== false)
   const intakeTeamObj = teams.find((t) => String(t.id || t._key) === String(intakeId))
   const intakeValid = !!intakeTeamObj && intakeTeamObj.is_active !== false
+  const anyCategoryMapped = INTAKE_PRODUCT_ROWS.some(({ key: k }) => {
+    const v = byCat[k]
+    return v != null && String(v).trim() !== ''
+  })
+  const canEnableWorkflow = intakeValid || anyCategoryMapped
+
+  const setCategoryTeam = (catKey, teamIdRaw) => {
+    const teamId = teamIdRaw || null
+    const next = { ...byCat }
+    if (teamId) next[catKey] = teamId
+    else delete next[catKey]
+    setDraft({ ...draft, receipt_intake_teams_by_category: next })
+  }
 
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-[var(--text-secondary)]">Intake team</label>
+        <label className="text-xs font-medium text-[var(--text-secondary)]">Default intake team (fallback)</label>
         <select
           value={intakeId}
           onChange={(e) => setDraft({ ...draft, receipt_intake_team_id: e.target.value || null })}
@@ -292,9 +319,48 @@ function ReceiptApprovalSection({ draft, setDraft }) {
           )}
         </select>
         <p className="text-[11px] text-[var(--text-muted)]">
-          New receipts are routed to this team on first submit. Required before enabling the workflow.
+          Used when a product category has no dedicated team below, and as a safety fallback. With auto-routing on create, set this and/or per-product teams.
           {loading ? ' Loading teams…' : teams.length === 0 ? ' No teams yet — create one in the Teams page.' : ''}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-4">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">Intake by product category (optional)</span>
+        <p className="text-[11px] text-[var(--text-muted)] max-w-2xl">
+          Map each receipt type to its first approval team. Unmapped categories use the default intake team. NCD falls back to BOND&apos;s team in the engine if NCD is unset.
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-[var(--stroke)] max-w-2xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--stroke)] bg-[var(--card-hover)]/50 text-left text-[11px] text-[var(--text-secondary)]">
+                <th className="px-3 py-2 font-medium">Product</th>
+                <th className="px-3 py-2 font-medium">Team</th>
+              </tr>
+            </thead>
+            <tbody>
+              {INTAKE_PRODUCT_ROWS.map(({ key, label }) => (
+                <tr key={key} className="border-b border-[var(--stroke)]/60 last:border-0">
+                  <td className="px-3 py-2 text-[var(--text-primary)] whitespace-nowrap">{label} <span className="text-[var(--text-muted)]">({key})</span></td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={byCat[key] || ''}
+                      onChange={(e) => setCategoryTeam(key, e.target.value)}
+                      className="w-full min-w-[12rem] px-2 py-1.5 border border-[var(--stroke)] rounded-md bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-xs"
+                    >
+                      <option value="">Default fallback</option>
+                      {activeTeams.map((t) => (
+                        <option key={`${key}-${t.id || t._key}`} value={t.id || t._key}>{t.name}</option>
+                      ))}
+                      {byCat[key] && !activeTeams.some((t) => String(t.id || t._key) === String(byCat[key])) && (
+                        <option value={byCat[key]}>{byCat[key]} (inactive)</option>
+                      )}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5 mt-3">
@@ -314,7 +380,7 @@ function ReceiptApprovalSection({ draft, setDraft }) {
           <input
             type="checkbox"
             checked={flagOn}
-            disabled={!flagOn && !intakeValid}
+            disabled={!flagOn && !canEnableWorkflow}
             onChange={(e) => setDraft({ ...draft, feature_flags: { ...flags, receipts_approval_v2: e.target.checked } })}
             className="mt-1"
           />
@@ -323,12 +389,12 @@ function ReceiptApprovalSection({ draft, setDraft }) {
               Enable team-based receipt approval workflow
             </span>
             <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
-              When on, receipts move through configured teams before completion and an <b>approval task</b> is created for each stage.
+              When on, new receipts are auto-submitted to the intake team for their product category (or default). Receipts move through configured teams before completion and an <b>approval task</b> is created for each stage.
               Admins keep the legacy status override (now behind an “Admin override” disclosure on the receipt).
             </span>
-            {!flagOn && !intakeValid && (
+            {!flagOn && !canEnableWorkflow && (
               <span className="block text-[11px] text-[var(--error)] mt-1">
-                Pick a valid active intake team before enabling this flag.
+                Set a valid default intake team or map at least one product category to a team.
               </span>
             )}
           </span>

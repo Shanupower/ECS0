@@ -94,10 +94,19 @@ export default function ClientManagementPage() {
       try {
         if (token) {
           const branches = await api.listBranches(token)
-          // Use branch id (_key) as value for canonical keys; label = branch_name
-          const branchOptions = branches.map(branch => ({
-            label: branch.branch_name,
-            value: String(branch.id ?? branch.branch_code ?? branch.branch_name)
+          // IMPORTANT: `branch_key` filter on `/api/customers` matches canonical branch keys
+          // stored in `customer.branches[]` (Arango `_key`). Fall back to branch_code/name
+          // only if `_key` isn't present so the filter behaves like Portfolio review.
+          const branchOptions = branches.map((branch) => ({
+            label: branch.branch_name || branch.branch_code || branch.name || 'Branch',
+            value: String(
+              branch._key ??
+                branch.id ??
+                branch.branch_code ??
+                branch.code ??
+                branch.branch_name ??
+                branch.name
+            ),
           }))
           setAvailableBranches(branchOptions)
         }

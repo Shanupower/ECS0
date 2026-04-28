@@ -79,10 +79,7 @@ export default function BranchPicker({ options = [], value, onChange, disabled =
         <FiMapPin className="w-4 h-4 text-[var(--text-muted)]" aria-hidden />
         <span className="truncate max-w-[9rem] text-left flex-1">
           {current ? (
-            <>
-              <span className="font-mono text-[11px] text-[var(--text-muted)] mr-1.5">{current.code}</span>
-              <span className="text-[var(--text-primary)]">{current.name}</span>
-            </>
+            <span className="text-[var(--text-primary)]">{current.name}</span>
           ) : (
             <span className="text-[var(--text-muted)]">Pick a branch</span>
           )}
@@ -129,9 +126,6 @@ export default function BranchPicker({ options = [], value, onChange, disabled =
                       isHl ? 'bg-[var(--card-hover)]' : ''
                     } ${isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}
                   >
-                    <span className="font-mono text-[11px] text-[var(--text-muted)] w-12 shrink-0">
-                      {opt.code}
-                    </span>
                     <span className="flex-1 truncate">{opt.name}</span>
                     {!opt.is_active ? (
                       <span className="text-[10px] uppercase tracking-wide text-[var(--warn)]">inactive</span>

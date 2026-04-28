@@ -21,6 +21,8 @@ import {
   formatCompactINR,
   formatNumber,
   tooltipStyle,
+  tooltipLabelStyle,
+  tooltipItemStyle,
   receiptCustomerName,
   receiptCustomerKey,
 } from './utils'
@@ -145,7 +147,7 @@ export default function CustomersTab({
                     <Cell key={i} fill={d.color} />
                   ))}
                 </Pie>
-                <RTooltip contentStyle={tooltipStyle} />
+                <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
@@ -180,6 +182,8 @@ export default function CustomersTab({
                 >
                   <RTooltip
                     contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
                     formatter={(_v, _n, p) => [
                       `${formatNumber(p?.payload?.count ?? 0)} · ${formatCompactINR(p?.payload?.amount ?? 0)}`,
                       p?.payload?.name,
@@ -227,7 +231,7 @@ export default function CustomersTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} width={90} />
-                <RTooltip contentStyle={tooltipStyle} />
+                <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                 <Bar dataKey="value" fill={PALETTE[1]} radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -248,7 +252,12 @@ export default function CustomersTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Legend wrapperStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
                 {portfolioMix.categories.map((c, i) => (
                   <Bar key={c} dataKey={c} stackId="mix" fill={colorFor(i)} />

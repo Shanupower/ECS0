@@ -74,6 +74,7 @@ export default function DashboardLayout() {
       <div className="flex h-screen min-h-0 overflow-hidden bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors duration-200">
         <Sidebar
           userRole={user?.role}
+          empCode={user?.emp_code}
           pendingIssuesCount={pendingIssuesCount}
           tasksReminderCount={tasksReminderCount}
           mobileOpen={isMobileMenuOpen}

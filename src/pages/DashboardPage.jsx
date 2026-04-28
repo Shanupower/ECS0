@@ -429,6 +429,14 @@ export default function DashboardPage() {
       const to = formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 0))
       return { from, to }
     }},
+    { label: 'Last 6 months', getValue: () => {
+      const today = new Date()
+      const to = formatDateForInput(today)
+      const d = new Date(today)
+      d.setMonth(d.getMonth() - 6)
+      const from = formatDateForInput(d)
+      return { from, to }
+    }},
     { label: 'YTD', getValue: () => {
       const y = new Date().getFullYear()
       return { from: `${y}-01-01`, to: `${y}-12-31` }

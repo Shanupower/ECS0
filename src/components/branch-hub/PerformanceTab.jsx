@@ -30,6 +30,8 @@ import {
   formatCompactINR,
   formatPct,
   tooltipStyle,
+  tooltipLabelStyle,
+  tooltipItemStyle,
   deltaPercent,
   receiptAmount,
   receiptCategory,
@@ -178,7 +180,12 @@ export default function PerformanceTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 11 }} hide={pacing.rows.length > 30} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Area type="monotone" dataKey="achieved" name="Achieved" stroke={pacing.onTrack ? PALETTE[2] : PALETTE[4]} fill="url(#pacingFill)" />
                 <Line type="monotone" dataKey="target" name="Target pace" stroke={PALETTE[3]} strokeDasharray="4 4" strokeWidth={1.5} dot={false} />
@@ -211,7 +218,12 @@ export default function PerformanceTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Bar dataKey="amount" fill={PALETTE[1]} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -231,7 +243,12 @@ export default function PerformanceTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 11 }} hide={categoryStackedArea.rows.length > 30} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {categoryStackedArea.categories.map((c, i) => (
                   <Area
@@ -264,7 +281,7 @@ export default function PerformanceTab({
                 <PolarGrid stroke="var(--stroke)" />
                 <PolarAngleAxis dataKey="axis" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
                 <PolarRadiusAxis stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
-                <RTooltip contentStyle={tooltipStyle} />
+                <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {radarData.employees.map((name, i) => (
                   <Radar key={name} name={name} dataKey={name} stroke={colorFor(i)} fill={colorFor(i)} fillOpacity={0.2} />

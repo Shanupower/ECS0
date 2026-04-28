@@ -24,6 +24,7 @@ import TeamsAdminPage from './pages/TeamsAdminPage.jsx'
 import ApprovalsQueuePage from './pages/ApprovalsQueuePage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
+import { canAccessSystemSettings } from './constants/system-settings-access.js'
 
 // Page Transition Wrapper
 function PageTransition({ children }) {
@@ -52,6 +53,11 @@ function AdminRoute({children}){
 function BranchRoute({children}){
   const {user}=useAuth()
   return (user?.role === 'admin' || user?.role === 'manager') ? children : <Navigate to="/dashboard"/>
+}
+
+function SettingsRoute({ children }) {
+  const { user } = useAuth()
+  return canAccessSystemSettings(user) ? children : <Navigate to="/dashboard" replace />
 }
 
 function ClientRoute({children}){
@@ -145,7 +151,7 @@ function AppContent() {
           />
           <Route
             path="settings"
-            element={<PageTransition><BranchRoute><SystemSettingsPage/></BranchRoute></PageTransition>}
+            element={<PageTransition><SettingsRoute><SystemSettingsPage /></SettingsRoute></PageTransition>}
           />
           <Route
             path="teams"

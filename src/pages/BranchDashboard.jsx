@@ -159,7 +159,7 @@ export default function BranchDashboard() {
   const [loadingBranchDetails, setLoadingBranchDetails] = useState(false)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
-  const [networkReceiptsForTrend, setNetworkReceiptsForTrend] = useState([])
+  const [monthlyCcSiForTrend, setMonthlyCcSiForTrend] = useState([])
   const [localIncludePending, setLocalIncludePending] = useState(true)
   const includePending = embedded ? !!wsIncludePending : localIncludePending
   const setIncludePending = embedded ? (wsSetIncludePending || (() => {})) : setLocalIncludePending
@@ -218,7 +218,7 @@ export default function BranchDashboard() {
           setBranchStats(null)
           setEmployeePerformance([])
           setBranchRecentReceipts([])
-          setNetworkReceiptsForTrend([])
+          setMonthlyCcSiForTrend([])
           setSelectedBranch(null)
         } else if (branchCode) {
           const branchObj = branchesData.find(b => b.branch_code === branchCode)
@@ -235,13 +235,13 @@ export default function BranchDashboard() {
           setEmployeePerformance(Array.isArray(empPerf) ? empPerf : [])
           const rec = receiptsRes?.items ?? receiptsRes?.data ?? []
           setBranchRecentReceipts(Array.isArray(rec) ? rec.slice(0, 10) : [])
-          setNetworkReceiptsForTrend([])
+          setMonthlyCcSiForTrend([])
         } else {
           setBranchStats(null)
           setGlobalStats(null)
           setEmployeePerformance([])
           setBranchRecentReceipts([])
-          setNetworkReceiptsForTrend([])
+          setMonthlyCcSiForTrend([])
           setSelectedBranch(null)
         }
       } else {
@@ -267,15 +267,15 @@ export default function BranchDashboard() {
           setEmployeePerformance([])
         }
         try {
-          const receiptList = await fetchAllReceiptsPaged(token, {
+          const rows = await api.getMonthlyCcSi(token, {
             from: dateRange.from,
             to: dateRange.to,
             date_basis: dateBasis,
             includePending: includePending ? '1' : '0',
           })
-          setNetworkReceiptsForTrend(Array.isArray(receiptList) ? receiptList : [])
+          setMonthlyCcSiForTrend(Array.isArray(rows) ? rows : [])
         } catch {
-          setNetworkReceiptsForTrend([])
+          setMonthlyCcSiForTrend([])
         }
         setBranchRecentReceipts([])
       }
@@ -498,16 +498,18 @@ export default function BranchDashboard() {
     const endKey = ymKey(dateRange.to)
     const buckets = new Map()
     for (const k of monthKeysBetween(startKey, endKey)) {
-      buckets.set(k, { month: monthLabel(k), key: k, investments: 0 })
+      buckets.set(k, { month: monthLabel(k), key: k, revenue: 0, cc: 0, si: 0 })
     }
-    ;(networkReceiptsForTrend || []).forEach((r) => {
-      const d = receiptDate(r) || (r.created_at ? String(r.created_at).slice(0, 10) : '')
-      const key = ymKey(d)
+    ;(monthlyCcSiForTrend || []).forEach((r) => {
+      const key = String(r?.month || '').slice(0, 7)
       if (!key || !buckets.has(key)) return
-      buckets.get(key).investments += receiptAmount(r)
+      const cc = Number(r?.cc || 0)
+      const si = Number(r?.si || 0)
+      const revenue = cc + si
+      buckets.set(key, { month: monthLabel(key), key, revenue, cc, si })
     })
     return Array.from(buckets.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
-  }, [networkReceiptsForTrend, dateRange.from, dateRange.to])
+  }, [monthlyCcSiForTrend, dateRange.from, dateRange.to])
 
   const getBranchDisplayName = (branchStat) => {
     if (!branchStat) return 'Unknown Branch'
@@ -1146,9 +1148,9 @@ export default function BranchDashboard() {
                 <h3 className="text-lg font-semibold text-[var(--text-primary)]">Revenue Trend</h3>
                 <p
                   className="text-xs text-[var(--text-secondary)]"
-                  title="Sum of receipt investment amounts (same fields as receipt cards) bucketed by calendar month, within the selected date range. Uses receipts loaded for analytics (paged up to 5,000)."
+                  title="Sum of Collection Credit (CC) plus Service Income (SI), bucketed by calendar month. Uses the same CC/SI formulas as the stats endpoints and respects date basis + include pending."
                 >
-                  Receipt amounts by month · {dateRange.from || '—'} → {dateRange.to || '—'}
+                  CC + SI by month · {dateRange.from || '—'} → {dateRange.to || '—'}
                 </p>
               </div>
             </div>
@@ -1167,17 +1169,41 @@ export default function BranchDashboard() {
                 tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
               />
               <Tooltip 
-                formatter={(value) => [formatCurrency(value), 'Receipt amount']}
+                formatter={(value, name) => {
+                  if (name === 'revenue') return [formatCurrency(value), 'CC + SI']
+                  if (name === 'cc') return [formatCurrency(value), 'CC']
+                  if (name === 'si') return [formatCurrency(value), 'SI']
+                  return [formatCurrency(value), name]
+                }}
                 contentStyle={chartTooltipStyle}
                 labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
               />
               <Line 
                 type="monotone" 
-                dataKey="investments" 
+                dataKey="revenue" 
+                name="CC + SI"
                 stroke="#EF4444" 
                 strokeWidth={2}
                 dot={{ fill: '#EF4444', r: 4 }}
                 activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="cc"
+                name="CC"
+                stroke="#F59E0B"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="4 3"
+              />
+              <Line
+                type="monotone"
+                dataKey="si"
+                name="SI"
+                stroke="#10B981"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="4 3"
               />
             </LineChart>
           </ResponsiveContainer>

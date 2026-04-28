@@ -7,6 +7,7 @@ import DarkModeToggle from './DarkModeToggle'
 import ReportIssueModal from './ReportIssueModal'
 import ChangePasswordModal from './ChangePasswordModal'
 import ProfileModal from './ProfileModal'
+import { canAccessSystemSettings } from '../constants/system-settings-access.js'
 import { 
   FiHome, 
   FiFileText, 
@@ -118,7 +119,8 @@ export default function Layout(){
   
   const isAdmin = user?.role === 'admin'
   const isBranchManager = user?.role === 'manager'
-  
+  const showSystemSettingsNav = canAccessSystemSettings(user)
+
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: FiHome },
     { to: "/receipts", label: "Create Receipt", icon: FiFileText },
@@ -133,12 +135,12 @@ export default function Layout(){
       { to: "/schemes", label: "Scheme Management", icon: FiDatabase },
       { to: "/customers", label: "Customer Management", icon: FiUserCheck },
       { to: "/issues", label: "All Issues", icon: FiAlertTriangle },
-      { to: "/settings", label: "System Settings", icon: FiSettings }
+      ...(showSystemSettingsNav ? [{ to: "/settings", label: "System Settings", icon: FiSettings }] : [])
     ] : []),
     ...(isBranchManager ? [
       { to: "/branches", label: "Branches", icon: FiBarChart },
       { to: "/customers", label: "Client Management", icon: FiUserCheck },
-      { to: "/settings", label: "System Settings", icon: FiSettings }
+      ...(showSystemSettingsNav ? [{ to: "/settings", label: "System Settings", icon: FiSettings }] : [])
     ] : []),
     ...(user?.role === 'employee' ? [
       { to: "/customers", label: "Client Management", icon: FiUserCheck }

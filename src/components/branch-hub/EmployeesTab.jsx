@@ -24,6 +24,8 @@ import {
   formatNumber,
   formatPct,
   tooltipStyle,
+  tooltipLabelStyle,
+  tooltipItemStyle,
   receiptAmount,
   receiptDate,
   receiptEmpCode,
@@ -111,22 +113,15 @@ export default function EmployeesTab({
         })
       }
     })
-    // Recharts categorises rows by `name`. Append the emp_code suffix on duplicate
-    // names so each bar gets its own slot (otherwise duplicates collapse into one).
+    // Recharts categorises rows by the category-axis key. Use a *stable unique*
+    // label so rows never collapse (and we can reliably show top 12).
     const rows = Array.from(byCode.values())
-    const nameCounts = new Map()
-    rows.forEach((row) => {
-      const baseName = String(row.name || row.emp_code || 'Employee')
-      nameCounts.set(baseName, (nameCounts.get(baseName) || 0) + 1)
-    })
-    const seenAlready = new Map()
-    rows.forEach((row) => {
-      const baseName = String(row.name || row.emp_code || 'Employee')
-      if ((nameCounts.get(baseName) || 0) > 1) {
-        const idx = seenAlready.get(baseName) || 0
-        seenAlready.set(baseName, idx + 1)
-        row.name = row.emp_code ? `${baseName} (${row.emp_code})` : `${baseName} #${idx + 1}`
-      }
+    rows.forEach((row, i) => {
+      const baseName = String(row.name || row.emp_code || 'Employee').trim() || 'Employee'
+      const code = String(row.emp_code || '').trim()
+      row.displayName = baseName
+      // Always unique: prevents duplicate-name collapse and makes it easier to read.
+      row.label = code ? `${baseName} (${code})` : `${baseName} #${i + 1}`
       row.pct = row.Target > 0 ? Math.min(100, (row.Achieved / row.Target) * 100) : 0
     })
     rows.sort((a, b) => b.Achieved - a.Achieved)
@@ -271,7 +266,12 @@ export default function EmployeesTab({
                     <Cell key={`al-${i}`} fill={d.color} />
                   ))}
                 </Pie>
-                <RTooltip contentStyle={tooltipStyle} formatter={(v, _n, p) => [formatCompactINR(v), p?.payload?.name || '']} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v, _n, p) => [formatCompactINR(v), p?.payload?.name || '']}
+                />
                 <Legend wrapperStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
@@ -282,22 +282,47 @@ export default function EmployeesTab({
           title="Actual vs target"
           subtitle="Top 12 by achievement"
           className="lg:col-span-2"
-          rows={actualVsTarget.map((r) => ({ name: r.name, emp_code: r.emp_code, Achieved: r.Achieved, Target: r.Target, pct: r.pct }))}
+          rows={actualVsTarget.map((r) => ({
+            name: r.displayName,
+            label: r.label,
+            emp_code: r.emp_code,
+            Achieved: r.Achieved,
+            Target: r.Target,
+            pct: r.pct,
+          }))}
           csvName="actual-vs-target.csv"
           pngName="actual-vs-target.png"
         >
           {actualVsTarget.length === 0 ? (
             <EmptyState icon={FiUsers} message="No employee performance data" />
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={actualVsTarget} layout="vertical" margin={{ top: 5, right: 12, left: 40, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={360}>
+              <BarChart
+                data={actualVsTarget}
+                layout="vertical"
+                margin={{ top: 5, right: 12, left: 40, bottom: 0 }}
+                barCategoryGap={26}
+                barGap={10}
+              >
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <YAxis type="category" dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 11 }} width={120} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  stroke="var(--text-muted)"
+                  tick={{ fontSize: 10 }}
+                  width={160}
+                  interval={0}
+                />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
-                <Bar dataKey="Achieved" fill={PALETTE[0]} radius={[0, 6, 6, 0]} />
-                <Bar dataKey="Target" fill={PALETTE[3]} fillOpacity={0.4} radius={[0, 6, 6, 0]} />
+                <Bar dataKey="Achieved" fill={PALETTE[0]} radius={[0, 6, 6, 0]} maxBarSize={10} />
+                <Bar dataKey="Target" fill={PALETTE[3]} fillOpacity={0.4} radius={[0, 6, 6, 0]} maxBarSize={10} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -372,7 +397,12 @@ export default function EmployeesTab({
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
                 <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11 }} tickFormatter={formatCompactINR} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => formatCompactINR(v)} />
+                <RTooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
+                  formatter={(v) => formatCompactINR(v)}
+                />
                 <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text-primary)' }} />
                 {teamMix.categories.map((c, i) => (
                   <Bar key={c} dataKey={c} stackId="mix" fill={colorFor(i)} />
