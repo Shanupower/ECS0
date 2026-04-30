@@ -28,6 +28,8 @@ export default function ClientManagementPage() {
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterBranchKey, setFilterBranchKey] = useState('')
+  const branchFilterMountRef = useRef(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCustomers, setTotalCustomers] = useState(0)
@@ -92,10 +94,19 @@ export default function ClientManagementPage() {
       try {
         if (token) {
           const branches = await api.listBranches(token)
-          // Use branch id (_key) as value for canonical keys; label = branch_name
-          const branchOptions = branches.map(branch => ({
-            label: branch.branch_name,
-            value: String(branch.id ?? branch.branch_code ?? branch.branch_name)
+          // IMPORTANT: `branch_key` filter on `/api/customers` matches canonical branch keys
+          // stored in `customer.branches[]` (Arango `_key`). Fall back to branch_code/name
+          // only if `_key` isn't present so the filter behaves like Portfolio review.
+          const branchOptions = branches.map((branch) => ({
+            label: branch.branch_name || branch.branch_code || branch.name || 'Branch',
+            value: String(
+              branch._key ??
+                branch.id ??
+                branch.branch_code ??
+                branch.code ??
+                branch.branch_name ??
+                branch.name
+            ),
           }))
           setAvailableBranches(branchOptions)
         }
@@ -263,6 +274,9 @@ export default function ClientManagementPage() {
       if (search.trim()) {
         query.search = search.trim()
       }
+      if (user?.role === 'admin' && filterBranchKey) {
+        query.branch_key = filterBranchKey
+      }
 
       const data = await api.listCustomers(token, query)
       const normalizedSearch = search.trim().toLowerCase()
@@ -331,6 +345,15 @@ export default function ClientManagementPage() {
 
     return () => clearTimeout(debounceTimer)
   }, [searchTerm])
+
+  useEffect(() => {
+    if (branchFilterMountRef.current) {
+      branchFilterMountRef.current = false
+      return
+    }
+    setCurrentPage(1)
+    fetchCustomers(1, searchTerm)
+  }, [filterBranchKey])
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -795,6 +818,16 @@ export default function ClientManagementPage() {
               />
             </div>
           </div>
+          {user?.role === 'admin' && (
+            <div className="w-full sm:w-56">
+              <SearchableSelect
+                options={[{ label: 'All branches', value: '' }, ...availableBranches]}
+                value={filterBranchKey}
+                onChange={(v) => setFilterBranchKey(v != null ? String(v) : '')}
+                placeholder="Filter by branch"
+              />
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}

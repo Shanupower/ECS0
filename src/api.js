@@ -9,13 +9,14 @@ export function setTokenExpirationCallback(callback) {
 
 function authHeaders(token){ return token ? { Authorization: `Bearer ${token}` } : {} }
 
-async function req(path,{method='GET',token,json,query}={}){
+async function req(path,{method='GET',token,json,query,headers}={}){
   const qs = query ? '?' + new URLSearchParams(query).toString() : ''
   const res = await fetch(BASE+path+qs,{
     method,
     headers:{
       ...(json?{'Content-Type':'application/json'}:{}),
-      ...authHeaders(token)
+      ...authHeaders(token),
+      ...(headers || {})
     },
     body: json?JSON.stringify(json):undefined
   })
@@ -151,7 +152,10 @@ export const api={
   getReceiptMedia:(t,id)=>req(`/api/receipts/${id}/media`,{token:t}),
   downloadReceiptMedia:(t,id,mediaId)=>req(`/api/receipts/${id}/media/${mediaId}`,{token:t}),
   downloadReceiptPDF:(t,id)=>req(`/api/receipts/${id}/pdf`,{token:t}),
-  uploadReceiptMedia:(t,id,files)=>reqWithFiles(`/api/receipts/${id}/media`,{method:'POST',token:t,formData:createFormData({},files)}),
+  // `meta` is an optional plain object whose fields are posted alongside the
+  // files as form fields. Use it to tag approval-evidence uploads, e.g.
+  // { category: 'approval_evidence', cycle_id, team_id, team_name, uploaded_during }.
+  uploadReceiptMedia:(t,id,files,meta)=>reqWithFiles(`/api/receipts/${id}/media`,{method:'POST',token:t,formData:createFormData(meta||{},files)}),
   createReceiptDraft:(t,data)=>req('/api/receipt-drafts',{method:'POST',token:t,json:data}),
   getReceiptDraft:(t,id)=>req(`/api/receipt-drafts/${id}`,{token:t}),
   listReceiptDrafts:(t)=>req('/api/receipt-drafts',{token:t}),
@@ -177,6 +181,10 @@ export const api={
   statsByCategory:(t,q)=>req('/api/stats/by-category',{token:t,query:q}),
   statsByDay:(t,q)=>req('/api/stats/by-day',{token:t,query:q}),
   getMonthlyCCSI:(t,q)=>req('/api/stats/monthly-cc-si',{token:t,query:q}),
+  getStatsSummary:(t,q)=>req('/api/stats/summary',{token:t,query:q}),
+  getStatsByCategory:(t,q)=>req('/api/stats/by-category',{token:t,query:q}),
+  getStatsByDay:(t,q)=>req('/api/stats/by-day',{token:t,query:q}),
+  getMonthlyCcSi:(t,q)=>req('/api/stats/monthly-cc-si',{token:t,query:q}),
   
   // Branch endpoints
   listBranches:(t,q)=>req('/api/branches',{token:t,query:q}),
@@ -185,8 +193,12 @@ export const api={
   getGlobalBranchStats:(t,q)=>req('/api/stats/branches',{token:t,query:q}),
   getEmployeePerformance:(t,q)=>req('/api/stats/employees/performance',{token:t,query:q}),
   getInvestorLocations:(t,q)=>req('/api/stats/investor-locations',{token:t,query:q}),
+  getBranchQueueMetrics:(t,q)=>req('/api/stats/branch-queue-metrics',{token:t,query:q}),
   getBranchReceipts:(t,code,q)=>req(`/api/branches/${code}/receipts`,{token:t,query:q}),
   createBranchReceipt:(t,code,data,files)=>files && files.length > 0 ? reqWithFiles(`/api/branches/${code}/receipts`,{method:'POST',token:t,formData:createReceiptFormData(data,files)}) : req(`/api/branches/${code}/receipts`,{method:'POST',token:t,json:data}),
+
+  // Audit (branch manager power tool)
+  getBranchAuditEvents:(t,q)=>req('/api/audit/branch',{token:t,query:q}),
   
   // Branch management endpoints (admin only)
   createBranch:(t,data)=>req('/api/branches',{method:'POST',token:t,json:data}),
@@ -213,12 +225,29 @@ export const api={
   deleteBranch:(t,code)=>req(`/api/branches/${code}`,{method:'DELETE',token:t}),
   assignUsersToBranch:(t,code,userIds)=>req(`/api/branches/${code}/users`,{method:'POST',token:t,json:{user_ids:userIds}}),
 
-  // Tasks endpoints
+  // Tasks endpoints (redesigned)
   listTasks:(t,q)=>req('/api/tasks',{token:t,query:q}),
+  searchTasks:(t,body)=>req('/api/tasks/search',{method:'POST',token:t,json:body}),
+  getTasksStats:(t)=>req('/api/tasks/stats',{token:t}),
+  getMyTasks:(t)=>req('/api/tasks/my',{token:t}),
+  getTasksByEntity:(t,type,id)=>req(`/api/tasks/entity/${type}/${id}`,{token:t}),
   getTask:(t,id)=>req(`/api/tasks/${id}`,{token:t}),
   createTask:(t,data)=>req('/api/tasks',{method:'POST',token:t,json:data}),
   updateTask:(t,id,data)=>req(`/api/tasks/${id}`,{method:'PATCH',token:t,json:data}),
+  bulkUpdateTasks:(t,ids,patch)=>req('/api/tasks/bulk-update',{method:'POST',token:t,json:{ids,patch}}),
   deleteTask:(t,id)=>req(`/api/tasks/${id}`,{method:'DELETE',token:t}),
+  listSubtasks:(t,id)=>req(`/api/tasks/${id}/subtasks`,{token:t}),
+  createSubtask:(t,id,data)=>req(`/api/tasks/${id}/subtasks`,{method:'POST',token:t,json:data}),
+  listTaskWatchers:(t,id)=>req(`/api/tasks/${id}/watchers`,{token:t}),
+  addTaskWatcher:(t,id,userId)=>req(`/api/tasks/${id}/watchers`,{method:'POST',token:t,json:{user_id:userId}}),
+  removeTaskWatcher:(t,id,uid)=>req(`/api/tasks/${id}/watchers/${uid}`,{method:'DELETE',token:t}),
+  listTaskComments:(t,id)=>req(`/api/tasks/${id}/comments`,{token:t}),
+  createTaskComment:(t,id,data)=>req(`/api/tasks/${id}/comments`,{method:'POST',token:t,json:data}),
+  deleteTaskComment:(t,id,cid)=>req(`/api/tasks/${id}/comments/${cid}`,{method:'DELETE',token:t}),
+  listTaskActivities:(t,id)=>req(`/api/tasks/${id}/activities`,{token:t}),
+  listTaskAttachments:(t,id)=>req(`/api/tasks/${id}/attachments`,{token:t}),
+  uploadTaskAttachments:(t,id,files)=>reqWithFiles(`/api/tasks/${id}/attachments`,{method:'POST',token:t,formData:createFormData({},files)}),
+  deleteTaskAttachment:(t,id,aid)=>req(`/api/tasks/${id}/attachments/${aid}`,{method:'DELETE',token:t}),
 
   // Leads endpoints
   listLeads:(t,q)=>req('/api/leads',{token:t,query:q}),
@@ -227,6 +256,46 @@ export const api={
   updateLead:(t,id,data)=>req(`/api/leads/${id}`,{method:'PATCH',token:t,json:data}),
   convertLeadToCustomer:(t,id,data)=>req(`/api/leads/${id}/convert`,{method:'POST',token:t,json:data}),
   deleteLead:(t,id)=>req(`/api/leads/${id}`,{method:'DELETE',token:t}),
+  reactivateLead:(t,id)=>req(`/api/leads/${id}/reactivate`,{method:'POST',token:t,json:{}}),
+  listLeadActivities:(t,id)=>req(`/api/leads/${id}/activities`,{token:t}),
+  createLeadActivity:(t,id,data)=>req(`/api/leads/${id}/activities`,{method:'POST',token:t,json:data}),
+
+  // Portfolio review bulk + history
+  bulkUpdatePortfolioReview:(t,body)=>req('/api/customers/portfolio-review/bulk-update',{method:'POST',token:t,json:body}),
+  getCustomerReviewHistory:(t,id)=>req(`/api/customers/${id}/review-history`,{token:t}),
+  getCustomerTimeline:(t,id,q)=>req(`/api/customers/${id}/timeline`,{token:t,query:q}),
+
+  // App config
+  getAppConfig:(t)=>req('/api/app-config',{token:t}),
+  updateAppConfig:(t,body)=>req('/api/app-config',{method:'PUT',token:t,json:body}),
+
+  // Notifications (in-app bell)
+  listNotifications:(t,q)=>req('/api/notifications',{token:t,query:q}),
+  markNotificationsRead:(t,ids)=>req('/api/notifications/mark-read',{method:'POST',token:t,json:{ids}}),
+  deleteNotification:(t,id)=>req(`/api/notifications/${id}`,{method:'DELETE',token:t}),
+
+  // Task reports (aggregated)
+  getTasksReports:(t,q)=>req('/api/tasks/reports',{token:t,query:q}),
+
+  // Shift hand-offs
+  createHandoff:(t,body)=>req('/api/handoffs',{method:'POST',token:t,json:body}),
+  listHandoffInbox:(t)=>req('/api/handoffs/inbox',{token:t}),
+  acknowledgeHandoff:(t,id)=>req(`/api/handoffs/${id}/acknowledge`,{method:'POST',token:t,json:{}}),
+  getHandoffSuggestion:(t)=>req('/api/handoffs/suggest-eod',{token:t}),
+
+  // Task templates
+  listTaskTemplates:(t)=>req('/api/task-templates',{token:t}),
+  createTaskTemplate:(t,data)=>req('/api/task-templates',{method:'POST',token:t,json:data}),
+  updateTaskTemplate:(t,id,data)=>req(`/api/task-templates/${id}`,{method:'PATCH',token:t,json:data}),
+  deleteTaskTemplate:(t,id)=>req(`/api/task-templates/${id}`,{method:'DELETE',token:t}),
+  runTaskTemplate:(t,id)=>req(`/api/task-templates/${id}/run`,{method:'POST',token:t,json:{}}),
+
+  // Task AI (Phase 4 — heuristics + pluggable LLM)
+  aiSummarizeTask:(t,task_id)=>req('/api/task-ai/summarize',{method:'POST',token:t,json:{task_id}}),
+  aiSuggestAssignee:(t,body)=>req('/api/task-ai/suggest-assignee',{method:'POST',token:t,json:body}),
+  aiSuggestRule:(t,prompt)=>req('/api/task-ai/suggest-rule',{method:'POST',token:t,json:{prompt}}),
+  aiScheduleTask:(t,body)=>req('/api/task-ai/schedule',{method:'POST',token:t,json:body}),
+  aiNlFilter:(t,prompt)=>req('/api/task-ai/nl-filter',{method:'POST',token:t,json:{prompt}}),
 
   // Export endpoints
   exportReceipts:(t,q)=>req('/api/export/receipts',{token:t,query:q}),
@@ -449,5 +518,56 @@ export const api={
   // Misc Services Schemes endpoints
   getMiscServicesScheme:(t)=>req('/api/misc-services-schemes',{token:t}),
   updateMiscServicesScheme:(t,data)=>req('/api/misc-services-schemes',{method:'PUT',token:t,json:data}),
-  calculateMiscServicesCCSI:(t,price)=>req('/api/misc-services-schemes/calculate-cc-si',{method:'POST',token:t,json:{price}})
+  calculateMiscServicesCCSI:(t,price)=>req('/api/misc-services-schemes/calculate-cc-si',{method:'POST',token:t,json:{price}}),
+
+  // -------------------------------------------------------------------------
+  // Receipt approval workflow (v2) — teams + engine actions.
+  // See backend: services/receipt-stage-engine.js, routes/teams.js
+  // -------------------------------------------------------------------------
+  listTeams:(t,q)=>req('/api/teams',{token:t,query:q}),
+  getTeam:(t,id)=>req(`/api/teams/${id}`,{token:t}),
+  createTeam:(t,data)=>req('/api/teams',{method:'POST',token:t,json:data}),
+  updateTeam:(t,id,data)=>req(`/api/teams/${id}`,{method:'PATCH',token:t,json:data}),
+  deleteTeam:(t,id)=>req(`/api/teams/${id}`,{method:'DELETE',token:t}),
+  getTeamWorkload:(t,id)=>req(`/api/teams/${id}/workload`,{token:t}),
+
+  // Each action accepts an optional array of `attachment_ids` referencing files
+  // already uploaded via `uploadReceiptMedia` with category 'approval_evidence'.
+  submitReceipt:(t,id,attachmentIds)=>req(`/api/receipts/${id}/submit`,{method:'POST',token:t,json:{attachment_ids:attachmentIds||[]}}),
+  routeReceipt:(t,id,nextTeamId,comment,attachmentIds)=>req(`/api/receipts/${id}/route`,{method:'POST',token:t,json:{next_team_id:nextTeamId,comment:comment||null,attachment_ids:attachmentIds||[]}}),
+  completeReceipt:(t,id,comment,attachmentIds)=>req(`/api/receipts/${id}/complete`,{method:'POST',token:t,json:{comment:comment||null,attachment_ids:attachmentIds||[]}}),
+  rejectReceipt:(t,id,comment,attachmentIds)=>req(`/api/receipts/${id}/reject`,{method:'POST',token:t,json:{comment,attachment_ids:attachmentIds||[]}}),
+  getReceiptApprovalHistory:(t,id)=>req(`/api/receipts/${id}/history`,{token:t}),
+  // Admin-only override wrapper around PATCH /status with required audit reason.
+  // shape: { complete?, reject?, next_team_id?, comment?, status? }
+  adminOverrideReceipt:(t,id,payload,reason)=>req(`/api/receipts/${id}/status`,{
+    method:'PATCH', token:t, json:payload, headers:{ 'x-admin-reason': reason }
+  }),
+
+  // Receipt-migration job (admin-only). Used by System Settings when an admin
+  // changes intake-team configuration to forcibly route existing in-flight
+  // receipts to the new intake teams.
+  // patch: { receipt_intake_team_id?, receipt_intake_teams_by_category? }
+  previewReceiptMigration:(t,patch)=>req('/api/receipt-approvals/migration/preview',{method:'POST',token:t,json:patch||{}}),
+  startReceiptMigration:(t,patch)=>req('/api/receipt-approvals/migration/run',{method:'POST',token:t,json:patch||{}}),
+  getReceiptMigrationJob:(t,jobId)=>req(`/api/receipt-approvals/migration/run/${jobId}`,{token:t}),
+
+  // Convenience helper used by approval modals: uploads `files` as approval
+  // evidence tagged with the current cycle/team/stage and returns the array
+  // of new file IDs that can be passed to the action endpoints.
+  uploadApprovalEvidence:async (t,receiptId,files,{cycleId,teamId,teamName,uploadedDuring})=>{
+    if (!files || !files.length) return []
+    const meta = {
+      category: 'approval_evidence',
+      cycle_id: cycleId || '',
+      team_id: teamId || '',
+      team_name: teamName || '',
+      uploaded_during: uploadedDuring || ''
+    }
+    const res = await reqWithFiles(`/api/receipts/${receiptId}/media`, {
+      method: 'POST', token: t, formData: createFormData(meta, files)
+    })
+    const uploaded = Array.isArray(res?.files) ? res.files : []
+    return uploaded.map(f => String(f.id)).filter(Boolean)
+  }
 }

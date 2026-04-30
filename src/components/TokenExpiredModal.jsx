@@ -2,10 +2,12 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { FiAlertCircle, FiLogOut, FiLogIn } from 'react-icons/fi'
+import { useEscapeClose } from '../hooks/useEscapeClose'
 
 const TokenExpiredModal = ({ isOpen, onClose }) => {
   const { logout } = useAuth()
   const navigate = useNavigate()
+  useEscapeClose(isOpen, onClose)
 
   const handleLogout = () => {
     logout()

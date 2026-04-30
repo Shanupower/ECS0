@@ -7,6 +7,7 @@ import DarkModeToggle from './DarkModeToggle'
 import ReportIssueModal from './ReportIssueModal'
 import ChangePasswordModal from './ChangePasswordModal'
 import ProfileModal from './ProfileModal'
+import { canAccessSystemSettings } from '../constants/system-settings-access.js'
 import { 
   FiHome, 
   FiFileText, 
@@ -25,7 +26,8 @@ import {
   FiDatabase,
   FiCheckSquare,
   FiTarget,
-  FiClipboard
+  FiClipboard,
+  FiSettings
 } from 'react-icons/fi'
 
 export default function Layout(){
@@ -71,21 +73,29 @@ export default function Layout(){
     }
   }, [user?.role, token])
 
-  // Load overdue + due-today task count for Tasks nav badge
+  // Load overdue + due-today task count for Tasks nav badge. Uses the unified
+  // /tasks/stats endpoint (falls back to legacy /tasks queries for older servers).
   useEffect(() => {
     if (!token) return
     const loadTasksReminderCount = async () => {
       try {
-        const today = new Date().toISOString().slice(0, 10)
-        const [overdueRes, dueTodayRes] = await Promise.all([
-          api.listTasks(token, { overdue: '1', limit: '1', page: '1' }),
-          api.listTasks(token, { due_from: today, due_to: today, status: 'pending,in_progress', limit: '1', page: '1' })
-        ])
-        const overdueTotal = overdueRes.total ?? (overdueRes.items?.length ?? 0)
-        const dueTodayTotal = dueTodayRes.total ?? (dueTodayRes.items?.length ?? 0)
-        setTasksReminderCount(overdueTotal + dueTodayTotal)
+        const stats = await api.getTasksStats(token)
+        const overdue = stats?.overdue ?? 0
+        const today = stats?.due_today ?? 0
+        setTasksReminderCount(overdue + today)
       } catch {
-        setTasksReminderCount(0)
+        try {
+          const today = new Date().toISOString().slice(0, 10)
+          const [overdueRes, dueTodayRes] = await Promise.all([
+            api.listTasks(token, { due: 'overdue', limit: '1', page: '1' }),
+            api.listTasks(token, { due: 'today', limit: '1', page: '1' })
+          ])
+          const overdueTotal = overdueRes.total ?? (overdueRes.items?.length ?? 0)
+          const dueTodayTotal = dueTodayRes.total ?? (dueTodayRes.items?.length ?? 0)
+          setTasksReminderCount(overdueTotal + dueTodayTotal)
+        } catch {
+          setTasksReminderCount(0)
+        }
       }
     }
     loadTasksReminderCount()
@@ -109,7 +119,8 @@ export default function Layout(){
   
   const isAdmin = user?.role === 'admin'
   const isBranchManager = user?.role === 'manager'
-  
+  const showSystemSettingsNav = canAccessSystemSettings(user)
+
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: FiHome },
     { to: "/receipts", label: "Create Receipt", icon: FiFileText },
@@ -119,16 +130,17 @@ export default function Layout(){
     { to: "/portfolio-review", label: "Portfolio Review", icon: FiClipboard },
     { to: "/my-issues", label: "My Issues", icon: FiAlertTriangle },
     ...(isAdmin ? [
-      { to: "/branches", label: "Branch Dashboard", icon: FiBarChart },
-      { to: "/admin/branches", label: "Branch Management", icon: FiShield },
+      { to: "/branches", label: "Branches", icon: FiBarChart },
       { to: "/users", label: "User Management", icon: FiUsers },
       { to: "/schemes", label: "Scheme Management", icon: FiDatabase },
       { to: "/customers", label: "Customer Management", icon: FiUserCheck },
-      { to: "/issues", label: "All Issues", icon: FiAlertTriangle }
+      { to: "/issues", label: "All Issues", icon: FiAlertTriangle },
+      ...(showSystemSettingsNav ? [{ to: "/settings", label: "System Settings", icon: FiSettings }] : [])
     ] : []),
     ...(isBranchManager ? [
-      { to: "/branches", label: "Branch Dashboard", icon: FiBarChart, disabled: true, comingSoon: true },
-      { to: "/customers", label: "Client Management", icon: FiUserCheck }
+      { to: "/branches", label: "Branches", icon: FiBarChart },
+      { to: "/customers", label: "Client Management", icon: FiUserCheck },
+      ...(showSystemSettingsNav ? [{ to: "/settings", label: "System Settings", icon: FiSettings }] : [])
     ] : []),
     ...(user?.role === 'employee' ? [
       { to: "/customers", label: "Client Management", icon: FiUserCheck }

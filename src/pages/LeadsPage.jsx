@@ -1,450 +1,654 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import {
+  FiTarget, FiChevronDown, FiChevronUp, FiTrash2, FiUserCheck, FiArrowRightCircle,
+  FiAlertCircle, FiTrendingUp, FiCalendar, FiAlertTriangle, FiInbox
+} from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { useAppConfig } from '../context/AppConfigContext'
+import LeadCard from './leads/LeadCard'
+import LeadDrawer from './leads/LeadDrawer'
+import LeadsToolbar from './leads/LeadsToolbar'
+import LostReasonModal from './leads/LostReasonModal'
 import {
-  FiTarget,
-  FiPlus,
-  FiRefreshCw,
-  FiEdit2,
-  FiUserCheck,
-  FiTrash2
-} from 'react-icons/fi'
+  CLOSED_STAGES,
+  DEFAULT_STAGES,
+  daysSinceWon,
+  daysSinceLost,
+  formatValue,
+  hasOverdueFollowUp,
+  isFollowUpToday,
+  isStale,
+  weightedPipelineValue
+} from './leads/utils'
 
-const STAGES = ['New', 'Contacted', 'Meeting Scheduled', 'Met', 'Proposal Sent', 'Won', 'Lost']
+const DEFAULT_FILTERS = {
+  search: '',
+  owner: '',
+  source: '',
+  branch: '',
+  staleOnly: false,
+  showClosed: true,
+  showArchived: false
+}
+
+const STAGE_TONES = {
+  New: { bar: 'bg-slate-400', dot: 'bg-slate-400' },
+  Contacted: { bar: 'bg-sky-500', dot: 'bg-sky-500' },
+  'Meeting Scheduled': { bar: 'bg-violet-500', dot: 'bg-violet-500' },
+  Met: { bar: 'bg-indigo-500', dot: 'bg-indigo-500' },
+  'Proposal Sent': { bar: 'bg-amber-500', dot: 'bg-amber-500' },
+  Won: { bar: 'bg-emerald-500', dot: 'bg-emerald-500' },
+  Lost: { bar: 'bg-rose-500', dot: 'bg-rose-500' },
+  _default: { bar: 'bg-[var(--stroke)]', dot: 'bg-[var(--text-muted)]' }
+}
+
+function readFiltersFromUrl(params) {
+  return {
+    search: params.get('q') || '',
+    owner: params.get('owner') || '',
+    source: params.get('source') || '',
+    branch: params.get('branch') || '',
+    staleOnly: params.get('stale') === '1',
+    showClosed: params.get('closed') !== '0',
+    showArchived: params.get('archived') === '1'
+  }
+}
+
+function writeFiltersToParams(current, filters) {
+  const next = new URLSearchParams(current)
+  const setOrDelete = (key, value) => {
+    if (value) next.set(key, value)
+    else next.delete(key)
+  }
+  setOrDelete('q', filters.search)
+  setOrDelete('owner', filters.owner)
+  setOrDelete('source', filters.source)
+  setOrDelete('branch', filters.branch)
+  setOrDelete('stale', filters.staleOnly ? '1' : '')
+  setOrDelete('closed', filters.showClosed ? '' : '0')
+  setOrDelete('archived', filters.showArchived ? '1' : '')
+  return next
+}
 
 export default function LeadsPage() {
   const { token, user } = useAuth()
+  const cfg = useAppConfig()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const stages = (cfg.lead_stages && cfg.lead_stages.length) ? cfg.lead_stages : DEFAULT_STAGES
+  const openStages = useMemo(() => stages.filter((s) => !CLOSED_STAGES.has(s)), [stages])
+  const closedStages = useMemo(() => stages.filter((s) => CLOSED_STAGES.has(s)), [stages])
+
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS, ...readFiltersFromUrl(searchParams) }))
   const [leads, setLeads] = useState([])
   const [assignableUsers, setAssignableUsers] = useState([])
+  const [branchOptions, setBranchOptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [stageFilter, setStageFilter] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    contact_phone: '',
-    contact_email: '',
-    stage: 'New',
-    notes: '',
-    assigned_to_id: ''
-  })
-  const [saving, setSaving] = useState(false)
-  const [convertModal, setConvertModal] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [drawerState, setDrawerState] = useState({ open: false, mode: 'edit', lead: null, initialTab: 'details' })
+  const [closedCollapsed, setClosedCollapsed] = useState(true)
+  const [lostReasonTarget, setLostReasonTarget] = useState(null) // { lead, rollback: () => void }
+  const [draggingId, setDraggingId] = useState(null)
+  const [dragOverStage, setDragOverStage] = useState(null)
+  const lastAnchorRef = useRef(null)
 
-  const loadLeads = async () => {
+  const isAdmin = user?.role === 'admin'
+  const isManager = user?.role === 'manager'
+  const showOwnerFilter = isAdmin || isManager
+
+  // Push filter changes to the URL for sharability.
+  useEffect(() => {
+    const next = writeFiltersToParams(searchParams, filters)
+    setSearchParams(next, { replace: true })
+  }, [filters]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadLeads = useCallback(async () => {
     if (!token) return
     setLoading(true)
     setError('')
     try {
-      const q = { page: '1', limit: '200' }
-      if (stageFilter) q.stage = stageFilter
-      const res = await api.listLeads(token, q)
-      setLeads(res.items || [])
+      const query = { page: '1', limit: '500' }
+      if (filters.owner) query.assignee_id = filters.owner
+      if (filters.source) query.source = filters.source
+      if (filters.search) query.search = filters.search
+      if (filters.showArchived) query.include_archived = '1'
+      if (filters.branch && isAdmin) query.branch_code = filters.branch
+      const res = await api.listLeads(token, query)
+      setLeads(Array.isArray(res?.items) ? res.items : [])
     } catch (err) {
       setError(err.message || 'Failed to load leads')
       setLeads([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [token, filters, isAdmin])
 
-  const loadAssignableUsers = async () => {
-    if (!token) return
-    try {
-      const list = await api.listAssignableUsers(token)
-      setAssignableUsers(Array.isArray(list) ? list : [])
-    } catch {
-      setAssignableUsers([])
-    }
-  }
+  useEffect(() => { loadLeads() }, [loadLeads])
 
   useEffect(() => {
-    if (token) {
-      loadLeads()
-      loadAssignableUsers()
+    if (!token) return
+    api.listAssignableUsers(token).then((list) => {
+      setAssignableUsers(Array.isArray(list) ? list : [])
+    }).catch(() => setAssignableUsers([]))
+    if (isAdmin) {
+      api.getGlobalBranchStats(token).then((res) => {
+        const rows = Array.isArray(res?.branches) ? res.branches : []
+        setBranchOptions(rows.map((b) => ({ value: b.branch_code || b.code || b.branch_name, label: b.branch_name || b.name || b.branch_code })))
+      }).catch(() => setBranchOptions([]))
     }
-  }, [token, stageFilter])
+  }, [token, isAdmin])
 
-  const handleCreate = async (e) => {
+  const ownerLookup = useMemo(() => {
+    const m = new Map()
+    for (const u of assignableUsers) {
+      const id = u.id || u._key
+      if (id) m.set(id, u)
+      if (u.emp_code) m.set(u.emp_code, u)
+    }
+    return m
+  }, [assignableUsers])
+
+  const labelForOwner = (lead) => {
+    const u = ownerLookup.get(lead.assigned_to_id) || ownerLookup.get(lead.assigned_to_emp_code)
+    if (!u) return lead.assigned_to_emp_code || ''
+    return `${u.name || u.emp_code}${u.emp_code ? ` (${u.emp_code})` : ''}`
+  }
+
+  // Apply client-side filters beyond what the server handles (stale, showClosed is about which columns to show).
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      if (filters.staleOnly && !isStale(lead, cfg.lead_stale_threshold_days)) return false
+      return true
+    })
+  }, [leads, filters.staleOnly, cfg.lead_stale_threshold_days])
+
+  const byStage = useMemo(() => {
+    const map = {}
+    for (const s of stages) map[s] = []
+    for (const lead of filteredLeads) {
+      if (map[lead.stage]) map[lead.stage].push(lead)
+    }
+    return map
+  }, [filteredLeads, stages])
+
+  const summary = useMemo(() => {
+    const active = filteredLeads.filter((l) => !CLOSED_STAGES.has(l.stage))
+    const stale = active.filter((l) => isStale(l, cfg.lead_stale_threshold_days)).length
+    const followUpsToday = active.filter((l) => isFollowUpToday(l)).length
+    const followUpsOverdue = active.filter((l) => hasOverdueFollowUp(l)).length
+    const noNextAction = active.filter((l) => !l.next_follow_up_at).length
+    const weighted = weightedPipelineValue(active, cfg.lead_stage_probabilities)
+    return { activeCount: active.length, stale, followUpsToday, followUpsOverdue, noNextAction, weighted }
+  }, [filteredLeads, cfg])
+
+  const selectedList = useMemo(() => filteredLeads.filter((l) => selectedIds.has(l._key)), [filteredLeads, selectedIds])
+
+  // --- Selection handling (single / shift-range / toggle) ---
+  const handleSelect = (lead, mode) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (mode === 'shift' && lastAnchorRef.current) {
+        const flat = filteredLeads.map((l) => l._key)
+        const fromIdx = flat.indexOf(lastAnchorRef.current)
+        const toIdx = flat.indexOf(lead._key)
+        if (fromIdx >= 0 && toIdx >= 0) {
+          const [a, b] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx]
+          for (let i = a; i <= b; i++) next.add(flat[i])
+        } else {
+          next.add(lead._key)
+        }
+      } else {
+        if (next.has(lead._key)) next.delete(lead._key)
+        else next.add(lead._key)
+        lastAnchorRef.current = lead._key
+      }
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  // --- Drawer open helpers ---
+  const openCreateDrawer = () => setDrawerState({ open: true, mode: 'create', lead: null, initialTab: 'details' })
+  const openEditDrawer = (lead, initialTab = 'details') => setDrawerState({ open: true, mode: 'edit', lead, initialTab })
+  const closeDrawer = () => setDrawerState({ open: false, mode: 'edit', lead: null, initialTab: 'details' })
+
+  const onCreated = (lead) => {
+    setLeads((prev) => [lead, ...prev])
+    closeDrawer()
+  }
+  const applyLeadUpdate = (updated) => {
+    if (!updated) return
+    setLeads((prev) => prev.map((l) => (l._key === updated._key ? { ...l, ...updated } : l)))
+    setDrawerState((prev) => (prev.open && prev.lead?._key === updated._key ? { ...prev, lead: { ...prev.lead, ...updated } } : prev))
+  }
+  const onDeleted = (lead) => setLeads((prev) => prev.filter((l) => l._key !== lead._key))
+  const onConverted = (result) => {
+    if (result?.lead) applyLeadUpdate(result.lead)
+    loadLeads()
+  }
+
+  // --- Drag and drop between stage columns ---
+  const handleDragStart = (e, lead) => {
+    setDraggingId(lead._key)
+    try {
+      e.dataTransfer.setData('text/plain', lead._key)
+      e.dataTransfer.effectAllowed = 'move'
+    } catch {}
+  }
+  const handleDragEnd = () => {
+    setDraggingId(null)
+    setDragOverStage(null)
+  }
+  const handleColumnDragOver = (e, stage) => {
     e.preventDefault()
-    if (!formData.name.trim()) return
-    setSaving(true)
-    try {
-      await api.createLead(token, {
-        name: formData.name.trim(),
-        contact_phone: formData.contact_phone.trim() || undefined,
-        contact_email: formData.contact_email.trim() || undefined,
-        stage: formData.stage,
-        notes: formData.notes.trim() || undefined,
-        assigned_to_id: formData.assigned_to_id || undefined
-      })
-      setFormData({ name: '', contact_phone: '', contact_email: '', stage: 'New', notes: '', assigned_to_id: '' })
-      setShowForm(false)
-      loadLeads()
-    } catch (err) {
-      alert(err.message || 'Failed to create lead')
-    } finally {
-      setSaving(false)
-    }
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverStage !== stage) setDragOverStage(stage)
   }
-
-  const handleUpdateStage = async (leadId, stage) => {
-    try {
-      await api.updateLead(token, leadId, { stage })
-      loadLeads()
-    } catch (err) {
-      alert(err.message || 'Failed to update')
-    }
-  }
-
-  const handleUpdate = async (e) => {
+  const handleColumnDrop = (e, nextStage) => {
     e.preventDefault()
-    if (!editingId) return
-    setSaving(true)
+    const id = (() => {
+      try { return e.dataTransfer.getData('text/plain') } catch { return null }
+    })() || draggingId
+    setDraggingId(null)
+    setDragOverStage(null)
+    if (!id) return
+    const lead = leads.find((l) => l._key === id)
+    if (!lead || lead.stage === nextStage) return
+    moveLeadToStage(lead, nextStage)
+  }
+
+  const moveLeadToStage = async (lead, nextStage) => {
+    const prevStage = lead.stage
+    if (nextStage === 'Lost') {
+      setLostReasonTarget({ lead, nextStage })
+      return
+    }
+    // Optimistic update
+    applyLeadUpdate({ _key: lead._key, stage: nextStage })
     try {
-      await api.updateLead(token, editingId, {
-        name: formData.name.trim(),
-        contact_phone: formData.contact_phone.trim() || undefined,
-        contact_email: formData.contact_email.trim() || undefined,
-        stage: formData.stage,
-        notes: formData.notes.trim() || undefined,
-        assigned_to_id: formData.assigned_to_id || undefined
-      })
-      setEditingId(null)
-      loadLeads()
+      const updated = await api.updateLead(token, lead._key, { stage: nextStage })
+      applyLeadUpdate(updated)
+      if (nextStage === 'Won' && !updated.converted_to_customer_id) {
+        // Auto-open the drawer on the Convert tab to force an explicit decision.
+        openEditDrawer(updated, 'convert')
+      }
     } catch (err) {
-      alert(err.message || 'Failed to update')
-    } finally {
-      setSaving(false)
+      // Rollback on error
+      applyLeadUpdate({ _key: lead._key, stage: prevStage })
+      alert(err.message || 'Failed to move lead')
     }
   }
 
-  const handleDelete = async (leadId) => {
-    if (!confirm('Delete this lead?')) return
+  const confirmLostReason = async (reason) => {
+    if (!lostReasonTarget) return
+    const { lead, nextStage } = lostReasonTarget
+    const prevStage = lead.stage
+    setLostReasonTarget(null)
+    applyLeadUpdate({ _key: lead._key, stage: nextStage, lost_reason: reason })
     try {
-      await api.deleteLead(token, leadId)
-      loadLeads()
+      const updated = await api.updateLead(token, lead._key, { stage: nextStage, lost_reason: reason })
+      applyLeadUpdate(updated)
     } catch (err) {
-      alert(err.message || 'Failed to delete lead')
+      applyLeadUpdate({ _key: lead._key, stage: prevStage })
+      alert(err.message || 'Failed to mark as lost')
     }
   }
 
-  const handleConvert = async (leadId, customerPayload) => {
-    try {
-      await api.convertLeadToCustomer(token, leadId, { customer: customerPayload })
-      setConvertModal(null)
-      loadLeads()
-      alert('Lead converted to customer successfully.')
-    } catch (err) {
-      alert(err.message || 'Failed to convert')
+  // --- Bulk actions ---
+  const bulkReassign = async (userId) => {
+    if (!userId || selectedList.length === 0) return
+    const branches = new Set(selectedList.map((l) => l.branch).filter(Boolean))
+    if (branches.size > 1 && !confirm(`Reassign across ${branches.size} branches? (${[...branches].join(', ')})`)) return
+    await Promise.all(selectedList.map((l) => api.updateLead(token, l._key, { assigned_to_id: userId })))
+    await loadLeads()
+    clearSelection()
+  }
+  const bulkStage = async (stage) => {
+    if (!stage || selectedList.length === 0) return
+    if (stage === 'Lost') {
+      alert('Use drag-to-Lost to capture a reason per lead.')
+      return
     }
+    await Promise.all(selectedList.map((l) => api.updateLead(token, l._key, { stage })))
+    await loadLeads()
+    clearSelection()
+  }
+  const bulkDelete = async () => {
+    if (selectedList.length === 0) return
+    if (!confirm(`Delete ${selectedList.length} lead(s)? This cannot be undone.`)) return
+    await Promise.all(selectedList.map((l) => api.deleteLead(token, l._key).catch(() => {})))
+    await loadLeads()
+    clearSelection()
   }
 
-  const userById = (id) => assignableUsers.find((u) => u.id === id) || { name: '', emp_code: '' }
+  const showBranchPill = isAdmin && !filters.branch
 
-  const byStage = {}
-  STAGES.forEach((s) => { byStage[s] = [] })
-  leads.forEach((lead) => {
-    if (byStage[lead.stage]) byStage[lead.stage].push(lead)
-  })
+  const renderColumn = (stage) => {
+    const column = byStage[stage] || []
+    const wonExpiry = cfg.lead_won_archive_days || 14
+    const lostExpiry = cfg.lead_lost_archive_days || 60
+    const total = column.reduce((sum, l) => sum + (Number(l.value || l.expected_value || 0) || 0), 0)
+    const isDragOver = dragOverStage === stage
+    const tone = STAGE_TONES[stage] || STAGE_TONES._default
+
+    const footer =
+      stage === 'Won' ? `Auto-archives in ${wonExpiry}d if not converted`
+      : stage === 'Lost' ? `Auto-archives in ${lostExpiry}d`
+      : null
+
+    return (
+      <div
+        key={stage}
+        onDragOver={(e) => handleColumnDragOver(e, stage)}
+        onDrop={(e) => handleColumnDrop(e, stage)}
+        className={`group relative flex flex-col min-h-[220px] rounded-xl border bg-[var(--card-bg)] overflow-hidden transition-all ${
+          isDragOver ? 'ring-2 ring-[var(--accent)] border-[var(--accent)]' : 'border-[var(--stroke)]'
+        }`}
+      >
+        <div className={`h-1 w-full ${tone.bar}`} />
+        <div className="flex items-center justify-between px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`w-2 h-2 rounded-full ${tone.dot}`} />
+            <h3 className="font-semibold text-[var(--text-primary)] text-sm truncate">{stage}</h3>
+            <span className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums bg-[var(--card-hover)] rounded-full px-1.5 min-w-[1.25rem] text-center">
+              {column.length}
+            </span>
+          </div>
+          {total > 0 && (
+            <span className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums">
+              {formatValue(total)}
+            </span>
+          )}
+        </div>
+        <ul className="px-2 pb-2 space-y-1.5 flex-1">
+          {column.length === 0 ? (
+            <li className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="w-9 h-9 rounded-full bg-[var(--card-hover)] flex items-center justify-center mb-2">
+                <FiInbox className="w-4 h-4 text-[var(--text-muted)]" />
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)]">No leads here</p>
+            </li>
+          ) : (
+            column.map((lead) => (
+              <li key={lead._key}>
+                <LeadCard
+                  lead={lead}
+                  ownerLabel={labelForOwner(lead)}
+                  showBranchPill={showBranchPill}
+                  staleThresholdDays={cfg.lead_stale_threshold_days}
+                  wonArchiveDays={cfg.lead_won_archive_days}
+                  lostArchiveDays={cfg.lead_lost_archive_days}
+                  selected={selectedIds.has(lead._key)}
+                  dimOthers={selectedIds.size > 0 && !selectedIds.has(lead._key)}
+                  onOpen={(l) => openEditDrawer(l)}
+                  onSelect={handleSelect}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  draggable
+                />
+              </li>
+            ))
+          )}
+        </ul>
+        {footer && (
+          <div className="px-3 py-1.5 text-[10px] text-[var(--text-muted)] bg-[var(--card-hover)]/50 border-t border-[var(--stroke)]/60">
+            {footer}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <FiTarget className="w-7 h-7 text-red-600 dark:text-red-400" />
-          Leads
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            <FiPlus className="w-4 h-4" />
-            Add lead
-          </button>
-          <button
-            onClick={loadLeads}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
-          >
-            <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+    <div className="max-w-[1400px] mx-auto space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2.5">
+            <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-600/10 text-red-600 dark:text-red-400">
+              <FiTarget className="w-5 h-5" />
+            </span>
+            Leads
+          </h1>
+          <p className="text-xs text-[var(--text-muted)] mt-1 ml-[2.9rem]">
+            {summary.activeCount} active · drag between stages · shift-click for bulk actions
+          </p>
         </div>
       </div>
 
+      <LeadsToolbar
+        filters={filters}
+        onChange={setFilters}
+        onCreate={openCreateDrawer}
+        onRefresh={loadLeads}
+        loading={loading}
+        sources={cfg.lead_sources || []}
+        owners={assignableUsers}
+        showOwnerFilter={showOwnerFilter}
+        showBranchPicker={isAdmin}
+        branches={branchOptions}
+        userSub={user?.sub}
+      />
+
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <StatPill
+          label="Active"
+          value={summary.activeCount}
+          dot="bg-[var(--text-muted)]"
+          icon={<FiTarget className="w-3.5 h-3.5" />}
+        />
+        <StatPill
+          label="Stale"
+          value={summary.stale}
+          dot="bg-amber-500"
+          tone={summary.stale > 0 ? 'amber' : null}
+          icon={<FiAlertTriangle className="w-3.5 h-3.5" />}
+        />
+        <StatPill
+          label="Overdue"
+          value={summary.followUpsOverdue}
+          dot="bg-rose-500"
+          tone={summary.followUpsOverdue > 0 ? 'rose' : null}
+          icon={<FiAlertCircle className="w-3.5 h-3.5" />}
+        />
+        <StatPill
+          label="Due today"
+          value={summary.followUpsToday}
+          dot="bg-sky-500"
+          icon={<FiCalendar className="w-3.5 h-3.5" />}
+        />
+        <StatPill
+          label="No next action"
+          value={summary.noNextAction}
+          dot="bg-[var(--stroke)]"
+        />
+        <StatPill
+          label="Weighted pipeline"
+          value={formatValue(summary.weighted) || '—'}
+          dot="bg-emerald-500"
+          icon={<FiTrendingUp className="w-3.5 h-3.5" />}
+          tone="emerald"
+        />
+      </div>
+
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+        <div className="rounded-lg p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm flex items-center gap-2">
+          <FiAlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
-      {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 p-4 rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] space-y-3">
-          <h3 className="font-semibold text-[var(--text-primary)]">New lead</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              type="text"
-              required
-              placeholder="Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            />
-            <input
-              type="text"
-              placeholder="Phone"
-              value={formData.contact_phone}
-              onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={formData.contact_email}
-              onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            />
-            <select
-              value={formData.stage}
-              onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            >
-              {STAGES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <select
-              value={formData.assigned_to_id}
-              onChange={(e) => setFormData({ ...formData, assigned_to_id: e.target.value })}
-              className="sm:col-span-2 px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            >
-              <option value="">Assign to...</option>
-              {assignableUsers.map((u) => (
-                <option key={u.id} value={u.id}>{u.name} ({u.emp_code})</option>
-              ))}
-            </select>
-            <textarea
-              placeholder="Notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="sm:col-span-2 px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-              rows={2}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
-              {saving ? 'Saving...' : 'Create'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)]">
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div className="mb-4">
-        <select
-          value={stageFilter}
-          onChange={(e) => setStageFilter(e.target.value)}
-          className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm"
-        >
-          <option value="">All stages</option>
-          {STAGES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-
-      {loading ? (
-        <div className="text-[var(--text-muted)] py-8">Loading leads...</div>
+      {loading && leads.length === 0 ? (
+        <div className="rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] p-12 text-center text-[var(--text-muted)]">Loading leads…</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {STAGES.map((stage) => (
-            <div key={stage} className="rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] p-3">
-              <h3 className="font-semibold text-[var(--text-primary)] mb-2 flex justify-between items-center">
-                <span>{stage}</span>
-                <span className="text-xs text-[var(--text-muted)]">{(byStage[stage] || []).length}</span>
-              </h3>
-              <ul className="space-y-2">
-                {(byStage[stage] || []).map((lead) => (
-                  <li
-                    key={lead._key}
-                    className="p-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)]"
-                  >
-                    <p className="font-medium text-[var(--text-primary)] truncate">{lead.name}</p>
-                    {lead.contact_phone && <p className="text-xs text-[var(--text-muted)]">{lead.contact_phone}</p>}
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <select
-                        value={lead.stage}
-                        onChange={(e) => handleUpdateStage(lead._key, e.target.value)}
-                        className="text-xs px-2 py-1 border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-                      >
-                        {STAGES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                      {lead.stage !== 'Won' && lead.stage !== 'Lost' && (
-                        <button
-                          onClick={() => setConvertModal(lead)}
-                          className="inline-flex items-center gap-1 text-xs px-2 py-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
-                        >
-                          <FiUserCheck className="w-3 h-3" />
-                          Convert
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setEditingId(lead._key)
-                          setFormData({
-                            name: lead.name || '',
-                            contact_phone: lead.contact_phone || '',
-                            contact_email: lead.contact_email || '',
-                            stage: lead.stage || 'New',
-                            notes: lead.notes || '',
-                            assigned_to_id: lead.assigned_to_id || ''
-                          })
-                        }}
-                        className="text-xs px-2 py-1 text-[var(--text-muted)] hover:bg-[var(--card-hover)] rounded"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(lead._key)}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
-                      >
-                        <FiTrash2 className="w-3 h-3" />
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {editingId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form onSubmit={handleUpdate} className="bg-[var(--card-bg)] rounded-xl shadow-xl max-w-md w-full p-6 space-y-3 max-h-[90vh] overflow-y-auto border border-[var(--stroke)]">
-            <h3 className="font-semibold text-[var(--text-primary)]">Edit lead</h3>
-            <input
-              type="text"
-              required
-              placeholder="Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            />
-            <input
-              type="text"
-              placeholder="Phone"
-              value={formData.contact_phone}
-              onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={formData.contact_email}
-              onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-            />
-            <select
-              value={formData.stage}
-              onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
-              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+        <>
+          {/* Open stages — horizontal scroller on narrow screens, grid on wide */}
+          <div className="overflow-x-auto -mx-2 px-2 pb-2">
+            <div
+              className="flex gap-3 min-w-max xl:grid xl:min-w-0 xl:gap-3"
+              style={{ gridTemplateColumns: `repeat(${Math.max(openStages.length, 1)}, minmax(240px, 1fr))` }}
             >
-              {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <textarea
-              placeholder="Notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-              rows={2}
-            />
-            <div className="flex gap-2 pt-2">
-              <button type="submit" disabled={saving} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">Save</button>
-              <button type="button" onClick={() => setEditingId(null)} className="px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)]">Cancel</button>
+              {openStages.map((stage) => (
+                <div key={stage} className="w-[280px] xl:w-auto">
+                  {renderColumn(stage)}
+                </div>
+              ))}
             </div>
-          </form>
-        </div>
+          </div>
+
+          {/* Closed stages footer strip */}
+          {filters.showClosed && closedStages.length > 0 && (
+            <div className="rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] overflow-hidden">
+              <button
+                onClick={() => setClosedCollapsed((v) => !v)}
+                className="w-full px-4 py-2.5 flex items-center justify-between text-sm hover:bg-[var(--card-hover)] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Closed</span>
+                  <div className="flex items-center gap-2">
+                    {closedStages.map((s) => {
+                      const tone = STAGE_TONES[s] || STAGE_TONES._default
+                      return (
+                        <span key={s} className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                          <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+                          {s} <span className="text-[var(--text-muted)] tabular-nums">{byStage[s]?.length || 0}</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+                {closedCollapsed ? <FiChevronDown className="w-4 h-4 text-[var(--text-muted)]" /> : <FiChevronUp className="w-4 h-4 text-[var(--text-muted)]" />}
+              </button>
+              {!closedCollapsed && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 border-t border-[var(--stroke)]">
+                  {closedStages.map((stage) => renderColumn(stage))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {convertModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--card-bg)] rounded-xl shadow-xl max-w-md w-full p-6 border border-[var(--stroke)]">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-2">Convert to customer</h3>
-            <p className="text-sm text-[var(--text-secondary)] mb-4">
-              Lead &quot;{convertModal.name}&quot; will be created as a customer. Add PAN and other required details below (or in Customer Management after creation).
-            </p>
-            <ConvertForm
-              lead={convertModal}
-              onSave={(payload) => handleConvert(convertModal._key, payload)}
-              onCancel={() => setConvertModal(null)}
-            />
-          </div>
-        </div>
+      {/* Bulk action bar */}
+      {selectedList.length > 0 && (
+        <BulkActionBar
+          count={selectedList.length}
+          assignableUsers={assignableUsers}
+          stages={openStages}
+          canReassign={isAdmin || isManager}
+          onReassign={bulkReassign}
+          onStageChange={bulkStage}
+          onDelete={bulkDelete}
+          onClear={clearSelection}
+        />
       )}
+
+      {lostReasonTarget && (
+        <LostReasonModal
+          leadName={lostReasonTarget.lead?.name}
+          reasons={cfg.lead_lost_reasons || []}
+          onConfirm={confirmLostReason}
+          onCancel={() => setLostReasonTarget(null)}
+        />
+      )}
+
+      <LeadDrawer
+        open={drawerState.open}
+        mode={drawerState.mode}
+        lead={drawerState.lead}
+        initialTab={drawerState.initialTab}
+        assignableUsers={assignableUsers}
+        onClose={closeDrawer}
+        onCreated={onCreated}
+        onUpdated={applyLeadUpdate}
+        onConverted={onConverted}
+        onDeleted={onDeleted}
+        onReactivated={applyLeadUpdate}
+      />
     </div>
   )
 }
 
-function ConvertForm({ lead, onSave, onCancel }) {
-  const [payload, setPayload] = useState({
-    name: lead.name || '',
-    pan: '',
-    email: lead.contact_email || '',
-    mobile: lead.contact_phone || ''
-  })
-  const [saving, setSaving] = useState(false)
+function StatPill({ label, value, dot, icon, tone = null }) {
+  const toneCls =
+    tone === 'amber' ? 'border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-900/10'
+    : tone === 'rose' ? 'border-rose-200 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-900/10'
+    : tone === 'emerald' ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-900/10'
+    : 'border-[var(--stroke)] bg-[var(--card-bg)]'
+  return (
+    <div className={`rounded-lg border px-3 py-2 flex items-center gap-2 ${toneCls}`}>
+      {dot && <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} />}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] truncate">{label}</span>
+          {icon && <span className="text-[var(--text-muted)] flex-shrink-0">{icon}</span>}
+        </div>
+        <div className="text-lg font-semibold text-[var(--text-primary)] tabular-nums leading-tight">{value}</div>
+      </div>
+    </div>
+  )
+}
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setSaving(true)
-    onSave(payload)
-    setSaving(false)
-  }
+function BulkActionBar({ count, assignableUsers, stages, canReassign, onReassign, onStageChange, onDelete, onClear }) {
+  const [assignTarget, setAssignTarget] = useState('')
+  const [stageTarget, setStageTarget] = useState('')
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <input
-        type="text"
-        required
-        placeholder="Name"
-        value={payload.name}
-        onChange={(e) => setPayload({ ...payload, name: e.target.value })}
-        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-      />
-      <input
-        type="text"
-        placeholder="PAN"
-        value={payload.pan}
-        onChange={(e) => setPayload({ ...payload, pan: e.target.value })}
-        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-      />
-      <input
-        type="email"
-        placeholder="Email"
-        value={payload.email}
-        onChange={(e) => setPayload({ ...payload, email: e.target.value })}
-        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-      />
-      <input
-        type="text"
-        placeholder="Mobile"
-        value={payload.mobile}
-        onChange={(e) => setPayload({ ...payload, mobile: e.target.value })}
-        className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
-      />
-      <div className="flex gap-2 pt-2">
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">Convert</button>
-        <button type="button" onClick={onCancel} className="px-4 py-2 border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)]">Cancel</button>
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 rounded-full border border-[var(--stroke)] bg-[var(--card-bg)] shadow-xl px-4 py-2 flex items-center gap-2 flex-wrap">
+      <span className="text-sm font-medium text-[var(--text-primary)]">
+        {count} selected
+      </span>
+      {canReassign && (
+        <div className="flex items-center gap-1">
+          <select
+            value={assignTarget}
+            onChange={(e) => setAssignTarget(e.target.value)}
+            className="text-sm px-2 py-1 border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+          >
+            <option value="">Reassign…</option>
+            {assignableUsers.map((u) => (
+              <option key={u.id || u._key} value={u.id || u._key}>{u.name} ({u.emp_code})</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { onReassign(assignTarget); setAssignTarget('') }}
+            disabled={!assignTarget}
+            className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--accent)] text-white rounded text-xs disabled:opacity-50"
+          >
+            <FiUserCheck className="w-3 h-3" /> Go
+          </button>
+        </div>
+      )}
+      <div className="flex items-center gap-1">
+        <select
+          value={stageTarget}
+          onChange={(e) => setStageTarget(e.target.value)}
+          className="text-sm px-2 py-1 border border-[var(--stroke)] rounded bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+        >
+          <option value="">Move stage…</option>
+          {stages.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <button
+          onClick={() => { onStageChange(stageTarget); setStageTarget('') }}
+          disabled={!stageTarget}
+          className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--accent)] text-white rounded text-xs disabled:opacity-50"
+        >
+          <FiArrowRightCircle className="w-3 h-3" /> Go
+        </button>
       </div>
-    </form>
+      <button
+        onClick={onDelete}
+        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+      >
+        <FiTrash2 className="w-3 h-3" /> Delete
+      </button>
+      <button onClick={onClear} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1">
+        Clear
+      </button>
+    </div>
   )
 }

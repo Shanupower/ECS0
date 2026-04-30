@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: ['dev.ecsfinancial.tech'],
     open: true
   },
   build: {

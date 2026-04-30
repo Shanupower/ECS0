@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { cn } from '../../utils/cn'
 import { FiX } from 'react-icons/fi'
+import { useEscapeClose } from '../../hooks/useEscapeClose'
 
 /**
  * Slide-over panel for detail view (e.g. issue, transaction, user). Frosted glass; close button.
@@ -13,6 +14,7 @@ import { FiX } from 'react-icons/fi'
  * @param {'left'|'right'} [props.side]
  */
 export function Drawer({ open, onClose, title, children, className, side = 'right' }) {
+  useEscapeClose(open, onClose)
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'

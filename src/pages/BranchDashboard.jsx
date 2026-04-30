@@ -1,9 +1,44 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { SegmentedControl } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
+import { useBranchWorkspace } from './branch-workspace/BranchWorkspaceContext'
+import KpiStat from '../components/branch-hub/KpiStat'
+import {
+  formatCompactINR as fmtCompactINR,
+  tooltipStyle as chartTooltipStyle,
+  receiptAmount,
+  receiptDate,
+} from '../components/branch-hub/utils'
+
+const RECEIPT_PAGE_SIZE = 200
+const RECEIPT_PAGE_CAP = 25
+
+async function fetchAllReceiptsPaged(token, queryBase) {
+  const all = []
+  for (let page = 1; page <= RECEIPT_PAGE_CAP; page++) {
+    let res
+    try {
+      res = await api.listReceipts(token, {
+        ...queryBase,
+        size: String(RECEIPT_PAGE_SIZE),
+        page: String(page),
+        sort: 'created_at:desc',
+      })
+    } catch {
+      break
+    }
+    const items = res?.items ?? res?.data ?? []
+    if (Array.isArray(items) && items.length) all.push(...items)
+    const total = Number(res?.total ?? 0)
+    if (!Array.isArray(items) || items.length < RECEIPT_PAGE_SIZE) break
+    if (total && all.length >= total) break
+  }
+  return all
+}
 import { 
   FiTrendingUp, 
   FiFileText, 
@@ -24,7 +59,9 @@ import {
   FiClock,
   FiMail,
   FiPhone,
-  FiHome
+  FiHome,
+  FiLayers,
+  FiZap,
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 
@@ -86,8 +123,27 @@ function scaleMonthlyTargetToDateRange(monthlyAmount, fromStr, toStr) {
   return total
 }
 
+function initialScopeFromUrl() {
+  if (typeof window === 'undefined') return 'my_branch'
+  const s = new URLSearchParams(window.location.search).get('scope')
+  if (s === 'all_branches' || s === 'all') return 'all_branches'
+  return 'my_branch'
+}
+
 export default function BranchDashboard() {
   const { token, user } = useAuth()
+  const navigate = useNavigate()
+  const [, setSearchParams] = useSearchParams()
+  const {
+    embedded,
+    refreshSignal,
+    scope: wsScope,
+    setScope: wsSetScope,
+    canSwitchScope: wsCanSwitch,
+    includePending: wsIncludePending,
+    setIncludePending: wsSetIncludePending,
+    focusedBranchCode: wsFocusedBranchCode,
+  } = useBranchWorkspace()
   const [branches, setBranches] = useState([])
   const [selectedBranch, setSelectedBranch] = useState(null)
   const [branchStats, setBranchStats] = useState(null)
@@ -103,7 +159,10 @@ export default function BranchDashboard() {
   const [loadingBranchDetails, setLoadingBranchDetails] = useState(false)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [branchRecentReceipts, setBranchRecentReceipts] = useState([])
-  const [includePending, setIncludePending] = useState(true)
+  const [monthlyCcSiForTrend, setMonthlyCcSiForTrend] = useState([])
+  const [localIncludePending, setLocalIncludePending] = useState(true)
+  const includePending = embedded ? !!wsIncludePending : localIncludePending
+  const setIncludePending = embedded ? (wsSetIncludePending || (() => {})) : setLocalIncludePending
   const [dateBasis, setDateBasis] = useState('receipt') // 'receipt' | 'transaction'
   const formatDateForInput = (date) => {
     const year = date.getFullYear()
@@ -118,12 +177,20 @@ export default function BranchDashboard() {
     to: `${currentYear}-12-31`
   })
   const [selectedPeriod, setSelectedPeriod] = useState('year')
-  const [scope, setScope] = useState('my_branch') // 'my_branch' | 'all_branches' (admin only)
+  const [localScope, setLocalScope] = useState(initialScopeFromUrl) // 'my_branch' | 'all_branches' (admin only)
 
   const isAdmin = user?.role === 'admin'
   const isManager = user?.role === 'manager'
-  const showScopeToggle = isAdmin
+  const showScopeToggle = isAdmin && !embedded // workspace provides the toggle when embedded
+  // When embedded, follow the workspace scope; otherwise use our own local state.
+  const scope = embedded && wsCanSwitch ? wsScope : localScope
+  const setScope = embedded && wsCanSwitch ? wsSetScope : setLocalScope
   const isMyBranchView = scope === 'my_branch' || isManager
+
+  useEffect(() => {
+    if (embedded) return
+    if (!isAdmin && localScope === 'all_branches') setLocalScope('my_branch')
+  }, [embedded, isAdmin, localScope])
 
   const userBranchCode = user?.branch_code || (user?.branch && branches.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code) || null
   const userBranchInfo = userBranchCode ? branches.find(b => b.branch_code === userBranchCode) : null
@@ -140,12 +207,18 @@ export default function BranchDashboard() {
       setBranches(Array.isArray(branchesData) ? branchesData : [])
       
       if (isMyBranchView) {
-        const branchCode = isManager ? (user?.branch_code || branchesData.find(b => String(b.branch_name).toLowerCase() === String(user?.branch).toLowerCase())?.branch_code) : user?.branch_code || (user?.branch && branchesData.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code)
+        // Admin in embedded my_branch uses the workspace-picked branch; everyone else uses their own.
+        const branchCode = isAdmin && embedded && wsFocusedBranchCode
+          ? wsFocusedBranchCode
+          : (isManager
+              ? (user?.branch_code || branchesData.find(b => String(b.branch_name).toLowerCase() === String(user?.branch).toLowerCase())?.branch_code)
+              : (user?.branch_code || (user?.branch && branchesData.find(b => String(b.branch_name).toLowerCase() === String(user.branch).toLowerCase())?.branch_code)))
         if (!branchCode && isAdmin) {
           setGlobalStats(null)
           setBranchStats(null)
           setEmployeePerformance([])
           setBranchRecentReceipts([])
+          setMonthlyCcSiForTrend([])
           setSelectedBranch(null)
         } else if (branchCode) {
           const branchObj = branchesData.find(b => b.branch_code === branchCode)
@@ -153,18 +226,22 @@ export default function BranchDashboard() {
           const [stats, empPerf, receiptsRes] = await Promise.all([
             api.getBranchStats(token, branchCode, { includePending: includePending ? '1' : '0', from: dateRange.from, to: dateRange.to, date_basis: dateBasis }),
             api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, branch_code: branchCode, includePending: includePending ? '1' : '0', date_basis: dateBasis }).catch(() => []),
-            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, size: '10', sort: 'created_at:desc' }).catch(() => ({ items: [], data: [] }))
+            api.getBranchReceipts(token, branchCode, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, size: '10', sort: 'created_at:desc', includePending: includePending ? '1' : '0' }).catch(() => ({ items: [], data: [] }))
           ])
-          setBranchStats(stats)
+          // Normalize: /api/branches/:code/stats returns { branch, statistics }.
+          // This dashboard expects a flat stats object (total_receipts, total_investments, total_cc, ...).
+          setBranchStats(stats?.statistics ?? stats)
           setGlobalStats(null)
           setEmployeePerformance(Array.isArray(empPerf) ? empPerf : [])
           const rec = receiptsRes?.items ?? receiptsRes?.data ?? []
           setBranchRecentReceipts(Array.isArray(rec) ? rec.slice(0, 10) : [])
+          setMonthlyCcSiForTrend([])
         } else {
           setBranchStats(null)
           setGlobalStats(null)
           setEmployeePerformance([])
           setBranchRecentReceipts([])
+          setMonthlyCcSiForTrend([])
           setSelectedBranch(null)
         }
       } else {
@@ -189,6 +266,17 @@ export default function BranchDashboard() {
         } catch {
           setEmployeePerformance([])
         }
+        try {
+          const rows = await api.getMonthlyCcSi(token, {
+            from: dateRange.from,
+            to: dateRange.to,
+            date_basis: dateBasis,
+            includePending: includePending ? '1' : '0',
+          })
+          setMonthlyCcSiForTrend(Array.isArray(rows) ? rows : [])
+        } catch {
+          setMonthlyCcSiForTrend([])
+        }
         setBranchRecentReceipts([])
       }
     } catch (err) {
@@ -208,7 +296,7 @@ export default function BranchDashboard() {
         to: dateRange.to,
         date_basis: dateBasis
       })
-      setBranchStats(stats)
+      setBranchStats(stats?.statistics ?? stats)
     } catch (err) {
       console.error('Failed to load branch stats:', err)
     }
@@ -270,7 +358,8 @@ export default function BranchDashboard() {
           to: dateRange.to,
           date_basis: dateBasis,
           size: 10,
-          sort: 'created_at:desc'
+          sort: 'created_at:desc',
+          includePending: includePending ? '1' : '0'
         })
         const receiptsData = receipts.data || receipts.items || receipts || []
         setBranchRecentReceipts(Array.isArray(receiptsData) ? receiptsData.slice(0, 10) : [])
@@ -295,7 +384,12 @@ export default function BranchDashboard() {
 
   useEffect(() => {
     loadBranchData()
-  }, [token, includePending, dateRange.from, dateRange.to, dateBasis, scope])
+  }, [token, includePending, dateRange.from, dateRange.to, dateBasis, scope, wsFocusedBranchCode])
+
+  useEffect(() => {
+    if (!embedded || !refreshSignal) return
+    loadBranchData()
+  }, [embedded, refreshSignal])
 
   const handlePeriodSelect = (period) => {
     setSelectedPeriod(period)
@@ -371,6 +465,51 @@ export default function BranchDashboard() {
 
     return lookup
   }, [branches])
+
+  // Revenue Trend: bucket the backend monthly CC+SI aggregate by YYYY-MM, gap-fill
+  // any missing months in the selected range with zero so the line is continuous.
+  const revenueTrendData = useMemo(() => {
+    const ymKey = (d) => {
+      if (!d) return null
+      const dt = new Date(d)
+      if (Number.isNaN(dt.getTime())) return null
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+    }
+    const monthLabel = (key) => {
+      const [y, m] = key.split('-').map((n) => parseInt(n, 10))
+      if (!Number.isFinite(y) || !Number.isFinite(m)) return key
+      return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+    }
+    const monthKeysBetween = (startKey, endKey) => {
+      if (!startKey || !endKey) return []
+      const [sy, sm] = startKey.split('-').map((n) => parseInt(n, 10))
+      const [ey, em] = endKey.split('-').map((n) => parseInt(n, 10))
+      const out = []
+      let y = sy
+      let m = sm
+      while (y < ey || (y === ey && m <= em)) {
+        out.push(`${y}-${String(m).padStart(2, '0')}`)
+        m += 1
+        if (m > 12) { m = 1; y += 1 }
+      }
+      return out
+    }
+    const startKey = ymKey(dateRange.from)
+    const endKey = ymKey(dateRange.to)
+    const buckets = new Map()
+    for (const k of monthKeysBetween(startKey, endKey)) {
+      buckets.set(k, { month: monthLabel(k), key: k, revenue: 0, cc: 0, si: 0 })
+    }
+    ;(monthlyCcSiForTrend || []).forEach((r) => {
+      const key = String(r?.month || '').slice(0, 7)
+      if (!key || !buckets.has(key)) return
+      const cc = Number(r?.cc || 0)
+      const si = Number(r?.si || 0)
+      const revenue = cc + si
+      buckets.set(key, { month: monthLabel(key), key, revenue, cc, si })
+    })
+    return Array.from(buckets.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+  }, [monthlyCcSiForTrend, dateRange.from, dateRange.to])
 
   const getBranchDisplayName = (branchStat) => {
     if (!branchStat) return 'Unknown Branch'
@@ -514,53 +653,107 @@ export default function BranchDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
-          </h1>
-          <p className="text-[var(--text-secondary)] mt-1">
-            {isMyBranchView ? (selectedBranch ? 'Your branch team performance metrics' : isAdmin ? 'No branch assigned. Switch to All branches or assign yourself a branch.' : 'Your branch team performance metrics') : 'Overview of all branch performance'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
+      <div
+        className={
+          embedded
+            ? 'rounded-xl border border-[var(--stroke)] bg-[var(--card-bg-opaque)] px-3 py-2.5 flex flex-wrap items-center gap-3'
+            : 'flex flex-col sm:flex-row sm:items-center justify-between gap-4'
+        }
+      >
+        {!embedded && (
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-[var(--accent-muted)] flex items-center justify-center shrink-0">
+              <FiBarChart className="w-5 h-5 text-[var(--accent)]" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] truncate">
+                {isMyBranchView && selectedBranch ? `${selectedBranch.branch_name || 'Branch'} Dashboard` : isManager ? `${user?.branch || 'Branch'} Dashboard` : 'Branch Dashboard'}
+              </h1>
+              <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
+                {isMyBranchView
+                  ? selectedBranch
+                    ? 'Branch performance · investments & collection credit (aligned with Branch Power Tool)'
+                    : isAdmin
+                      ? 'No branch assigned. Switch to All branches or assign yourself a branch.'
+                      : 'Branch performance · investments & collection credit'
+                  : 'Network view · all branches (admin)'}
+              </p>
+            </div>
+          </div>
+        )}
+        <div className={embedded ? 'flex flex-wrap items-center gap-3 w-full' : 'flex flex-wrap items-center gap-4'}>
           {showScopeToggle && (
             <SegmentedControl
               options={[{ value: 'my_branch', label: 'My branch' }, { value: 'all_branches', label: 'All branches' }]}
               value={scope}
-              onChange={(v) => setScope(v)}
+              onChange={(v) => {
+                setScope(v)
+                if (isAdmin) {
+                  setSearchParams(
+                    (prev) => {
+                      const next = new URLSearchParams(prev)
+                      if (v === 'all_branches') next.set('scope', 'all_branches')
+                      else next.delete('scope')
+                      return next
+                    },
+                    { replace: true }
+                  )
+                }
+              }}
             />
           )}
-          <button
-            onClick={loadBranchData}
-            disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-[var(--stroke)] rounded-lg text-sm font-medium bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50 transition-colors duration-200"
-          >
-            <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <label className="flex items-center space-x-3 cursor-pointer group pl-4 border-l border-[var(--stroke)] shrink-0">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={includePending}
-                onChange={e => setIncludePending(e.target.checked)}
-                className="sr-only"
-              />
-              <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
-                includePending ? 'bg-[var(--accent)]' : 'bg-neutral-200 dark:bg-neutral-600'
-              }`}>
-                <div className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-blue-600 shadow transition-transform duration-200 ease-in-out ${
-                  includePending ? 'translate-x-5' : 'translate-x-0'
-                }`} />
+          {!embedded && (isManager || isAdmin) && (
+            <Link
+              to="/branches?section=operations"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-muted)] text-[var(--accent)] hover:bg-[var(--accent-muted)]/80"
+            >
+              <FiZap className="w-4 h-4" />
+              Branch Power Tool
+            </Link>
+          )}
+          {!embedded && isAdmin && (
+            <Link
+              to="/branches?section=admin"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-lg border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] hover:text-[var(--text-primary)]"
+            >
+              <FiLayers className="w-4 h-4" />
+              Branch Management
+            </Link>
+          )}
+          {!embedded && (
+            <button
+              onClick={loadBranchData}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-[var(--stroke)] rounded-lg text-sm font-medium bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50 transition-colors duration-200"
+            >
+              <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          )}
+          {!embedded && (
+            <label className="flex items-center space-x-3 cursor-pointer group pl-4 border-l border-[var(--stroke)] shrink-0">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={includePending}
+                  onChange={e => setIncludePending(e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
+                  includePending ? 'bg-[var(--accent)]' : 'bg-neutral-200 dark:bg-neutral-600'
+                }`}>
+                  <div className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-blue-600 shadow transition-transform duration-200 ease-in-out ${
+                    includePending ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </div>
               </div>
-            </div>
-            <span className="text-sm font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
-              Include Pending
-            </span>
-          </label>
+              <span className="text-sm font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
+                Include Pending
+              </span>
+            </label>
+          )}
           <div className="flex items-center gap-2 pl-4 border-l border-[var(--stroke)] shrink-0">
             <span className="text-xs font-medium text-[var(--text-secondary)]">Date basis</span>
             <div className="flex gap-2">
@@ -654,130 +847,69 @@ export default function BranchDashboard() {
         </div>
       )}
 
-      {/* Single-branch stats (my_branch view) */}
+      {/* Single-branch outcomes (my_branch view) — Investments / Collection Credit / Service Income */}
       {isMyBranchView && selectedBranch && branchStats && (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6`}>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{branchStats.total_receipts ?? 0}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-lg flex items-center justify-center">
-                <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)]" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Investments</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(branchStats.total_investments || branchStats.total_collections)}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-lg flex items-center justify-center">
-                <FiTrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--success)]" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Collection Credit</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(branchStats.total_cc || branchStats.commissions)}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-lg flex items-center justify-center">
-                <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--warn)]" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Employees</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{employeePerformance.length}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiStat
+            title="Total Investments"
+            value={Number(branchStats.total_investments || branchStats.total_collections || 0)}
+            format={fmtCompactINR}
+            icon={FiTrendingUp}
+            iconBg="bg-[var(--success-muted)]"
+            iconColor="text-[var(--success)]"
+            definition="Total invested amount for this branch in the selected range."
+          />
+          <KpiStat
+            title="Collection Credit"
+            value={Number(branchStats.collection_credit ?? branchStats.total_cc ?? branchStats.commissions ?? 0)}
+            format={fmtCompactINR}
+            icon={FiAward}
+            iconBg="bg-[var(--warn-muted)]"
+            iconColor="text-[var(--warn)]"
+            definition="Collection credit attributed to this branch for the selected filters."
+          />
+          <KpiStat
+            title="Service Income"
+            value={Number(branchStats.service_income ?? branchStats.total_si ?? 0)}
+            format={fmtCompactINR}
+            icon={FiPercent}
+            iconBg="bg-[var(--info-muted)]"
+            iconColor="text-blue-600 dark:text-blue-400"
+            definition="Service income earned by this branch in the selected range."
+          />
         </div>
       )}
 
-      {/* Global Statistics (all_branches view) */}
+      {/* Network outcomes (all_branches view) — Investments / Collection Credit / Service Income only. Roster lives in Administration tab. */}
       {globalStats && !isMyBranchView && (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${globalStats.total_service_income !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Branches</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {globalStats.total_branches || 0}
-                </div>
-              </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                  <FiMapPin className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-                </div>
-            </div>
-          </div>
-          
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Investments</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {formatCurrency(globalStats.total_investments || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-lg flex items-center justify-center">
-                <span className="text-green-600 dark:text-green-400 text-lg sm:text-xl font-bold">₹</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Receipts</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {formatNumber(globalStats.total_receipts || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Collection/Credit</div>
-                <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                  {formatCurrency(globalStats?.total_collection_credit || globalStats?.total_commissions || 0)}
-                </div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-lg flex items-center justify-center">
-                <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </div>
-          
-          {globalStats.total_service_income !== undefined && (
-            <div className="p-4 sm:p-6 rounded-xl shadow-sm border border-[var(--stroke)] bg-[var(--card-bg)] hover:bg-[var(--card-hover)] transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">Total Service Income</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                    {formatCurrency(globalStats.total_service_income || 0)}
-                  </div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--info-muted)] rounded-lg flex items-center justify-center">
-                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiStat
+            title="Total Investments"
+            value={Number(globalStats.total_investments || 0)}
+            format={fmtCompactINR}
+            icon={FiTrendingUp}
+            iconBg="bg-[var(--success-muted)]"
+            iconColor="text-[var(--success)]"
+            definition="Total invested amount across all branches in the selected range."
+          />
+          <KpiStat
+            title="Collection Credit"
+            value={Number(globalStats?.total_collection_credit || globalStats?.total_commissions || 0)}
+            format={fmtCompactINR}
+            icon={FiAward}
+            iconBg="bg-[var(--warn-muted)]"
+            iconColor="text-[var(--warn)]"
+            definition="Collection credit attributed across the network."
+          />
+          <KpiStat
+            title="Service Income"
+            value={Number(globalStats.total_service_income || 0)}
+            format={fmtCompactINR}
+            icon={FiPercent}
+            iconBg="bg-[var(--info-muted)]"
+            iconColor="text-blue-600 dark:text-blue-400"
+            definition="Service income earned across the network."
+          />
         </div>
       )}
 
@@ -884,20 +1016,20 @@ export default function BranchDashboard() {
                       <stop offset="95%" stopColor="#DC2626" stopOpacity={0.7}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
                   <XAxis 
                     dataKey="name" 
-                    stroke="#9CA3AF"
+                    stroke="var(--text-muted)"
                     angle={-45}
                     textAnchor="end"
                     height={80}
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    tickLine={{ stroke: '#E5E7EB' }}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                    tickLine={{ stroke: 'var(--stroke)' }}
                   />
                   <YAxis 
-                    stroke="#9CA3AF"
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    tickLine={{ stroke: '#E5E7EB' }}
+                    stroke="var(--text-muted)"
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                    tickLine={{ stroke: 'var(--stroke)' }}
                     tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
                   />
                   <Tooltip 
@@ -907,15 +1039,9 @@ export default function BranchDashboard() {
                       name === 'receipts' ? 'Receipts' : 
                       name === 'users' ? 'Users' : 'Collection/Credit'
                     ]}
-                    contentStyle={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                      border: 'none',
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                      padding: '12px 16px'
-                    }}
-                    labelStyle={{ color: '#111827', fontWeight: 600, marginBottom: '4px' }}
-                    cursor={{ fill: 'rgba(239, 68, 68, 0.05)' }}
+                    contentStyle={chartTooltipStyle}
+                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                    cursor={{ fill: 'var(--card-hover)' }}
                   />
                   <Bar 
                     dataKey="investments" 
@@ -980,28 +1106,22 @@ export default function BranchDashboard() {
                     </Pie>
                     <Tooltip 
                       formatter={(value) => [formatCurrency(value), 'Investment']}
-                      contentStyle={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                        padding: '12px 16px'
-                      }}
-                      labelStyle={{ color: '#111827', fontWeight: 600, marginBottom: '4px' }}
+                      contentStyle={chartTooltipStyle}
+                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex flex-col gap-2 max-w-xs w-full">
                   {getBranchDistributionData().slice(0, 6).map((entry, index) => (
-                    <div key={`legend-${index}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors">
+                    <div key={`legend-${index}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card-hover)] transition-colors">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div 
                           className="w-3 h-3 rounded-full flex-shrink-0" 
                           style={{ backgroundColor: COLORS[index % COLORS.length] }}
                         />
-                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{entry.name}</span>
+                        <span className="text-sm text-[var(--text-primary)] truncate">{entry.name}</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white ml-2">{entry.percentage}%</span>
+                      <span className="text-sm font-semibold text-[var(--text-primary)] ml-2">{entry.percentage}%</span>
                     </div>
                   ))}
                 </div>
@@ -1026,57 +1146,64 @@ export default function BranchDashboard() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)]">Revenue Trend</h3>
-                <p className="text-xs text-[var(--text-secondary)]">Investment trends over time</p>
+                <p
+                  className="text-xs text-[var(--text-secondary)]"
+                  title="Sum of Collection Credit (CC) plus Service Income (SI), bucketed by calendar month. Uses the same CC/SI formulas as the stats endpoints and respects date basis + include pending."
+                >
+                  CC + SI by month · {dateRange.from || '—'} → {dateRange.to || '—'}
+                </p>
               </div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={(() => {
-              // Group by month for trend analysis
-              const monthMap = new Map()
-              const branches = globalStats.branches || []
-              branches.forEach(branch => {
-                // Simulate monthly data (in real implementation, this would come from API)
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-                months.forEach((month, idx) => {
-                  const key = `${month}-2024`
-                  if (!monthMap.has(key)) {
-                    monthMap.set(key, { month, investments: 0 })
-                  }
-                  const entry = monthMap.get(key)
-                  entry.investments += (branch.total_investments || 0) / 6 // Distribute evenly for demo
-                })
-              })
-              return Array.from(monthMap.values())
-            })()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+            <LineChart data={revenueTrendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
               <XAxis 
                 dataKey="month" 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
               />
               <YAxis 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
               />
               <Tooltip 
-                formatter={(value) => [formatCurrency(value), 'Investments']}
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                  padding: '12px 16px'
+                formatter={(value, name) => {
+                  if (name === 'revenue') return [formatCurrency(value), 'CC + SI']
+                  if (name === 'cc') return [formatCurrency(value), 'CC']
+                  if (name === 'si') return [formatCurrency(value), 'SI']
+                  return [formatCurrency(value), name]
                 }}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
               />
               <Line 
                 type="monotone" 
-                dataKey="investments" 
+                dataKey="revenue" 
+                name="CC + SI"
                 stroke="#EF4444" 
                 strokeWidth={2}
                 dot={{ fill: '#EF4444', r: 4 }}
                 activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="cc"
+                name="CC"
+                stroke="#F59E0B"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="4 3"
+              />
+              <Line
+                type="monotone"
+                dataKey="si"
+                name="SI"
+                stroke="#10B981"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="4 3"
               />
             </LineChart>
           </ResponsiveContainer>
@@ -1102,29 +1229,24 @@ export default function BranchDashboard() {
                 { category: 'Bonds', value: globalStats.total_investments * 0.1 }
               ]
             })()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
               <XAxis 
                 dataKey="category" 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 angle={-45}
                 textAnchor="end"
                 height={80}
               />
               <YAxis 
-                stroke="#9CA3AF"
-                tick={{ fill: '#6B7280', fontSize: 12 }}
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
               />
               <Tooltip 
                 formatter={(value) => [formatCurrency(value), 'Investment']}
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                  padding: '12px 16px'
-                }}
+                contentStyle={chartTooltipStyle}
+                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
               />
               <Bar dataKey="value" fill="#EF4444" radius={[8, 8, 0, 0]} />
             </BarChart>
@@ -1176,7 +1298,7 @@ export default function BranchDashboard() {
                   <div className="flex justify-between text-sm">
                     <span className="text-[var(--text-secondary)]">Collection/Credit:</span>
                     <span className="font-medium text-[var(--text-primary)]">
-                      {formatCurrency(branch.commissions || 0)}
+                      {formatCurrency(branch.collection_credit ?? branch.total_cc ?? branch.commissions ?? 0)}
                     </span>
                   </div>
                 </div>
@@ -1362,29 +1484,24 @@ export default function BranchDashboard() {
                                   investment: data.total_investments || 0,
                                   count: data.total_receipts || 0
                                 }))}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                                  <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
                                   <XAxis 
                                     dataKey="category" 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     angle={-45}
                                     textAnchor="end"
                                     height={80}
                                   />
                                   <YAxis 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
                                   />
                                   <Tooltip 
                                     formatter={(value) => [formatCurrency(value), 'Investment']}
-                                    contentStyle={{
-                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                      border: 'none',
-                                      borderRadius: '12px',
-                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                                      padding: '12px 16px'
-                                    }}
+                                    contentStyle={chartTooltipStyle}
+                                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
                                   />
                                   <Bar dataKey="investment" fill="#EF4444" radius={[8, 8, 0, 0]} />
                                 </BarChart>
@@ -1405,16 +1522,16 @@ export default function BranchDashboard() {
                                   investment: day.total_investments || 0,
                                   receipts: day.total_receipts || 0
                                 }))}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.3} />
+                                  <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.6} />
                                   <XAxis 
                                     dataKey="date" 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     tickFormatter={(value) => new Date(value).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                                   />
                                   <YAxis 
-                                    stroke="#9CA3AF"
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                                    stroke="var(--text-muted)"
+                                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                                     tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`}
                                   />
                                   <Tooltip 
@@ -1423,13 +1540,8 @@ export default function BranchDashboard() {
                                       name === 'investment' ? 'Investment' : 'Receipts'
                                     ]}
                                     labelFormatter={(label) => `Date: ${new Date(label).toLocaleDateString('en-IN')}`}
-                                    contentStyle={{
-                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                      border: 'none',
-                                      borderRadius: '12px',
-                                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                                      padding: '12px 16px'
-                                    }}
+                                    contentStyle={chartTooltipStyle}
+                                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
                                   />
                                   <Line 
                                     type="monotone" 
@@ -1510,7 +1622,9 @@ export default function BranchDashboard() {
                                 </div>
                                 <button
                                   onClick={() => {
-                                    window.location.href = `/transactions?branch_code=${branch.branch_code}`
+                                    navigate(
+                                      `/transactions?branch=${encodeURIComponent(branch.branch_code)}`
+                                    )
                                   }}
                                   className="text-sm text-[var(--accent)] hover:underline"
                                 >

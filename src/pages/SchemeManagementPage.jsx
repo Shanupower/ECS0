@@ -32,7 +32,7 @@ const LIFE_SUBCATEGORIES = [
 ]
 
 export default function SchemeManagementPage() {
-  const SIMPLE_SCHEME_CATEGORIES = ['SIF', 'PMS', 'AIF', 'GIFT_CITY_FUNDS']
+  const SIMPLE_SCHEME_CATEGORIES = ['PMS', 'AIF', 'GIFT_CITY_FUNDS']
   const { token, user } = useAuth()
   const [activeTab, setActiveTab] = useState('MF')
   const [amcs, setAmcs] = useState([])
@@ -897,12 +897,17 @@ useEffect(() => {
     
     try {
       const schemeCategory = selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
-      const trimmedData = trimFormData({
+      const payload = {
         ...schemeFormData,
         amc_category: schemeCategory,
         cc: schemeFormData.cc !== undefined ? schemeFormData.cc : null,
         si: schemeFormData.si !== undefined ? schemeFormData.si : null
-      })
+      }
+      if (schemeCategory === 'SIF') {
+        payload.plan = (schemeFormData.plans && schemeFormData.plans[0]) || 'REGULAR'
+        payload.option = (schemeFormData.options && schemeFormData.options[0]) || 'GROWTH'
+      }
+      const trimmedData = trimFormData(payload)
       await api.updateScheme(token, editingScheme.scheme_code, trimmedData)
       await loadSchemes(selectedAmc.amc_code)
       setEditingScheme(null)
@@ -2566,6 +2571,11 @@ useEffect(() => {
   const isSimpleEditingSchemeCategory = useMemo(() => {
     const cat = editingScheme?.amc_category ?? selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
     return SIMPLE_SCHEME_CATEGORIES.includes(cat)
+  }, [editingScheme, selectedAmc])
+
+  const isSIFEditingScheme = useMemo(() => {
+    const cat = editingScheme?.amc_category ?? selectedAmc?.amc_category ?? selectedAmc?.categories?.[0] ?? 'MF'
+    return cat === 'SIF'
   }, [editingScheme, selectedAmc])
 
   if (!isAdmin) {
@@ -5282,23 +5292,46 @@ useEffect(() => {
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                               Plan
                             </label>
-                            <input
-                              type="text"
-                              value={schemeFormData.plans[0] || ''}
-                              readOnly
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-                            />
+                            {isSIFEditingScheme ? (
+                              <select
+                                value={schemeFormData.plans[0] || 'REGULAR'}
+                                onChange={(e) => setSchemeFormData({ ...schemeFormData, plans: [e.target.value] })}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="REGULAR">Regular</option>
+                                <option value="DIRECT">Direct</option>
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={schemeFormData.plans[0] || ''}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                              />
+                            )}
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                               Option
                             </label>
-                            <input
-                              type="text"
-                              value={schemeFormData.options[0] || ''}
-                              readOnly
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-                            />
+                            {isSIFEditingScheme ? (
+                              <select
+                                value={schemeFormData.options[0] || 'GROWTH'}
+                                onChange={(e) => setSchemeFormData({ ...schemeFormData, options: [e.target.value] })}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="GROWTH">Growth</option>
+                                <option value="IDCW_PAYOUT">IDCW – Payout</option>
+                                <option value="IDCW_REINVEST">IDCW – Reinvestment</option>
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={schemeFormData.options[0] || ''}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                              />
+                            )}
                           </div>
                         </div>
                         

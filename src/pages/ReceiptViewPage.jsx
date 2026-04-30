@@ -1,20 +1,46 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { FiArrowLeft, FiPrinter, FiDownload, FiFile, FiImage, FiEye } from 'react-icons/fi'
+import { FiArrowLeft, FiPrinter, FiDownload, FiFile, FiImage, FiEye, FiShield, FiChevronDown } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
+import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
 import { getCategoryDisplayName, getReceiptProductCategoryLabel } from '../utils/categoryMapping'
 import { normalizeReceiptFields } from '../utils/receiptNormalizer'
+import RelatedTasks from './tasks/RelatedTasks'
+import { useToast } from '../components/ui'
+import {
+  ReceiptActionBar,
+  TeamPickerModal,
+  RejectModal,
+  HistoryTimeline,
+  AdminOverrideModal,
+  SubmitForApprovalModal,
+  CompleteApprovalModal,
+} from '../components/receipt-approval'
 
 export default function ReceiptViewPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { token, user } = useAuth()
+  const cfg = useAppConfig()
+  const toast = useToast()
   const [receipt, setReceipt] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mediaFiles, setMediaFiles] = useState([])
   const [loadingMedia, setLoadingMedia] = useState(false)
+
+  // Approval workflow state
+  const approvalFlagOn = !!cfg?.feature_flags?.receipts_approval_v2
+  const [history, setHistory] = useState(null)
+  const [teams, setTeams] = useState([])
+  const [approvalBusy, setApprovalBusy] = useState(false)
+  const [showRouteModal, setShowRouteModal] = useState(false)
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showOverrideModal, setShowOverrideModal] = useState(false)
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [showLegacyAdmin, setShowLegacyAdmin] = useState(false)
   const formatDateDisplay = (value) => {
     if (!value) return '—'
     const raw = String(value).trim()
@@ -90,6 +116,109 @@ export default function ReceiptViewPage() {
       setLoadingMedia(false)
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Approval workflow: load history + teams, actions
+  // -------------------------------------------------------------------------
+
+  const loadHistory = async () => {
+    if (!token || !id || !approvalFlagOn) return
+    try {
+      const h = await api.getReceiptApprovalHistory(token, id)
+      setHistory(h)
+    } catch (err) {
+      // 404 or flag off server-side — silently ignore so legacy receipts still show
+      console.warn('Approval history load failed:', err?.message || err)
+      setHistory(null)
+    }
+  }
+
+  const loadTeams = async () => {
+    if (!token || !approvalFlagOn) return
+    try {
+      const list = await api.listTeams(token)
+      setTeams(Array.isArray(list) ? list : [])
+    } catch { setTeams([]) }
+  }
+
+  useEffect(() => { loadHistory(); loadTeams() /* eslint-disable-next-line */ }, [token, id, approvalFlagOn])
+
+  const currentTeamFull = useMemo(() => {
+    const tid = history?.current_team?.id || receipt?.current_team_id
+    if (!tid) return null
+    return teams.find((t) => String(t.id || t._key) === String(tid)) || history?.current_team || null
+  }, [history, receipt, teams])
+
+  const myUserId = user?.id ?? user?._key ?? user?.sub ?? null
+  const isCreator = !!receipt && !!user && (
+    (myUserId != null && String(receipt.user_id) === String(myUserId)) ||
+    (receipt.emp_code && user.emp_code && String(receipt.emp_code) === String(user.emp_code))
+  )
+  const isAdminRole = user?.role === 'admin'
+  const canActOnCurrentTeam = !!currentTeamFull && Array.isArray(currentTeamFull.member_ids) && myUserId != null && (
+    currentTeamFull.member_ids.some((m) => String(m) === String(myUserId))
+  )
+
+  const runAction = async (fn, successMsg) => {
+    setApprovalBusy(true)
+    try {
+      await fn()
+      if (successMsg) toast.success(successMsg)
+      await Promise.all([loadReceipt(), loadHistory()])
+    } catch (err) {
+      toast.error(err.message || 'Action failed')
+    } finally { setApprovalBusy(false) }
+  }
+
+  // Upload optional evidence files first, tagged with the current cycle/team
+  // and the stage we're transitioning through. The returned file IDs are
+  // persisted on the history entry the engine writes for this action.
+  const uploadEvidence = async (files, uploadedDuring) => {
+    if (!files || !files.length) return []
+    const currentTid = history?.current_team?.id || receipt?.current_team_id || null
+    const currentTname = currentTeamFull?.name || history?.current_team?.name || null
+    return api.uploadApprovalEvidence(token, id, files, {
+      cycleId: history?.approval_cycle_id || receipt?.approval_cycle_id || null,
+      teamId: currentTid,
+      teamName: currentTname,
+      uploadedDuring
+    })
+  }
+
+  const handleSubmit = async (comment, files) => {
+    const ids = await uploadEvidence(files, 'submit')
+    await runAction(() => api.submitReceipt(token, id, ids), 'Submitted for approval')
+    setShowSubmitModal(false)
+  }
+  const handleComplete = async (comment, files) => {
+    const ids = await uploadEvidence(files, 'complete')
+    await runAction(() => api.completeReceipt(token, id, comment, ids), 'Approved & completed')
+    setShowCompleteModal(false)
+  }
+  const handleRoute = async (nextTeamId, comment, files) => {
+    const ids = await uploadEvidence(files, 'route')
+    await runAction(
+      () => api.routeReceipt(token, id, nextTeamId, comment, ids),
+      'Approved & routed'
+    )
+    setShowRouteModal(false)
+  }
+  const handleReject = async (comment, files) => {
+    const ids = await uploadEvidence(files, 'reject')
+    await runAction(
+      () => api.rejectReceipt(token, id, comment, ids),
+      'Sent back to creator'
+    )
+    setShowRejectModal(false)
+  }
+  const handleOverride = async (payload, reason, files) => {
+    const ids = await uploadEvidence(files, 'override')
+    return runAction_legacyOverride(payload, reason, ids)
+  }
+  const runAction_legacyOverride = (payload, reason, ids) => runAction(
+    () => api.adminOverrideReceipt(token, id, { ...payload, attachment_ids: ids || [] }, reason),
+    'Override applied'
+  ).then(() => setShowOverrideModal(false))
 
   const handlePrint = async () => {
     try {
@@ -519,6 +648,62 @@ export default function ReceiptViewPage() {
           </div>
         </div>
       </div>
+
+      {/* Approval workflow bar + history (feature-flag-gated) */}
+      {approvalFlagOn && receipt && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-4 no-print">
+          <ReceiptActionBar
+            receipt={receipt}
+            currentTeam={currentTeamFull}
+            currentUser={user}
+            isCreator={isCreator}
+            canActOnCurrentTeam={canActOnCurrentTeam || isAdminRole}
+            loading={approvalBusy}
+            onSubmit={() => setShowSubmitModal(true)}
+            onRoute={() => setShowRouteModal(true)}
+            onComplete={() => setShowCompleteModal(true)}
+            onReject={() => setShowRejectModal(true)}
+          />
+
+          {isAdminRole && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLegacyAdmin((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                <FiChevronDown className={`transition-transform ${showLegacyAdmin ? 'rotate-180' : ''}`} />
+                Admin override
+              </button>
+            </div>
+          )}
+
+          {isAdminRole && showLegacyAdmin && (
+            <div className="rounded-lg border border-[var(--warn)]/40 bg-[var(--warn-muted)] p-3 text-sm">
+              <div className="flex items-start gap-2">
+                <FiShield className="mt-0.5 text-[var(--warn)]" />
+                <div className="flex-1">
+                  <div className="font-medium text-[var(--text-primary)]">Bypass the workflow</div>
+                  <div className="text-[var(--text-secondary)]">
+                    Force-complete, force-reject, or route this receipt. Each action is audited with your reason and marked <b>forced</b> in history.
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOverrideModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--warn)] text-white text-xs font-medium hover:opacity-90"
+                    >
+                      <FiShield /> Open admin override
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {history && <HistoryTimeline history={history} token={token} receiptId={id} />}
+        </div>
+      )}
 
       {/* Receipt Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1117,6 +1302,15 @@ export default function ReceiptViewPage() {
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                             {(file.file_size / 1024).toFixed(1)} KB
                           </p>
+                        {file.category === 'approval_evidence' && (
+                          <span
+                            className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30"
+                            title={`Uploaded during ${file.uploaded_during || 'approval'}${file.team_name ? ' · ' + file.team_name : ''}`}
+                          >
+                            <FiShield className="w-3 h-3" />
+                            Approval evidence{file.team_name ? ` · ${file.team_name}` : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
@@ -1147,7 +1341,54 @@ export default function ReceiptViewPage() {
             )}
           </div>
         )}
+
+        {/* Related tasks for this receipt */}
+        {id && (
+          <div className="mt-6">
+            <RelatedTasks entityType="receipt" entityId={id} title="Receipt tasks" />
+          </div>
+        )}
       </div>
+
+      {/* Approval workflow modals */}
+      {approvalFlagOn && (
+        <>
+          <TeamPickerModal
+            open={showRouteModal}
+            teams={teams}
+            currentTeamId={history?.current_team?.id || receipt?.current_team_id || null}
+            excludedTeamIds={history?.approved_by_team_ids || []}
+            onClose={() => setShowRouteModal(false)}
+            onSubmit={handleRoute}
+          />
+          <RejectModal
+            open={showRejectModal}
+            onClose={() => setShowRejectModal(false)}
+            onSubmit={handleReject}
+          />
+          <AdminOverrideModal
+            open={showOverrideModal}
+            teams={teams}
+            currentStatus={receipt?.status || ''}
+            currentTeamId={history?.current_team?.id || receipt?.current_team_id || null}
+            onClose={() => setShowOverrideModal(false)}
+            onSubmit={handleOverride}
+          />
+          <SubmitForApprovalModal
+            open={showSubmitModal}
+            isResubmit={receipt?.status === 'Needs Changes'}
+            onClose={() => setShowSubmitModal(false)}
+            onSubmit={handleSubmit}
+          />
+          <CompleteApprovalModal
+            open={showCompleteModal}
+            currentTeamName={currentTeamFull?.name || history?.current_team?.name || ''}
+            finalLabel={cfg?.receipt_final_status_label || 'Completed'}
+            onClose={() => setShowCompleteModal(false)}
+            onSubmit={handleComplete}
+          />
+        </>
+      )}
     </div>
   )
 }
