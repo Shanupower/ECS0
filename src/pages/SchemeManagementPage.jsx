@@ -371,6 +371,9 @@ export default function SchemeManagementPage() {
     effective_yield_pa: null,
     cc: 0,
     si: 0,
+    senior_citizen_bonus_bps: '',
+    women_bonus_bps: '',
+    renewal_bonus_bps: '',
     notes_public_display: '',
     is_active: true
   })
@@ -1113,6 +1116,17 @@ useEffect(() => {
         delete trimmedData.tenure_min_days
         delete trimmedData.tenure_max_days
       }
+      const bonusKeys = ['senior_citizen_bonus_bps', 'women_bonus_bps', 'renewal_bonus_bps']
+      for (const k of bonusKeys) {
+        const raw = trimmedData[k]
+        if (raw === '' || raw === undefined || raw === null) {
+          delete trimmedData[k]
+        } else {
+          const n = Number(raw)
+          if (Number.isFinite(n) && n >= 0) trimmedData[k] = Math.round(n)
+          else delete trimmedData[k]
+        }
+      }
       await api.createFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, trimmedData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
       setShowFDSlabForm(false)
@@ -1140,6 +1154,16 @@ useEffect(() => {
         trimmedData.tenure_max_months = Number(trimmedData.tenure_max_months)
         delete trimmedData.tenure_min_days
         delete trimmedData.tenure_max_days
+      }
+      const bonusKeys = ['senior_citizen_bonus_bps', 'women_bonus_bps', 'renewal_bonus_bps']
+      for (const k of bonusKeys) {
+        const raw = trimmedData[k]
+        if (raw === '' || raw === undefined || raw === null) {
+          trimmedData[k] = null
+        } else {
+          const n = Number(raw)
+          trimmedData[k] = Number.isFinite(n) && n >= 0 ? Math.round(n) : null
+        }
       }
       await api.updateFDRateSlab(token, issuerKey, selectedFdScheme.scheme_id, editingFDSlab.slab_id, trimmedData)
       await loadFDRateSlabs(selectedFdScheme.scheme_id)
@@ -1210,7 +1234,10 @@ useEffect(() => {
       notes_public_display: '',
       is_active: true,
       cc: selectedFdScheme?.cc ?? 0,
-      si: selectedFdScheme?.si ?? 0
+      si: selectedFdScheme?.si ?? 0,
+      senior_citizen_bonus_bps: '',
+      women_bonus_bps: '',
+      renewal_bonus_bps: ''
     })
   }
 
@@ -1427,7 +1454,15 @@ useEffect(() => {
       notes_public_display: slab.notes_public_display || '',
       is_active: slab.is_active !== undefined ? slab.is_active : true,
       cc: slab.cc !== undefined && slab.cc !== null ? slab.cc : (selectedFdScheme?.cc ?? 0),
-      si: slab.si !== undefined && slab.si !== null ? slab.si : (selectedFdScheme?.si ?? 0)
+      si: slab.si !== undefined && slab.si !== null ? slab.si : (selectedFdScheme?.si ?? 0),
+      senior_citizen_bonus_bps:
+        slab.senior_citizen_bonus_bps != null && slab.senior_citizen_bonus_bps !== ''
+          ? slab.senior_citizen_bonus_bps
+          : '',
+      women_bonus_bps:
+        slab.women_bonus_bps != null && slab.women_bonus_bps !== '' ? slab.women_bonus_bps : '',
+      renewal_bonus_bps:
+        slab.renewal_bonus_bps != null && slab.renewal_bonus_bps !== '' ? slab.renewal_bonus_bps : ''
     })
   }
   
@@ -3537,6 +3572,51 @@ useEffect(() => {
                       </div>
                     </>
                   )}
+
+                  <div className="border border-[var(--stroke)]/80 rounded-lg p-3 space-y-2">
+                    <p className="text-sm font-medium text-[var(--text-secondary)]">Bonus BPS overrides (optional)</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Leave blank to use this scheme’s senior / women / renewal bonus (bps). Set a value to override for this slab only.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Senior (bps)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={fdSlabFormData.senior_citizen_bonus_bps === '' || fdSlabFormData.senior_citizen_bonus_bps == null ? '' : fdSlabFormData.senior_citizen_bonus_bps}
+                          onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, senior_citizen_bonus_bps: e.target.value })}
+                          className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                          placeholder={String(selectedFdScheme?.senior_citizen_bonus_bps ?? 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Women (bps)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={fdSlabFormData.women_bonus_bps === '' || fdSlabFormData.women_bonus_bps == null ? '' : fdSlabFormData.women_bonus_bps}
+                          onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, women_bonus_bps: e.target.value })}
+                          className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                          placeholder={String(selectedFdScheme?.women_bonus_bps ?? 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Renewal (bps)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={fdSlabFormData.renewal_bonus_bps === '' || fdSlabFormData.renewal_bonus_bps == null ? '' : fdSlabFormData.renewal_bonus_bps}
+                          onChange={(e) => setFdSlabFormData({ ...fdSlabFormData, renewal_bonus_bps: e.target.value })}
+                          className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)]"
+                          placeholder={String(selectedFdScheme?.renewal_bonus_bps ?? 0)}
+                        />
+                      </div>
+                    </div>
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>

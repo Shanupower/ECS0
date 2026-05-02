@@ -709,10 +709,17 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           </div>
         )}
 
-        {/* Bonuses */}
+        {/* Bonuses — display effective bps for matched slab when rate is calculated */}
         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Bonus Eligibility</h4>
           <div className="space-y-2">
+            {(() => {
+              const schemeToUse = fullScheme || scheme
+              const seniorBps = rateCalculation?.bonuses_bps?.senior_citizen ?? schemeToUse.senior_citizen_bonus_bps ?? 0
+              const womenBps = rateCalculation?.bonuses_bps?.women ?? schemeToUse.women_bonus_bps ?? 0
+              const renewalBps = rateCalculation?.bonuses_bps?.renewal ?? schemeToUse.renewal_bonus_bps ?? 0
+              return (
+                <>
             <label className="flex items-center">
               <input
                 type="checkbox"
@@ -720,7 +727,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 onChange={(e) => setSeniorCitizen(e.target.checked)}
                 className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Senior Citizen (60+ years) (+{(scheme.senior_citizen_bonus_bps / 100).toFixed(2)}%)</span>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Senior Citizen (60+ years) (+{(Number(seniorBps) / 100).toFixed(2)}%)</span>
             </label>
             <label className="flex items-center">
               <input
@@ -729,7 +736,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 onChange={(e) => setWomen(e.target.checked)}
                 className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Women Depositor (+{(scheme.women_bonus_bps / 100).toFixed(2)}%)</span>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Women Depositor (+{(Number(womenBps) / 100).toFixed(2)}%)</span>
             </label>
             <label className="flex items-center">
               <input
@@ -738,8 +745,11 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 onChange={(e) => setRenewal(e.target.checked)}
                 className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Renewal/Existing Customer (+{(scheme.renewal_bonus_bps / 100).toFixed(2)}%)</span>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Renewal/Existing Customer (+{(Number(renewalBps) / 100).toFixed(2)}%)</span>
             </label>
+                </>
+              )
+            })()}
           </div>
         </div>
 
