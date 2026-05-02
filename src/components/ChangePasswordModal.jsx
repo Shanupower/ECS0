@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { FiLock, FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi'
+import { Modal } from './ui/Modal'
 
 /**
  * Modal shown when user has never changed their password (e.g. new account or admin-set password).
@@ -47,20 +48,27 @@ export default function ChangePasswordModal({ isOpen }) {
     }
   }
 
-  if (!isOpen) return null
+  const noop = () => {}
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70">
-      <div className="bg-white dark:bg-dark-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-dark-700">
+    <Modal
+      open={isOpen}
+      onClose={noop}
+      variant="legacy"
+      size="md"
+      closeOnBackdrop={false}
+      closeOnEscape={false}
+    >
+      <div className="max-h-[inherit] overflow-y-auto overscroll-contain p-4 sm:p-6">
         <div className="flex items-center justify-center mb-4">
           <div className="bg-amber-100 dark:bg-amber-900/30 rounded-full p-3">
             <FiLock className="h-8 w-8 text-amber-600 dark:text-amber-400" />
           </div>
         </div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-1">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white text-center mb-1">
           Set your password
         </h2>
-        <p className="text-gray-600 dark:text-dark-300 text-center mb-6 text-sm">
+        <p className="text-gray-600 dark:text-dark-300 text-center mb-6 text-sm px-1">
           You haven’t changed your password yet. Please set a new password to secure your account.
         </p>
 
@@ -72,14 +80,14 @@ export default function ChangePasswordModal({ isOpen }) {
                 type={showCurrent ? 'text' : 'password'}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full min-h-11 pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="Enter current password"
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowCurrent(v => !v)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
+                className="absolute inset-y-0 right-0 min-w-11 pr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
                 aria-label={showCurrent ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >
@@ -94,7 +102,7 @@ export default function ChangePasswordModal({ isOpen }) {
                 type={showNew ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full min-h-11 pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="At least 8 characters (uppercase, lowercase, number)"
                 autoComplete="new-password"
                 minLength={8}
@@ -102,7 +110,7 @@ export default function ChangePasswordModal({ isOpen }) {
               <button
                 type="button"
                 onClick={() => setShowNew(v => !v)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
+                className="absolute inset-y-0 right-0 min-w-11 pr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
                 aria-label={showNew ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >
@@ -117,14 +125,14 @@ export default function ChangePasswordModal({ isOpen }) {
                 type={showConfirm ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full min-h-11 pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="Confirm new password"
                 autoComplete="new-password"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirm(v => !v)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
+                className="absolute inset-y-0 right-0 min-w-11 pr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >
@@ -141,12 +149,12 @@ export default function ChangePasswordModal({ isOpen }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-red-600 text-white py-2.5 px-4 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 font-medium disabled:opacity-50"
+            className="w-full min-h-11 bg-red-600 text-white py-2.5 px-4 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 font-medium disabled:opacity-50"
           >
             {loading ? 'Updating…' : 'Update password'}
           </button>
         </form>
       </div>
-    </div>
+    </Modal>
   )
 }

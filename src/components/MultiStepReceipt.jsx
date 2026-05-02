@@ -493,13 +493,28 @@ function StepHeader({ step, productType }) {
   }
 
   const pct = getStepProgress()
+  const currentMeta = stepLabels.find(([_, stepNumber]) => stepNumber === step)
+  const currentLabel = currentMeta ? currentMeta[0] : '—'
 
   return (
-    <div className="mb-4 min-w-0">
-      <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-1">
+    <div className="mb-4 min-w-0 space-y-3">
+      {/* Narrow viewports: single row — no clipped horizontal stepper */}
+      <div className="rounded-xl border-2 border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-3 shadow-[var(--dashboard-shadow)] lg:hidden">
+        <div className="flex items-center justify-between gap-3 min-w-0">
+          <span className="text-caption sm:text-sm font-medium text-[var(--dashboard-muted)] shrink-0 tabular-nums">
+            Step {step} / {totalSteps}
+          </span>
+          <span className="text-sm sm:text-base font-semibold text-[var(--dashboard-text)] truncate text-right min-w-0" title={currentLabel}>
+            {currentLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Desktop: full pill stepper (scrolls if needed on smaller laptops) */}
+      <div className="hidden lg:block overflow-x-auto overflow-y-hidden overscroll-x-contain pb-1 -mx-1 px-1 touch-pan-x">
         <div className="inline-flex flex-nowrap items-center gap-0.5 rounded-xl border-2 border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-1 min-h-[44px] shadow-[var(--dashboard-shadow)]">
           {stepLabels.map(([label, stepNumber], i) => (
-            <React.Fragment key={label}>
+            <React.Fragment key={`${label}-${stepNumber}`}>
               <div
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-200 flex-shrink-0 ${
                   step === stepNumber
@@ -514,12 +529,13 @@ function StepHeader({ step, productType }) {
                 </span>
                 <span className={`text-xs font-semibold whitespace-nowrap ${step === stepNumber ? 'text-white' : 'text-[var(--dashboard-text)]'}`}>{label}</span>
               </div>
-              {i < stepLabels.length - 1 && <div className="w-px h-5 bg-[var(--dashboard-border)] flex-shrink-0 mx-0.5" />}
+              {i < stepLabels.length - 1 && <div className="w-px h-5 bg-[var(--dashboard-border)] flex-shrink-0 mx-0.5" aria-hidden />}
             </React.Fragment>
           ))}
         </div>
       </div>
-      <div className="mt-3 h-2 w-full rounded-full bg-[var(--dashboard-border)] overflow-hidden">
+
+      <div className="h-2 w-full rounded-full bg-[var(--dashboard-border)] overflow-hidden">
         <div className="h-full rounded-full bg-[var(--dashboard-primary)] transition-all duration-500 ease-out" style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -656,7 +672,7 @@ function LivePreview({ empSeed, investorSeed, productTypeSeed, mfSchemeSeed, fdI
   )
 
   return (
-    <Card padding="lg" className="mb-4 shadow-glow border border-[var(--stroke)] bg-[var(--card-bg)]/90 backdrop-blur-xl min-w-0">
+    <Card padding="lg" className="mb-4 min-w-0 max-w-full overflow-hidden shadow-glow border border-[var(--stroke)] bg-[var(--card-bg)]/90 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-2 mb-5">
         <span className="text-section-title text-[var(--text-primary)] tracking-tight">Live Preview</span>
         <button
@@ -2494,10 +2510,10 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-0 pl-0 pr-4 lg:pr-6 relative">
+    <div className="relative w-full min-w-0 max-w-6xl mx-auto">
       {/* Failure Popup */}
       {showFailurePopup && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 px-0 sm:px-4 animate-in slide-in-from-bottom-4 duration-300">
           <div className="rounded-card shadow-glow border border-[var(--stroke)] bg-[var(--card-bg)] p-6">
             <div className="flex items-start space-x-3">
               <div className="flex-shrink-0">

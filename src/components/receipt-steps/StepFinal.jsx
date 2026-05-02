@@ -1191,13 +1191,14 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
           </div>
 
       {docs.length === 0 && lastDocMeta?.dataUrl && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex items-center justify-between">
-          <div className="text-sm text-yellow-800 dark:text-yellow-200">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between min-w-0">
+          <div className="text-sm text-yellow-800 dark:text-yellow-200 min-w-0">
             Use your last uploaded document?
           </div>
           <button
+            type="button"
             onClick={applyLastDocument}
-            className="px-3 py-1.5 rounded-md bg-yellow-600 text-white text-sm font-semibold"
+            className="min-h-11 shrink-0 px-3 py-2 rounded-md bg-yellow-600 text-white text-sm font-semibold w-full sm:w-auto"
           >
             Use Last Document
           </button>
@@ -1226,19 +1227,19 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
         </div>
       )}
       
-      <div className="flex flex-wrap gap-3 justify-center">
-        <button type="button" className="receipt-step-ghost-btn px-4 py-2.5 text-sm font-medium" onClick={onBack} disabled={isSaving}>
+      <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-3 justify-stretch sm:justify-center w-full">
+        <button type="button" className="receipt-step-ghost-btn min-h-11 w-full sm:w-auto px-4 py-2.5 text-sm font-medium justify-center" onClick={onBack} disabled={isSaving}>
           Back
         </button>
         <button
           type="button"
           onClick={handleSavePreset}
           disabled={isSaving || !onSavePreset}
-          className="px-4 py-2.5 text-sm font-medium rounded-xl border border-[var(--warn)]/50 text-[var(--warn)] hover:bg-[var(--warn-muted)]"
+          className="min-h-11 w-full sm:w-auto px-4 py-2.5 text-sm font-medium rounded-xl border border-[var(--warn)]/50 text-[var(--warn)] hover:bg-[var(--warn-muted)] justify-center inline-flex items-center"
         >
           Save preset
         </button>
-        <button type="button" className="receipt-step-primary-btn px-4 py-2.5 text-sm flex items-center gap-2" onClick={handleSave} disabled={isSaving}>
+        <button type="button" className="receipt-step-primary-btn min-h-11 w-full sm:w-auto px-4 py-2.5 text-sm flex items-center justify-center gap-2" onClick={handleSave} disabled={isSaving}>
           {isSaving ? (
             <>
               <FiRefreshCw className="w-4 h-4 animate-spin" />

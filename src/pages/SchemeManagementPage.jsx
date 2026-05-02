@@ -2682,7 +2682,7 @@ useEffect(() => {
             <select
               value={ncdBondCategoryFilter}
               onChange={(e) => setNcdBondCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {ncdBondCategoryOptions.map((cat) => (
@@ -2696,7 +2696,7 @@ useEffect(() => {
               <select
                 value={ncdBondInstrumentTypeFilter}
                 onChange={(e) => setNcdBondInstrumentTypeFilter(e.target.value)}
-                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
               >
                 <option value="all">All</option>
                 {ncdBondInstrumentTypeOptions.map((t) => (
@@ -2710,7 +2710,7 @@ useEffect(() => {
             <select
               value={ncdBondStatusFilter}
               onChange={(e) => setNcdBondStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               <option value="active">Active</option>
@@ -4067,7 +4067,7 @@ useEffect(() => {
             <select
               value={insuranceCategoryFilter}
               onChange={(e) => setInsuranceCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {insuranceCategoryOptions.map((cat) => (
@@ -4081,7 +4081,7 @@ useEffect(() => {
               <select
                 value={insuranceSubCategoryFilter}
                 onChange={(e) => setInsuranceSubCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+                className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
               >
                 <option value="all">All</option>
                 {insuranceSubCategoryOptions.map((sub) => (
@@ -4095,7 +4095,7 @@ useEffect(() => {
             <select
               value={insuranceStatusFilter}
               onChange={(e) => setInsuranceStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               <option value="active">Active</option>
@@ -4590,7 +4590,7 @@ useEffect(() => {
             <select
               value={fdSchemeTypeFilter}
               onChange={(e) => setFdSchemeTypeFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {fdSchemeTypeOptions.map((t) => (
@@ -4603,7 +4603,7 @@ useEffect(() => {
             <select
               value={fdSchemeStatusFilter}
               onChange={(e) => setFdSchemeStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               <option value="active">Active</option>
@@ -5109,7 +5109,7 @@ useEffect(() => {
             <select
               value={schemeFundCategoryFilter}
               onChange={(e) => setSchemeFundCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {schemeFundCategoryOptions.map((cat) => (
@@ -5124,7 +5124,7 @@ useEffect(() => {
             <select
               value={schemeNfoFilter}
               onChange={(e) => setSchemeNfoFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All schemes</option>
               <option value="nfo_only">NFO only</option>
@@ -6380,7 +6380,7 @@ useEffect(() => {
             <select
               value={fdIssuerTypeFilter}
               onChange={(e) => setFdIssuerTypeFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {fdIssuerTypeOptions.map((t) => (
@@ -6399,7 +6399,7 @@ useEffect(() => {
             <select
               value={ncdBondIssuerTypeFilter}
               onChange={(e) => setNcdBondIssuerTypeFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {ncdBondIssuerTypeOptions.map((t) => (
@@ -6418,7 +6418,7 @@ useEffect(() => {
             <select
               value={insuranceIssuerTypeFilter}
               onChange={(e) => setInsuranceIssuerTypeFilter(e.target.value)}
-              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm min-w-[160px]"
+              className="px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-sm w-full min-w-0 sm:min-w-[160px] sm:w-auto"
             >
               <option value="all">All</option>
               {insuranceIssuerTypeOptions.map((t) => (

@@ -7,8 +7,6 @@ import ProfileModal from './ProfileModal'
 import HandoffBanner from './HandoffBanner'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { FiMenu } from 'react-icons/fi'
-
 export default function DashboardLayout() {
   const { user, logout, token } = useAuth()
   const navigate = useNavigate()
@@ -71,7 +69,7 @@ export default function DashboardLayout() {
 
   return (
     <>
-      <div className="flex h-screen min-h-0 overflow-hidden bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors duration-200">
+      <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors duration-200">
         <Sidebar
           userRole={user?.role}
           empCode={user?.emp_code}
@@ -92,24 +90,16 @@ export default function DashboardLayout() {
             onReportIssue={() => setIsReportIssueModalOpen(true)}
             onProfileClick={() => setIsProfileModalOpen(true)}
             onLogout={handleLogout}
+            onMenuClick={() => setIsMobileMenuOpen(true)}
           />
 
+          {/*
+            Page gutters live here only (max-w-7xl + padding). Child routes should use w-full min-w-0
+            and avoid stacking extra asymmetric horizontal padding.
+          */}
           <main ref={mainRef} className="flex-1 min-h-0 overflow-auto bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)]">
             <HandoffBanner />
-            <div className="flex items-center gap-3 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 lg:hidden border-b border-[var(--dashboard-border)] bg-[var(--dashboard-card)]">
-              <button
-                type="button"
-                onClick={() => setIsMobileMenuOpen(true)}
-                className="p-2 rounded-lg text-[var(--dashboard-muted)] hover:bg-[var(--dashboard-border)]/50"
-                aria-label="Open menu"
-              >
-                <FiMenu className="w-5 h-5" />
-              </button>
-              <span className="text-sm font-medium text-[var(--dashboard-text)] truncate">
-                {user?.name || user?.emp_code}
-              </span>
-            </div>
-            <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6 min-w-0">
+            <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6 min-w-0 pb-[max(12px,env(safe-area-inset-bottom))]">
               <Outlet />
             </div>
           </main>

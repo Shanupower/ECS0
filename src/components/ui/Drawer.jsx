@@ -37,7 +37,7 @@ export function Drawer({ open, onClose, title, children, className, side = 'righ
       />
       <aside
         className={cn(
-          'fixed top-0 bottom-0 z-50 w-full max-w-md overflow-y-auto border-[var(--stroke)] bg-[var(--card-bg)] shadow-lg backdrop-blur-[20px]',
+          'fixed top-0 bottom-0 z-50 w-full max-w-md max-h-[100dvh] overflow-y-auto border-[var(--stroke)] bg-[var(--card-bg)] shadow-lg backdrop-blur-[20px]',
           side === 'right' ? 'right-0 border-l animate-[slideInRight_0.25s_ease-out]' : 'left-0 border-r animate-[slideInLeft_0.25s_ease-out]',
           className
         )}

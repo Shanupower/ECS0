@@ -20,6 +20,7 @@ import {
   FiEye,
   FiEyeOff
 } from 'react-icons/fi'
+import { Modal } from '../components/ui/Modal'
 
 export default function UserManagementPage() {
   const { token, user } = useAuth()
@@ -392,9 +393,17 @@ export default function UserManagementPage() {
       )}
 
       {/* Create/Edit User Modal */}
-      {(showCreateForm || editingUser) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--card-bg)] p-8 rounded-xl shadow-lg w-full max-w-md border border-[var(--stroke)]">
+      <Modal
+        open={!!(showCreateForm || editingUser)}
+        onClose={() => {
+          setShowCreateForm(false)
+          setEditingUser(null)
+          resetForm()
+        }}
+        variant="glass"
+        size="md"
+      >
+        <div className="max-h-[inherit] overflow-y-auto overscroll-contain p-4 sm:p-6 md:p-8">
             <div className="flex items-center mb-6">
               <FiUser className="w-5 h-5 text-red-600 mr-2" />
               <h3 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -695,13 +704,7 @@ export default function UserManagementPage() {
               </div>
               )}
               
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
-                >
-                  {editingUser ? (isManager ? 'Save Target' : 'Update User') : 'Create User'}
-                </button>
+              <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => {
@@ -709,15 +712,20 @@ export default function UserManagementPage() {
                     setEditingUser(null)
                     resetForm()
                   }}
-                  className="flex-1 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] py-3 rounded-lg hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] transition-colors duration-200"
+                  className="min-h-11 flex-1 border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-[var(--text-secondary)] py-3 rounded-lg hover:bg-[var(--card-hover)] hover:text-[var(--text-primary)] transition-colors duration-200"
                 >
                   Cancel
                 </button>
+                <button
+                  type="submit"
+                  className="min-h-11 flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
+                >
+                  {editingUser ? (isManager ? 'Save Target' : 'Update User') : 'Create User'}
+                </button>
               </div>
             </form>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Users Table */}
       {!loading && !error && (

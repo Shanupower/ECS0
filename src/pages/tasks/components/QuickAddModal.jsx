@@ -3,7 +3,7 @@ import * as chrono from 'chrono-node'
 import { FiX, FiCalendar, FiFlag, FiTag, FiUser, FiLink2, FiRepeat } from 'react-icons/fi'
 import { useAppConfig } from '../../../context/AppConfigContext'
 import { labelMeta, priorityMeta, toneFor } from '../utils'
-import { useEscapeClose } from '../../../hooks/useEscapeClose'
+import { Modal } from '../../../components/ui/Modal'
 
 /**
  * Natural-language quick add. Parses:
@@ -95,8 +95,6 @@ export default function QuickAddModal({ open, prefill, onClose, onCreate }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef(null)
-  useEscapeClose(open && !saving, onClose)
-
   useEffect(() => {
     if (!open) return
     setRaw('')
@@ -135,23 +133,33 @@ export default function QuickAddModal({ open, prefill, onClose, onCreate }) {
     }
   }
 
-  if (!open) return null
-
   const pMeta = parsed.priority ? priorityMeta(cfg, parsed.priority) : null
   const pTone = pMeta ? toneFor(pMeta.color) : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh] bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-2xl border border-[var(--stroke)] bg-[var(--card-bg)] shadow-2xl overflow-hidden">
-        <form onSubmit={submit}>
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--stroke)]">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">Quick add</span>
-            <span className="ml-auto text-[11px] text-[var(--text-muted)]">Cmd+Enter to save · Esc to close</span>
-            <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+    <Modal
+      open={open}
+      onClose={onClose}
+      variant="glass"
+      size="xl"
+      position="top"
+      closeOnEscape={!saving}
+    >
+      <div className="flex min-h-0 max-h-[inherit] flex-1 flex-col overflow-hidden rounded-2xl">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--stroke)] shrink-0">
+            <span className="text-sm font-semibold text-[var(--text-primary)] shrink-0">Quick add</span>
+            <span className="ml-auto hidden sm:inline text-[11px] text-[var(--text-muted)]">Cmd+Enter · Esc</span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-10 min-w-10 shrink-0 inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card-hover)]"
+              aria-label="Close"
+            >
               <FiX className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
             <input
               ref={inputRef}
               type="text"
@@ -211,20 +219,20 @@ export default function QuickAddModal({ open, prefill, onClose, onCreate }) {
             </div>
             {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
           </div>
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--stroke)] bg-[var(--card-bg-opaque)]">
-            <span className="text-[11px] text-[var(--text-muted)]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-[var(--stroke)] bg-[var(--card-bg-opaque)]">
+            <span className="text-[11px] text-[var(--text-muted)] min-w-0">
               Tip · try: <code>#onsite</code>, <code>@priya</code>, <code>!p0</code>, <code>+lead:LD-12</code>, <code>every monday</code>
             </span>
             <button
               type="submit"
               disabled={saving || !parsed.title}
-              className="px-3 py-1.5 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              className="min-h-10 shrink-0 px-3 py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-hover)] disabled:opacity-50 w-full sm:w-auto"
             >
               {saving ? 'Creating…' : 'Create task'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   )
 }
