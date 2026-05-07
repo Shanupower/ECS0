@@ -105,18 +105,19 @@ export function GlobalSearch({ onClose, className, inputRef: externalInputRef })
 
   let flatIndex = 0
   return (
-    <div className={cn('relative flex-1 min-w-0 max-w-md', className)}>
-      <div className="flex items-center gap-2 rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors focus-within:border-[var(--dashboard-primary)] focus-within:ring-2 focus-within:ring-[var(--dashboard-primary)]/20">
-        <Search className="w-4 h-4 text-[var(--dashboard-muted)] flex-shrink-0 ml-3" />
+    <div className={cn('relative w-full min-w-0 max-w-full sm:max-w-md', className)}>
+      <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors focus-within:border-[var(--dashboard-primary)] focus-within:ring-2 focus-within:ring-[var(--dashboard-primary)]/20">
+        <Search className="w-4 h-4 text-[var(--dashboard-muted)] flex-shrink-0 ml-2 sm:ml-3" />
         <input
           ref={inputRef}
           type="search"
-          placeholder="Search customers, receipts… (⌘K)"
+          placeholder="Search…"
+          title="Search customers and receipts (⌘K)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-1 min-w-0 py-2.5 pr-4 pl-1 text-sm bg-transparent text-[var(--dashboard-text)] placeholder:text-[var(--dashboard-muted)] outline-none"
-          aria-label="Search"
+          className="flex-1 min-w-0 py-2 sm:py-2.5 pr-2 sm:pr-4 pl-0.5 sm:pl-1 text-sm bg-transparent text-[var(--dashboard-text)] placeholder:text-[var(--dashboard-muted)] outline-none"
+          aria-label="Search customers and receipts"
         />
         {loading && <Loader2 className="w-4 h-4 text-[var(--dashboard-muted)] animate-spin flex-shrink-0 mr-2" />}
       </div>

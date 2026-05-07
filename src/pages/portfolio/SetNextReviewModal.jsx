@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 import DatePickerInput from '../../components/ui/DatePickerInput.jsx'
-import { useEscapeClose } from '../../hooks/useEscapeClose'
+import { Modal } from '../../components/ui/Modal'
 
 function addMonthsISO(ymd, months) {
   const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number)
@@ -26,7 +26,6 @@ export default function SetNextReviewModal({
   onSave,
   onClose
 }) {
-  useEscapeClose(!saving, onClose)
   const multi = customers.length > 1
   const today = new Date().toISOString().slice(0, 10)
 
@@ -48,17 +47,22 @@ export default function SetNextReviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-[var(--card-bg)] border border-[var(--stroke)] rounded-xl shadow-xl max-w-md w-full">
-        <div className="flex items-center justify-between p-4 border-b border-[var(--stroke)]">
-          <h3 className="font-semibold text-[var(--text-primary)]">
+    <Modal open={true} variant="glass" size="md" onClose={onClose} closeOnEscape={!saving}>
+      <div className="flex max-h-[inherit] min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
+        <div className="flex items-start justify-between gap-3 p-4 border-b border-[var(--stroke)] shrink-0">
+          <h3 className="font-semibold text-[var(--text-primary)] text-sm sm:text-base min-w-0 pr-2">
             {multi ? `Set next review · ${customers.length} customers` : `Set next review · ${customer?.name || ''}`}
           </h3>
-          <button onClick={onClose} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--card-hover)]" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-10 min-w-10 shrink-0 inline-flex items-center justify-center p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--card-hover)]"
+            aria-label="Close"
+          >
             <FiX className="w-4 h-4" />
           </button>
         </div>
-        <form onSubmit={apply} className="p-4 space-y-4">
+        <form onSubmit={apply} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
           <div>
             <span className="block text-xs font-medium text-[var(--text-secondary)] mb-2">Preset</span>
             <div className="flex flex-wrap gap-1.5">
@@ -67,7 +71,7 @@ export default function SetNextReviewModal({
                   key={p.months}
                   type="button"
                   onClick={() => setNext(addMonthsISO(today, p.months))}
-                  className={`px-2.5 py-1 rounded-full text-xs border ${
+                  className={`min-h-9 px-2.5 py-1 rounded-full text-xs border ${
                     next === addMonthsISO(today, p.months)
                       ? 'border-[var(--accent)] text-[var(--accent)]'
                       : 'border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]'
@@ -80,7 +84,7 @@ export default function SetNextReviewModal({
                 <button
                   type="button"
                   onClick={() => setNext(addMonthsISO(today, suggestedMonths))}
-                  className="px-2.5 py-1 rounded-full text-xs border border-dashed border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
+                  className="min-h-9 px-2.5 py-1 rounded-full text-xs border border-dashed border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
                   title="Use the customer's configured cadence"
                 >
                   Use cadence ({suggestedMonths}m)
@@ -93,7 +97,7 @@ export default function SetNextReviewModal({
             <DatePickerInput
               value={next}
               onChange={(v) => setNext(v)}
-              inputClassName="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
+              inputClassName="w-full min-h-11 px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--accent)]"
               ariaLabel="Next review due"
             />
           </div>
@@ -107,20 +111,24 @@ export default function SetNextReviewModal({
               className="w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-sm text-[var(--text-primary)]"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--card-hover)]">
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-11 px-4 py-2 text-sm border border-[var(--stroke)] rounded-lg text-[var(--text-secondary)] hover:bg-[var(--card-hover)] w-full sm:w-auto"
+            >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !next}
-              className="px-4 py-2 text-sm bg-[var(--accent)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+              className="min-h-11 px-4 py-2 text-sm bg-[var(--accent)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 w-full sm:w-auto"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   )
 }

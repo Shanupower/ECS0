@@ -96,17 +96,24 @@ function CreateReceiptContent() {
 export default function CreateReceiptPage() {
   const { user } = useAuth()
   const [reportIssueOpen, setReportIssueOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
-    <div className="flex h-screen bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]">
-      <Sidebar userRole={user?.role} empCode={user?.emp_code} />
+    <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]">
+      <Sidebar
+        userRole={user?.role}
+        empCode={user?.emp_code}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
         <TopHeader
           isAdmin={user?.role === 'admin'}
           userName={user?.name ?? user?.emp_code}
           userEmail={user?.email}
           onReportIssue={() => setReportIssueOpen(true)}
+          onMenuClick={() => setMobileMenuOpen(true)}
         />
 
         <CreateReceiptContent />

@@ -109,7 +109,7 @@ export default function ReceiptsPage(){
   }, [token, localDraftPayload, savingLocalDraft])
 
   return (
-    <div className="space-y-4 -ml-4 lg:-ml-6">
+    <div className="space-y-4 w-full min-w-0">
       {!draftId && cachedDraftId && (
         <div className="rounded-card border border-[var(--warn)]/40 bg-[var(--warn-muted)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <span className="text-body text-[var(--text-primary)]">We found a failed receipt draft. Resume where you left off?</span>

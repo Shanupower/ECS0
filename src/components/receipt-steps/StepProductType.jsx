@@ -30,7 +30,7 @@ function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true,
       <h3 className="receipt-step-title mt-0 mb-1">Step 3 – Select Product Type</h3>
       <p className="receipt-step-helper mb-4">Choose the type of financial product you want to invest in</p>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6">
         {productTypes.map((type) => {
           const isSelected = productType === type.value
           const Icon = type.Icon

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Shield, AlertCircle, User, LogOut, MapPin } from 'lucide-react'
+import { Shield, AlertCircle, User, LogOut, MapPin, Menu } from 'lucide-react'
 import DarkModeToggle from '../DarkModeToggle'
 import { GlobalSearch } from './GlobalSearch'
 import NotificationBell from '../NotificationBell'
@@ -14,6 +14,8 @@ interface TopHeaderProps {
   onReportIssue?: () => void
   onProfileClick?: () => void
   onLogout?: () => void
+  /** Opens the sidebar on small viewports; omitted = no menu control (desktop-only layouts). */
+  onMenuClick?: () => void
 }
 
 export function TopHeader({
@@ -26,6 +28,7 @@ export function TopHeader({
   onReportIssue,
   onProfileClick,
   onLogout,
+  onMenuClick,
 }: TopHeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -53,11 +56,21 @@ export function TopHeader({
   }, [])
 
   return (
-    <header className="relative z-40 flex-shrink-0 min-h-14 px-3 sm:px-4 lg:px-6 py-2 flex items-center gap-3 sm:gap-4 border-b border-[var(--dashboard-border)] bg-[var(--dashboard-card)]/80 dark:bg-[var(--dashboard-card)] backdrop-blur-xl">
-      <div className="min-w-0 w-full sm:max-w-md flex-shrink">
+    <header className="relative z-40 flex-shrink-0 min-h-14 px-2 sm:px-4 lg:px-6 py-2 flex items-center gap-1.5 sm:gap-4 border-b border-[var(--dashboard-border)] bg-[var(--dashboard-card)]/80 dark:bg-[var(--dashboard-card)] backdrop-blur-xl">
+      {onMenuClick && (
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="lg:hidden flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg text-[var(--dashboard-muted)] hover:bg-[var(--dashboard-border)]/50 hover:text-[var(--dashboard-text)] transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
+      <div className="min-w-0 flex-1 max-w-[min(100%,28rem)]">
         <GlobalSearch inputRef={searchRef} />
       </div>
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
         {isAdmin && (
           <span className="hidden sm:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-medium bg-[var(--dashboard-primary)]/15 text-[var(--dashboard-primary)] border border-[var(--dashboard-primary)]/30">
             <Shield className="w-3.5 h-3.5" />

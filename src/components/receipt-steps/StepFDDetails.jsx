@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { api } from '../../api'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
+import { findMatchingFdSlab, getEffectiveBonusesBps } from '../../utils/fdSlabMatch.js'
 
 export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false, initialData }) {
   const todayYyyyMmDd = new Date().toISOString().split('T')[0]
@@ -277,8 +278,34 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
     if (principalAmount) calculateRate()
   }, [principalAmount])
 
+  const schemeToUse = fullScheme || scheme
+
+  const matchedSlab = useMemo(() => {
+    const sch = fullScheme || scheme
+    const tv = parseInt(tenureValue, 10)
+    return findMatchingFdSlab({
+      slabs: sch?.rate_slabs || [],
+      tenure_unit: tenureUnit,
+      tenure_value: tv,
+      payout_frequency: payoutFrequency
+    })
+  }, [fullScheme, scheme, tenureUnit, tenureValue, payoutFrequency])
+
+  const displayBonusesBps = useMemo(() => {
+    const sch = fullScheme || scheme
+    if (rateCalculation?.bonuses_bps) return rateCalculation.bonuses_bps
+    if (matchedSlab) return getEffectiveBonusesBps(matchedSlab, sch)
+    return {
+      senior_citizen: sch?.senior_citizen_bonus_bps ?? 0,
+      women: sch?.women_bonus_bps ?? 0,
+      renewal: sch?.renewal_bonus_bps ?? 0
+    }
+  }, [rateCalculation?.bonuses_bps, matchedSlab, fullScheme, scheme])
+
+  const displaySlabId = rateCalculation?.slab ?? matchedSlab?.slab_id ?? null
+  const showTenurePayoutHint = !String(tenureValue || '').trim() || !payoutFrequency
+
   const handleNext = () => {
-    const schemeToUse = fullScheme || scheme
     const issuer_key = issuer?._key || issuer?.issuer_key
     const tv = parseInt(tenureValue, 10)
     const fdData = {
@@ -709,7 +736,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
           </div>
         )}
 
-        {/* Bonuses */}
+        {/* Bonuses — API bonuses_bps first; else client slab match; else scheme defaults */}
         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Bonus Eligibility</h4>
           <div className="space-y-2">
@@ -720,7 +747,9 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 onChange={(e) => setSeniorCitizen(e.target.checked)}
                 className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Senior Citizen (60+ years) (+{(scheme.senior_citizen_bonus_bps / 100).toFixed(2)}%)</span>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                Senior Citizen (60+ years) (+{(Number(displayBonusesBps.senior_citizen) / 100).toFixed(2)}%)
+              </span>
             </label>
             <label className="flex items-center">
               <input
@@ -729,7 +758,9 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 onChange={(e) => setWomen(e.target.checked)}
                 className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Women Depositor (+{(scheme.women_bonus_bps / 100).toFixed(2)}%)</span>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                Women Depositor (+{(Number(displayBonusesBps.women) / 100).toFixed(2)}%)
+              </span>
             </label>
             <label className="flex items-center">
               <input
@@ -738,9 +769,22 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 onChange={(e) => setRenewal(e.target.checked)}
                 className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Renewal/Existing Customer (+{(scheme.renewal_bonus_bps / 100).toFixed(2)}%)</span>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                Renewal/Existing Customer (+{(Number(displayBonusesBps.renewal) / 100).toFixed(2)}%)
+              </span>
             </label>
           </div>
+          {displaySlabId && (
+            <p className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+              Bonus increments apply to this booking&apos;s rate slab:{' '}
+              <span className="font-semibold text-gray-800 dark:text-gray-200">{displaySlabId}</span>.
+            </p>
+          )}
+          {showTenurePayoutHint && (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+              Select tenure and payout to see slab-specific bonus amounts (if any).
+            </p>
+          )}
         </div>
 
         {/* Interest / maturity summary */}

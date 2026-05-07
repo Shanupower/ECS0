@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import { FiUser, FiMail, FiPhone, FiLock, FiX, FiAlertCircle } from 'react-icons/fi'
-import { useEscapeClose } from '../hooks/useEscapeClose'
+import { Modal } from './ui/Modal'
 
 export default function ProfileModal({ isOpen, onClose }) {
   const { token, user, refreshUser, impersonator, impersonateAs, endImpersonation } = useAuth()
-  useEscapeClose(isOpen, onClose)
   const [email, setEmail] = useState('')
   const [mobile, setMobile] = useState('')
   const [profileError, setProfileError] = useState('')
@@ -106,29 +105,28 @@ export default function ProfileModal({ isOpen, onClose }) {
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-dark-800 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-dark-700"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-2">
+    <Modal open={isOpen} onClose={onClose} variant="legacy" size="md">
+      <div className="flex max-h-[inherit] min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+        <div className="flex-shrink-0 border-b border-gray-200 dark:border-dark-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-2 shrink-0">
                 <FiUser className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Profile</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">Profile</h2>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-500 dark:text-dark-400"
+              className="min-h-11 min-w-11 shrink-0 inline-flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-500 dark:text-dark-400"
+              aria-label="Close"
             >
               <FiX className="h-5 w-5" />
             </button>
           </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
 
           {/* Profile: email & phone */}
           <form onSubmit={handleProfileSubmit} className="space-y-4 mb-8">
@@ -268,11 +266,11 @@ export default function ProfileModal({ isOpen, onClose }) {
                     {impError}
                   </div>
                 )}
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <button
                     type="submit"
                     disabled={impLoading}
-                    className="flex-1 bg-indigo-600 text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 font-medium disabled:opacity-50 text-sm"
+                    className="min-h-11 w-full sm:flex-1 bg-indigo-600 text-white py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800 font-medium disabled:opacity-50 text-sm"
                   >
                     {impLoading ? 'Logging in…' : 'Login as employee'}
                   </button>
@@ -280,7 +278,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                     <button
                       type="button"
                       onClick={endImpersonation}
-                      className="px-3 py-2 rounded-lg border border-gray-300 dark:border-dark-600 text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark-700"
+                      className="min-h-11 w-full sm:w-auto px-3 py-2 rounded-lg border border-gray-300 dark:border-dark-600 text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark-700 shrink-0"
                     >
                       Return to admin
                     </button>
@@ -294,6 +292,6 @@ export default function ProfileModal({ isOpen, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

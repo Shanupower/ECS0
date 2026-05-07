@@ -5,7 +5,7 @@ import {
   FiDownload, FiTrash2, FiImage
 } from 'react-icons/fi'
 import { Button, Card, Input } from '../ui'
-import { useEscapeClose } from '../../hooks/useEscapeClose'
+import { Modal } from '../ui/Modal'
 
 /** @typedef {{ id: string, name: string, is_active?: boolean }} Team */
 
@@ -218,8 +218,6 @@ export function TeamPickerModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEscapeClose(open && !busy, onClose)
-
   useEffect(() => {
     if (open) { setTeamId(''); setComment(defaultComment); setFiles([]); setError('') }
   }, [open, defaultComment])
@@ -236,8 +234,6 @@ export function TeamPickerModal({
     [teams, excludedSet]
   )
 
-  if (!open) return null
-
   const handleSubmit = async () => {
     if (!teamId) return setError('Pick a team to continue')
     setBusy(true); setError('')
@@ -247,11 +243,11 @@ export function TeamPickerModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
-      <Card padding="lg" className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+    <Modal open={open} onClose={() => !busy && onClose()} variant="glass" size="md" closeOnBackdrop={!busy} closeOnEscape={!busy}>
+      <Card padding="lg" className="w-full max-h-[inherit] overflow-y-auto overscroll-contain border-0 shadow-none bg-transparent">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-          <button aria-label="Close" onClick={() => !busy && onClose()} className="p-1 rounded hover:bg-[var(--card-hover)]"><FiX /></button>
+          <button aria-label="Close" onClick={() => !busy && onClose()} className="min-h-10 min-w-10 inline-flex items-center justify-center rounded hover:bg-[var(--card-hover)]"><FiX /></button>
         </div>
         <div className="space-y-3">
           <div className="flex flex-col gap-1.5">
@@ -286,12 +282,12 @@ export function TeamPickerModal({
           <ApprovalAttachmentsPicker value={files} onChange={setFiles} disabled={busy} />
           {error && <p className="text-sm text-[var(--error)] flex items-center gap-1.5"><FiAlertTriangle /> {error}</p>}
         </div>
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !teamId} icon={<FiCheck />} onClick={handleSubmit}>{busy ? 'Submitting…' : submitLabel}</Button>
+        <div className="flex flex-col-reverse gap-2 mt-5 sm:flex-row sm:justify-end sm:items-center">
+          <Button variant="secondary" disabled={busy} onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button disabled={busy || !teamId} icon={<FiCheck />} onClick={handleSubmit} className="w-full sm:w-auto">{busy ? 'Submitting…' : submitLabel}</Button>
         </div>
       </Card>
-    </div>
+    </Modal>
   )
 }
 
@@ -310,11 +306,7 @@ export function RejectModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEscapeClose(open && !busy, onClose)
-
   useEffect(() => { if (open) { setComment(''); setFiles([]); setError('') } }, [open])
-
-  if (!open) return null
 
   const handleSubmit = async () => {
     if (!comment.trim()) return setError('A rejection reason is required')
@@ -324,13 +316,13 @@ export function RejectModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
-      <Card padding="lg" className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+    <Modal open={open} onClose={() => !busy && onClose()} variant="glass" size="md" closeOnBackdrop={!busy} closeOnEscape={!busy}>
+      <Card padding="lg" className="w-full max-h-[inherit] overflow-y-auto overscroll-contain border-0 shadow-none bg-transparent">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <FiSlash className="text-[var(--error)]" /> {title}
           </h2>
-          <button aria-label="Close" onClick={() => !busy && onClose()} className="p-1 rounded hover:bg-[var(--card-hover)]"><FiX /></button>
+          <button aria-label="Close" onClick={() => !busy && onClose()} className="min-h-10 min-w-10 inline-flex items-center justify-center rounded hover:bg-[var(--card-hover)]"><FiX /></button>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
           The receipt will return to the creator with status <b>Needs Changes</b>.
@@ -351,12 +343,12 @@ export function RejectModal({
           <ApprovalAttachmentsPicker value={files} onChange={setFiles} disabled={busy} />
         </div>
         {error && <p className="text-sm text-[var(--error)] flex items-center gap-1.5 mt-2"><FiAlertTriangle /> {error}</p>}
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !comment.trim()} icon={<FiSlash />} onClick={handleSubmit}>{busy ? 'Rejecting…' : 'Send back to creator'}</Button>
+        <div className="flex flex-col-reverse gap-2 mt-5 sm:flex-row sm:justify-end">
+          <Button variant="secondary" disabled={busy} onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button disabled={busy || !comment.trim()} icon={<FiSlash />} onClick={handleSubmit} className="w-full sm:w-auto">{busy ? 'Rejecting…' : 'Send back to creator'}</Button>
         </div>
       </Card>
-    </div>
+    </Modal>
   )
 }
 
@@ -376,11 +368,7 @@ export function SubmitForApprovalModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEscapeClose(open && !busy, onClose)
-
   useEffect(() => { if (open) { setComment(''); setFiles([]); setError('') } }, [open])
-
-  if (!open) return null
 
   const handleSubmit = async () => {
     setBusy(true); setError('')
@@ -389,13 +377,13 @@ export function SubmitForApprovalModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
-      <Card padding="lg" className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+    <Modal open={open} onClose={() => !busy && onClose()} variant="glass" size="md" closeOnBackdrop={!busy} closeOnEscape={!busy}>
+      <Card padding="lg" className="w-full max-h-[inherit] overflow-y-auto overscroll-contain border-0 shadow-none bg-transparent">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <FiSend className="text-[var(--accent)]" /> {isResubmit ? 'Resubmit for approval' : 'Submit for approval'}
           </h2>
-          <button aria-label="Close" onClick={() => !busy && onClose()} className="p-1 rounded hover:bg-[var(--card-hover)]"><FiX /></button>
+          <button aria-label="Close" onClick={() => !busy && onClose()} className="min-h-10 min-w-10 inline-flex items-center justify-center rounded hover:bg-[var(--card-hover)]"><FiX /></button>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
           The receipt will be routed to the intake team. Attach supporting documents if you want to give reviewers extra context.
@@ -414,14 +402,14 @@ export function SubmitForApprovalModal({
           <ApprovalAttachmentsPicker value={files} onChange={setFiles} disabled={busy} />
           {error && <p className="text-sm text-[var(--error)] flex items-center gap-1.5"><FiAlertTriangle /> {error}</p>}
         </div>
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button disabled={busy} icon={<FiSend />} onClick={handleSubmit}>
+        <div className="flex flex-col-reverse gap-2 mt-5 sm:flex-row sm:justify-end">
+          <Button variant="secondary" disabled={busy} onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button disabled={busy} icon={<FiSend />} onClick={handleSubmit} className="w-full sm:w-auto">
             {busy ? 'Submitting…' : (isResubmit ? 'Resubmit' : 'Submit for approval')}
           </Button>
         </div>
       </Card>
-    </div>
+    </Modal>
   )
 }
 
@@ -441,11 +429,7 @@ export function CompleteApprovalModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEscapeClose(open && !busy, onClose)
-
   useEffect(() => { if (open) { setComment(''); setFiles([]); setError('') } }, [open])
-
-  if (!open) return null
 
   const handleSubmit = async () => {
     setBusy(true); setError('')
@@ -454,13 +438,13 @@ export function CompleteApprovalModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
-      <Card padding="lg" className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+    <Modal open={open} onClose={() => !busy && onClose()} variant="glass" size="md" closeOnBackdrop={!busy} closeOnEscape={!busy}>
+      <Card padding="lg" className="w-full max-h-[inherit] overflow-y-auto overscroll-contain border-0 shadow-none bg-transparent">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <FiCheckCircle className="text-[var(--success)]" /> Approve &amp; complete
           </h2>
-          <button aria-label="Close" onClick={() => !busy && onClose()} className="p-1 rounded hover:bg-[var(--card-hover)]"><FiX /></button>
+          <button aria-label="Close" onClick={() => !busy && onClose()} className="min-h-10 min-w-10 inline-flex items-center justify-center rounded hover:bg-[var(--card-hover)]"><FiX /></button>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
           {currentTeamName ? <>As <b className="text-[var(--text-primary)]">{currentTeamName}</b>, this will finalize the receipt as <b>{finalLabel}</b>.</> :
@@ -481,14 +465,14 @@ export function CompleteApprovalModal({
           <ApprovalAttachmentsPicker value={files} onChange={setFiles} disabled={busy} />
           {error && <p className="text-sm text-[var(--error)] flex items-center gap-1.5"><FiAlertTriangle /> {error}</p>}
         </div>
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button disabled={busy} icon={<FiCheckCircle />} onClick={handleSubmit}>
+        <div className="flex flex-col-reverse gap-2 mt-5 sm:flex-row sm:justify-end">
+          <Button variant="secondary" disabled={busy} onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button disabled={busy} icon={<FiCheckCircle />} onClick={handleSubmit} className="w-full sm:w-auto">
             {busy ? 'Finalizing…' : 'Approve & complete'}
           </Button>
         </div>
       </Card>
-    </div>
+    </Modal>
   )
 }
 
@@ -666,16 +650,12 @@ export function AdminOverrideModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEscapeClose(open && !busy, onClose)
-
   useEffect(() => {
     if (open) {
       setAction('complete'); setReason(''); setComment(''); setTeamId('')
       setStatus(currentStatus || ''); setFiles([]); setError('')
     }
   }, [open, currentStatus])
-
-  if (!open) return null
 
   // Legacy-status overrides don't flow through the engine, so attachments
   // can't be tagged with a stage_event_id there. Hide the picker in that mode.
@@ -703,13 +683,13 @@ export function AdminOverrideModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
-      <Card padding="lg" className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+    <Modal open={open} onClose={() => !busy && onClose()} variant="glass" size="lg" closeOnBackdrop={!busy} closeOnEscape={!busy}>
+      <Card padding="lg" className="w-full max-h-[inherit] overflow-y-auto overscroll-contain border-0 shadow-none bg-transparent">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <FiShield className="text-[var(--warn)]" /> Admin override
           </h2>
-          <button aria-label="Close" onClick={() => !busy && onClose()} className="p-1 rounded hover:bg-[var(--card-hover)]"><FiX /></button>
+          <button aria-label="Close" onClick={() => !busy && onClose()} className="min-h-10 min-w-10 inline-flex items-center justify-center rounded hover:bg-[var(--card-hover)]"><FiX /></button>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mb-3">
           Bypass the normal workflow. Every override is recorded with your reason and marked <b>forced</b> in history.
@@ -778,13 +758,13 @@ export function AdminOverrideModal({
           {error && <p className="text-sm text-[var(--error)] flex items-center gap-1.5"><FiAlertTriangle /> {error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !reason.trim()} icon={<FiShield />} onClick={submit}>
+        <div className="flex flex-col-reverse gap-2 mt-5 sm:flex-row sm:justify-end">
+          <Button variant="secondary" disabled={busy} onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button disabled={busy || !reason.trim()} icon={<FiShield />} onClick={submit} className="w-full sm:w-auto">
             {busy ? 'Applying…' : 'Apply override'}
           </Button>
         </div>
       </Card>
-    </div>
+    </Modal>
   )
 }

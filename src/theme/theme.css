@@ -68,6 +68,11 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  /* App shell gutters (align with DashboardLayout p-3 / p-4 / p-6) */
+  --page-gutter: 12px;
+  --page-gutter-sm: 16px;
+  --page-gutter-lg: 24px;
+
   /* Border radius – Apple-like */
   --radius-input: 10px;
   --radius-card: 12px;

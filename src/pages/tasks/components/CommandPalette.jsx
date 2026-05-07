@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FiSearch, FiCheckSquare, FiHome, FiUsers, FiList, FiGrid, FiCalendar, FiPlus, FiFilter } from 'react-icons/fi'
+import { Modal } from '../../../components/ui/Modal'
 
 export default function CommandPalette({ open, onClose, tasks, filters, setFilter, onQuickAdd }) {
   const [q, setQ] = useState('')
@@ -51,12 +52,10 @@ export default function CommandPalette({ open, onClose, tasks, filters, setFilte
     else if (e.key === 'Enter') { e.preventDefault(); run(commands[index]) }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh] bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-xl border border-[var(--stroke)] bg-[var(--card-bg)] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--stroke)]">
+    <Modal open={open} onClose={onClose} variant="glass" size="xl" position="top">
+      <div className="flex max-h-[inherit] min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--stroke)] shrink-0">
           <FiSearch className="w-4 h-4 text-[var(--text-muted)]" />
           <input
             ref={inputRef}
@@ -68,7 +67,7 @@ export default function CommandPalette({ open, onClose, tasks, filters, setFilte
           />
           <span className="text-[10px] text-[var(--text-muted)] border border-[var(--stroke)] rounded px-1 py-0.5">Esc</span>
         </div>
-        <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1">
+        <div ref={listRef} className="min-h-0 max-h-[min(50dvh,360px)] overflow-y-auto overscroll-contain py-1">
           {commands.length === 0 && <div className="px-3 py-4 text-sm text-[var(--text-muted)]">No matches.</div>}
           {commands.map((cmd, i) => (
             <button
@@ -84,6 +83,6 @@ export default function CommandPalette({ open, onClose, tasks, filters, setFilte
           ))}
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
