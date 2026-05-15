@@ -6,8 +6,8 @@ import { getInitialReportFilters } from '../report-meta.js'
 import { filtersToReportQuery } from '../lib/report-filters.js'
 import { downloadExportFile, downloadReportFile } from '../lib/report-download.js'
 import { useToast } from '../../../components/ui/Toast.jsx'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
-import { Button } from '../../../components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/Card.jsx'
+import { Button } from '../../../components/ui/Button.jsx'
 
 const EXPORT_PAGE_SIZE = 50000
 

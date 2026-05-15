@@ -7,7 +7,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel
 } from '@tanstack/react-table'
-import { Button } from '../../../components/ui/button'
+import { Button } from '../../../components/ui/Button.jsx'
 import { cn } from '../../../utils/cn'
 
 export function ReportDataTable({ columns, data, pageSize = 25 }) {

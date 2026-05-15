@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import * as Lucide from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card.jsx'
+import { Button } from '../components/ui/Button.jsx'
 import DataExportSection from '../features/analytics/components/DataExportSection.jsx'
 
 export default function AnalyticsDashboardPage() {

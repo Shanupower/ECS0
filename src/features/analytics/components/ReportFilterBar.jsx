@@ -1,14 +1,14 @@
 import * as React from 'react'
-import { Input } from '../../../components/ui/input'
-import { Button } from '../../../components/ui/button'
-import { Switch } from '../../../components/ui/switch'
+import { Input } from '../../../components/ui/Input.jsx'
+import { Button } from '../../../components/ui/Button.jsx'
+import { Switch } from '../../../components/ui/Switch.jsx'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from '../../../components/ui/select'
+} from '../../../components/ui/Select.jsx'
 import {
   RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS,
   RECEIPT_PRODUCT_CATEGORY_KEYS
