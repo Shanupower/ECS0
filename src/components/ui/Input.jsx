@@ -1,32 +1,17 @@
-import React from 'react'
+import * as React from 'react'
 import { cn } from '../../utils/cn'
 
-/**
- * Themed text input. Border, radius, focus ring, optional error state.
- * @param {Object} props
- * @param {string} [props.className]
- * @param {boolean} [props.error]
- * @param {string} [props.label]
- */
-export function Input({ className, error, label, id, ...rest }) {
-  const inputId = id || (label && label.toLowerCase().replace(/\s/g, '-'))
+export const Input = React.forwardRef(({ className, type = 'text', ...props }, ref) => {
   return (
-    <div className="flex flex-col gap-1.5">
-      {label && (
-        <label htmlFor={inputId} className="text-label text-[var(--text-secondary)]">
-          {label}
-        </label>
+    <input
+      type={type}
+      className={cn(
+        'flex h-10 w-full rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-bg)] px-3 py-2 text-sm text-[var(--dashboard-text)] placeholder:text-[var(--dashboard-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        className
       )}
-      <input
-        id={inputId}
-        className={cn(
-          'w-full rounded-input border bg-[var(--card-bg-opaque)] px-4 py-2.5 text-body text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--placeholder)]',
-          'border-[var(--stroke)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 focus:ring-offset-[var(--canvas)]',
-          error && 'border-[var(--error)] focus:border-[var(--error)] focus:ring-[var(--error)]/30',
-          className
-        )}
-        {...rest}
-      />
-    </div>
+      ref={ref}
+      {...props}
+    />
   )
-}
+})
+Input.displayName = 'Input'

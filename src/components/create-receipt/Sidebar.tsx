@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FileText,
   History,
+  LineChart,
   Users,
   Target,
   ClipboardList,
@@ -35,6 +36,7 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlag
 
   const main = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    ...(isAdmin ? [{ to: '/analytics', label: 'Business Analytics', icon: LineChart }] : []),
     { to: '/receipts', label: 'Create Receipt', icon: FileText },
     { to: '/transactions', label: 'Transactions', icon: History },
   ]

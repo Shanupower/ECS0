@@ -28,7 +28,7 @@ export function SegmentedControl({ options, value, onChange, className }) {
           className={cn(
             'rounded-pill px-4 py-2 text-caption font-medium transition-colors',
             value === opt.value
-              ? 'bg-[var(--accent-muted)] text-[var(--accent)] shadow-sm'
+              ? 'bg-[var(--dashboard-primary)] text-white shadow-sm'
               : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card-hover)]'
           )}
         >

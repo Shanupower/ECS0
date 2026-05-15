@@ -357,6 +357,16 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+/* Dashboard KPI / widget grids – consistent gutters (see DashboardPage layout constants) */
+.dashboard-kpi-grid {
+  gap: 1.25rem;
+}
+@media (min-width: 640px) {
+  .dashboard-kpi-grid {
+    gap: 1.5rem;
+  }
+}
+
 /* Customize modal overlay and panel */
 .dashboard-customize-overlay {
   backdrop-filter: blur(8px);

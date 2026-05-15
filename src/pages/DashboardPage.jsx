@@ -4,7 +4,6 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, R
 import { useAuth } from '../context/AuthContext'
 import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
-import CSVExport from '../components/CSVExport'
 import { Card, Button, SegmentedControl, Switch, Skeleton } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import {
@@ -88,6 +87,15 @@ function scaleMonthlyTargetToDateRange(monthlyAmount, fromStr, toStr) {
   }
   return total
 }
+
+/** Shared layout rhythm for dashboard sections and grids */
+const DASHBOARD_STACK = 'space-y-8'
+const DASHBOARD_GRID_KPI =
+  'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-5 sm:gap-6'
+const DASHBOARD_GRID_KPI_EMPLOYEE =
+  'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 sm:gap-6'
+const DASHBOARD_GRID_WIDGETS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6'
+const DASHBOARD_GRID_CHARTS = 'grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8'
 
 const WIDGET_LABELS = {
   kpi_cards: 'KPI cards',
@@ -468,7 +476,7 @@ export default function DashboardPage() {
   }, [branchStats, dateRange.from, dateRange.to])
 
   return (
-    <div className="space-y-6">
+    <div className={DASHBOARD_STACK}>
       {/* Hero: welcome + refresh */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -592,10 +600,10 @@ export default function DashboardPage() {
       )}
 
       {/* Compact filter bar */}
-      <Card padding="md" hover={false}>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-end gap-4">
+      <Card padding="lg" hover={false}>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-5">
+            <div className="flex flex-wrap items-end gap-5">
               <div className="flex items-center gap-2">
                 <FiCalendar className="w-5 h-5 text-[var(--accent)]" />
                 <span className="text-body font-medium text-[var(--text-primary)] tracking-wide">
@@ -665,7 +673,7 @@ export default function DashboardPage() {
             </label>
           </div>
           {(isAdmin || isEmployee || isBranchManager) && (
-            <div className="flex items-center gap-3 pt-2 border-t border-[var(--stroke)]">
+            <div className="flex items-center gap-3 pt-4 mt-1 border-t border-[var(--stroke)]">
               <span className="text-label text-[var(--text-secondary)]">View</span>
               <SegmentedControl
                 options={viewModeOptions}
@@ -678,8 +686,8 @@ export default function DashboardPage() {
       </Card>
 
       {loading && (
-        <div className="space-y-6">
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
+        <div className={DASHBOARD_STACK}>
+          <div className={isAdmin ? DASHBOARD_GRID_KPI : DASHBOARD_GRID_KPI_EMPLOYEE}>
             {Array.from({ length: isAdmin ? 5 : 4 }).map((_, i) => (
               <Card key={i} padding="md">
                 <Skeleton variant="line" lines={3} />
@@ -689,7 +697,7 @@ export default function DashboardPage() {
           <Card padding="lg">
             <Skeleton variant="line" lines={4} />
           </Card>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className={DASHBOARD_GRID_CHARTS}>
             <Card padding="lg"><Skeleton variant="block" className="h-[350px]" /></Card>
             <Card padding="lg"><Skeleton variant="block" className="h-[350px]" /></Card>
           </div>
@@ -704,9 +712,9 @@ export default function DashboardPage() {
       )}
 
       {!loading && !error && summary && (
-        <div className="space-y-6">
+        <div className={DASHBOARD_STACK}>
           {showWidget('target_vs_actual') && (summary.effective_target != null || summary.branch_target != null) && monthlyTargetBasis > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
               <div className="flex items-center gap-2 mb-2">
                 <FiTarget className="w-5 h-5 text-[var(--accent)]" />
                 <h3 className="text-title font-semibold text-[var(--text)]">Target vs actual</h3>
@@ -749,7 +757,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('average_ticket') && summary.total_receipts > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--success-muted)]">
                   <FaRupeeSign className="h-5 w-5 text-[var(--success)]" />
@@ -766,11 +774,17 @@ export default function DashboardPage() {
 
           {/* KPI Cards */}
           {showWidget('kpi_cards') && (
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin && summary.service_income_earned !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Receipts</div>
+          <div
+            className={
+              isAdmin && summary.service_income_earned !== undefined
+                ? DASHBOARD_GRID_KPI
+                : DASHBOARD_GRID_KPI_EMPLOYEE
+            }
+          >
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="text-small font-medium text-[var(--text-muted)] mb-1.5">Total Receipts</div>
                   <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{summary.total_receipts ?? 0}</div>
                   <div className="text-helper mt-1">
                     {isAdmin
@@ -784,10 +798,10 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Investments</div>
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="text-small font-medium text-[var(--text-muted)] mb-1.5">Total Investments</div>
                   <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--success)]">{formatCurrency(summary.total_investments || 0)}</div>
                   <div className="text-helper mt-1">Investment amount in the selected period</div>
                 </div>
@@ -797,10 +811,10 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Customers</div>
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="text-small font-medium text-[var(--text-muted)] mb-1.5">Total Customers</div>
                   <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-primary)]">{summary.total_customers ?? 0}</div>
                   <div className="text-helper mt-1">Customers in the selected scope</div>
                 </div>
@@ -810,10 +824,10 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Collection/Credit Earned</div>
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="text-small font-medium text-[var(--text-muted)] mb-1.5">Collection/Credit Earned</div>
                   <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--warn)]">
                     {formatCurrency(summary.collection_credit_earned || summary.commissions_total || 0)}
                   </div>
@@ -826,10 +840,10 @@ export default function DashboardPage() {
             </Card>
 
             {isAdmin && summary.service_income_earned !== undefined && (
-              <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-small font-medium text-[var(--text-muted)] mb-1">Service Income Earned</div>
+              <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1 pr-2">
+                    <div className="text-small font-medium text-[var(--text-muted)] mb-1.5">Service Income Earned</div>
                     <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(summary.service_income_earned || 0)}</div>
                     <div className="text-helper mt-1">Admin-only SI</div>
                   </div>
@@ -843,16 +857,16 @@ export default function DashboardPage() {
           )}
 
           {/* Small widgets grid – 2–3 per row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={DASHBOARD_GRID_WIDGETS}>
           {showWidget('cc_vs_si') && isAdmin && (summary.collection_credit_earned != null || summary.service_income_earned != null) && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warn-muted)]">
                   <FiAward className="h-4 w-4 text-[var(--warn)]" />
                 </div>
                 <h3 className="text-base font-semibold text-[var(--text-primary)]">CC vs SI</h3>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3 transition-colors hover:border-[var(--stroke-strong)]">
                   <div className="text-xs font-medium text-[var(--text-muted)]">CC</div>
                   <div className="mt-0.5 text-lg font-bold tracking-tight text-[var(--warn)]">{formatCurrency(summary.collection_credit_earned || summary.commissions_total || 0)}</div>
@@ -866,7 +880,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('status_breakdown') && summary.status_counts && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
                   <FiPieChart className="h-4 w-4 text-[var(--accent)]" />
@@ -898,7 +912,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('leads_snapshot') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
@@ -913,7 +927,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('issues_snapshot') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warn-muted)]">
@@ -933,7 +947,7 @@ export default function DashboardPage() {
           )}
 
           {approvalFlagOn && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
@@ -951,7 +965,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('top_employees') && topEmployees.length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warn-muted)]">
                   <FiAward className="h-4 w-4 text-[var(--warn)]" />
@@ -977,7 +991,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('monthly_cc_si') && monthlyCcSi.length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--success-muted)]">
                   <FiTrendingUp className="h-4 w-4 text-[var(--success)]" />
@@ -1005,7 +1019,7 @@ export default function DashboardPage() {
 
           {/* Tasks / Issues summary */}
           {showWidget('overdue_tasks') && (
-          <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+          <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-title font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
@@ -1036,7 +1050,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('recent_receipts') && recentReceipts.length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
@@ -1058,7 +1072,7 @@ export default function DashboardPage() {
           )}
 
           {showWidget('investor_heatmap') && investorLocations && Object.keys(investorLocations).length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
                   <FiGlobe className="w-4 h-4 text-[var(--accent)]" />
@@ -1078,9 +1092,9 @@ export default function DashboardPage() {
           )}
 
           {/* Charts */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+          <div className={DASHBOARD_GRID_CHARTS}>
           {showWidget('by_category') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
                   <div className="w-10 h-10 rounded-card flex items-center justify-center mr-3 bg-[var(--dashboard-primary)]/12">
@@ -1152,7 +1166,7 @@ export default function DashboardPage() {
               )
             }
             return (
-              <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+              <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
                 <div className="flex items-center gap-2 mb-4">
                   <FiPieChart className="w-5 h-5 text-[var(--accent)]" />
                   <h3 className="text-title font-semibold text-[var(--text)]">By category</h3>
@@ -1207,7 +1221,7 @@ export default function DashboardPage() {
           })()}
 
           {showWidget('daily_timeline') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
                   <div className="w-10 h-10 bg-[var(--success-muted)] rounded-card flex items-center justify-center mr-3">
@@ -1260,11 +1274,10 @@ export default function DashboardPage() {
           )}
           </div>
 
-          {isAdmin && <CSVExport token={token} user={user} />}
 
           {/* Branch leaderboard */}
           {showWidget('branch_performance') && branchStats && isAdmin && viewMode === 'all' && allBranchesTargetSummary && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
+            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget min-h-[7.5rem]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center">
                   <FiMapPin className="w-5 h-5 text-[var(--accent)] mr-2" />
@@ -1317,7 +1330,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="max-h-[560px] overflow-y-auto pr-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                   {allBranchesTargetSummary.branches.map((branch, index) => {
                     const monthlyBranchTarget = toSafeNumber(branch.total_target)
                     const tgt = scaleMonthlyTargetToDateRange(
@@ -1437,7 +1450,7 @@ export default function DashboardPage() {
                     const allocated = first?.allocated_target != null ? toSafeNumber(first.allocated_target) : (unset > 0 ? remaining / unset : 0)
                     const periodBranchTarget = scaleMonthlyTargetToDateRange(monthly, dateRange.from, dateRange.to)
                     return (
-                      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-5 sm:gap-6">
                         <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
                           <div className="text-xs text-[var(--text-muted)]">Branch target (monthly)</div>
                           <div className="font-semibold text-[var(--text-primary)]">{formatCurrency(monthly)}</div>

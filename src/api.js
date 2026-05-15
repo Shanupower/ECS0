@@ -268,6 +268,7 @@ export const api={
   // App config
   getAppConfig:(t)=>req('/api/app-config',{token:t}),
   updateAppConfig:(t,body)=>req('/api/app-config',{method:'PUT',token:t,json:body}),
+  migrateReceiptIntake:(t,payload)=>req('/api/receipts/approvals/migrate-intake',{method:'POST',token:t,json:payload}),
 
   // Notifications (in-app bell)
   listNotifications:(t,q)=>req('/api/notifications',{token:t,query:q}),
@@ -569,5 +570,18 @@ export const api={
     })
     const uploaded = Array.isArray(res?.files) ? res.files : []
     return uploaded.map(f => String(f.id)).filter(Boolean)
-  }
+  },
+
+  // -------------------------------------------------------------------------
+  // Reports / Business Analytics (GET /api/reports/*)
+  // -------------------------------------------------------------------------
+  reportsRegistry:(t)=>req('/api/reports/registry',{token:t}),
+  reportsMisSummary:(t,q)=>req('/api/reports/mis-summary',{token:t,query:q}),
+  reportsMisTransactions:(t,q)=>req('/api/reports/mis-transactions',{token:t,query:q}),
+  reportsProductSales:(t,q)=>req('/api/reports/product-sales',{token:t,query:q}),
+  reportsMfCategory:(t,q)=>req('/api/reports/mf-category',{token:t,query:q}),
+  reportsMfFund:(t,q)=>req('/api/reports/mf-fund',{token:t,query:q}),
+  reportsSipReport:(t,q)=>req('/api/reports/sip-report',{token:t,query:q}),
+  reportsCashflow:(t,q)=>req('/api/reports/cashflow',{token:t,query:q}),
+  reportsPendingReceipts:(t,q)=>req('/api/reports/pending-receipts',{token:t,query:q})
 }

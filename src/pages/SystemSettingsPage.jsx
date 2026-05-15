@@ -87,6 +87,7 @@ export default function SystemSettingsPage() {
     // so we can decide whether to offer a receipt-migration after save succeeds.
     const prevIntake = {
       receipt_intake_team_id: cfg.receipt_intake_team_id || null,
+      receipt_intake_non_online_team_id: cfg.receipt_intake_non_online_team_id || null,
       receipt_intake_teams_by_category: normalizeIntakeMap(cfg.receipt_intake_teams_by_category)
     }
     setSaving(true)
@@ -97,12 +98,14 @@ export default function SystemSettingsPage() {
 
       const nextIntake = {
         receipt_intake_team_id: draft.receipt_intake_team_id || null,
+        receipt_intake_non_online_team_id: draft.receipt_intake_non_online_team_id || null,
         receipt_intake_teams_by_category: normalizeIntakeMap(draft.receipt_intake_teams_by_category)
       }
       if (isAdmin && hasIntakeChanged(prevIntake, nextIntake)) {
         setMigration({
           patch: {
             receipt_intake_team_id: nextIntake.receipt_intake_team_id,
+            receipt_intake_non_online_team_id: nextIntake.receipt_intake_non_online_team_id,
             receipt_intake_teams_by_category: nextIntake.receipt_intake_teams_by_category
           }
         })
@@ -288,6 +291,7 @@ export default function SystemSettingsPage() {
 function hasIntakeChanged(a, b) {
   if (!a || !b) return false
   if ((a.receipt_intake_team_id || null) !== (b.receipt_intake_team_id || null)) return true
+  if ((a.receipt_intake_non_online_team_id || null) !== (b.receipt_intake_non_online_team_id || null)) return true
   const am = a.receipt_intake_teams_by_category || {}
   const bm = b.receipt_intake_teams_by_category || {}
   const keys = new Set([...Object.keys(am), ...Object.keys(bm)])
@@ -338,12 +342,15 @@ function ReceiptApprovalSection({ draft, setDraft }) {
   const flags = draft.feature_flags || {}
   const flagOn = !!flags.receipts_approval_v2
   const intakeId = draft.receipt_intake_team_id || ''
+  const nonOnlineId = draft.receipt_intake_non_online_team_id || ''
   const byCat = draft.receipt_intake_teams_by_category && typeof draft.receipt_intake_teams_by_category === 'object'
     ? draft.receipt_intake_teams_by_category
     : {}
   const activeTeams = teams.filter((t) => t.is_active !== false)
   const intakeTeamObj = teams.find((t) => String(t.id || t._key) === String(intakeId))
   const intakeValid = !!intakeTeamObj && intakeTeamObj.is_active !== false
+  const nonOnlineTeamObj = teams.find((t) => String(t.id || t._key) === String(nonOnlineId))
+  const nonOnlineValid = !nonOnlineId || (!!nonOnlineTeamObj && nonOnlineTeamObj.is_active !== false)
   const anyCategoryMapped = INTAKE_PRODUCT_ROWS.some(({ key: k }) => {
     const v = byCat[k]
     return v != null && String(v).trim() !== ''
@@ -379,6 +386,27 @@ function ReceiptApprovalSection({ draft, setDraft }) {
         <p className="text-[11px] text-[var(--text-muted)]">
           Used when a product category has no dedicated team below, and as a safety fallback. With auto-routing on create, set this and/or per-product teams.
           {loading ? ' Loading teams…' : teams.length === 0 ? ' No teams yet — create one in the Teams page.' : ''}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5 mt-3">
+        <label className="text-xs font-medium text-[var(--text-secondary)]">Offline/Others intake team (override)</label>
+        <select
+          value={nonOnlineId}
+          onChange={(e) => setDraft({ ...draft, receipt_intake_non_online_team_id: e.target.value || null })}
+          className="w-full max-w-md px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-sm text-[var(--text-primary)]"
+        >
+          <option value="">Default fallback</option>
+          {activeTeams.map((t) => (
+            <option key={`nononline-${t.id || t._key}`} value={t.id || t._key}>{t.name}</option>
+          ))}
+          {nonOnlineId && !activeTeams.some((t) => String(t.id || t._key) === String(nonOnlineId)) && (
+            <option value={nonOnlineId}>{(nonOnlineTeamObj && nonOnlineTeamObj.name) || nonOnlineId} (inactive)</option>
+          )}
+        </select>
+        <p className="text-[11px] text-[var(--text-muted)]">
+          If a receipt&apos;s payment entry mode is <b>Offline</b> or <b>Others</b>, it will start here regardless of product category.
+          {!nonOnlineValid ? ' Pick an active team (or clear to use default intake).' : ''}
         </p>
       </div>
 
@@ -821,10 +849,15 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
   const [phase, setPhase] = useState('preview') // 'preview' | 'running' | 'done' | 'error'
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState('')
-  const [job, setJob] = useState(null)
   const [busy, setBusy] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
-  const pollRef = useRef(null)
+  const [options, setOptions] = useState({
+    filter_entry_mode: 'all',
+    include_draft: true,
+    include_needs_changes: true,
+    include_in_flight_intake_stage: true
+  })
+  const [reason, setReason] = useState('')
 
   // Initial preview fetch.
   useEffect(() => {
@@ -832,7 +865,7 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
     setPhase('preview')
     setError('')
     setBusy(true)
-    api.previewReceiptMigration(token, patch)
+    api.migrateReceiptIntake(token, { dry_run: true, ...options })
       .then((p) => { if (!cancelled) setPreview(p) })
       .catch((err) => {
         if (cancelled) return
@@ -844,39 +877,27 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Stop polling on unmount.
-  useEffect(() => {
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-  }, [])
-
-  const startPolling = (jobId) => {
-    if (pollRef.current) clearInterval(pollRef.current)
-    pollRef.current = setInterval(async () => {
-      try {
-        const j = await api.getReceiptMigrationJob(token, jobId)
-        setJob(j)
-        if (j?.status && j.status !== 'running') {
-          clearInterval(pollRef.current)
-          pollRef.current = null
-          setPhase('done')
-        }
-      } catch (err) {
-        clearInterval(pollRef.current)
-        pollRef.current = null
-        setError(err?.message || 'Lost connection to migration job')
-        setPhase('error')
-      }
-    }, 2000)
+  const refreshPreview = async () => {
+    setBusy(true); setError('')
+    try {
+      const p = await api.migrateReceiptIntake(token, { dry_run: true, ...options })
+      setPreview(p)
+      setPhase('preview')
+    } catch (err) {
+      setError(err?.message || 'Failed to load preview')
+      setPhase('error')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const runMigration = async () => {
     setBusy(true); setError('')
     try {
-      const { job_id } = await api.startReceiptMigration(token, patch)
-      const initial = await api.getReceiptMigrationJob(token, job_id).catch(() => null)
-      setJob(initial)
       setPhase('running')
-      startPolling(job_id)
+      const result = await api.migrateReceiptIntake(token, { dry_run: false, reason, ...options })
+      setPreview(result)
+      setPhase('done')
     } catch (err) {
       const detail = err?.detail || err?.message || 'Failed to start migration'
       setError(typeof detail === 'string' ? detail : JSON.stringify(detail))
@@ -886,9 +907,10 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
     }
   }
 
-  const total = job?.total ?? preview?.will_move ?? 0
-  const processed = job?.processed ?? 0
-  const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0
+  const total = preview?.counts?.filtered ?? 0
+  const moved = preview?.counts?.moved ?? 0
+  const skipped = preview?.counts?.skipped ?? 0
+  const errorCount = preview?.counts?.errors ?? 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
@@ -900,7 +922,7 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
             {phase === 'error' && <FiAlertTriangle className="w-4 h-4 text-amber-500" />}
             {phase === 'preview' && 'Move existing receipts to new intake teams?'}
             {phase === 'running' && 'Re-routing receipts…'}
-            {phase === 'done' && (job?.status === 'failed' ? 'Migration finished with errors' : 'Migration complete')}
+            {phase === 'done' && (errorCount > 0 ? 'Migration finished with errors' : 'Migration complete')}
             {phase === 'error' && 'Migration error'}
           </h3>
           <button
@@ -917,77 +939,45 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
           {phase === 'preview' && (
             busy
               ? <div className="text-sm text-[var(--text-muted)]">Calculating impact…</div>
-              : preview ? <PreviewSummary preview={preview} /> : null
+              : <PreviewSummary preview={preview} options={options} onOptionsChange={setOptions} reason={reason} onReasonChange={setReason} onRefresh={refreshPreview} />
           )}
 
-          {(phase === 'running' || phase === 'done') && job && (
-            <>
-              <div>
-                <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] mb-1">
-                  <span>{processed} / {total} receipts</span>
-                  <span>{pct}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-[var(--card-hover)] overflow-hidden">
-                  <div
-                    className={`h-full ${job.status === 'failed' ? 'bg-amber-500' : 'bg-red-500'} transition-all`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2 mt-2 text-[11px] text-[var(--text-secondary)]">
-                  <div>Moved: <b className="text-[var(--text-primary)]">{job.moved ?? 0}</b></div>
-                  <div>Skipped: <b className="text-[var(--text-primary)]">{job.skipped ?? 0}</b></div>
-                  <div>Errors: <b className={job.error_count ? 'text-red-500' : 'text-[var(--text-primary)]'}>{job.error_count ?? 0}</b></div>
-                </div>
-              </div>
+          {phase === 'running' && (
+            <div className="text-sm text-[var(--text-muted)]">Running migration…</div>
+          )}
 
-              <div className="rounded-lg border border-[var(--stroke)] divide-y divide-[var(--stroke)]">
-                {Object.values(job.by_team || {}).length === 0 && (
-                  <div className="px-3 py-2 text-xs text-[var(--text-muted)]">No team-level rerouting required.</div>
-                )}
-                {Object.values(job.by_team || {}).map((row) => {
-                  const tPct = row.target > 0 ? Math.round((row.moved / row.target) * 100) : 100
-                  return (
-                    <div key={row.team_id} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
-                      <div className="min-w-0">
-                        <div className="text-[var(--text-primary)] truncate">{row.team_name}</div>
-                        <div className="text-[var(--text-muted)]">
-                          {row.moved}/{row.target} moved
-                          {row.errors > 0 && <span className="text-red-500"> · {row.errors} errors</span>}
-                        </div>
-                      </div>
-                      <div className="w-20 h-1.5 rounded-full bg-[var(--card-hover)] overflow-hidden flex-shrink-0">
-                        <div className="h-full bg-red-500 transition-all" style={{ width: `${tPct}%` }} />
-                      </div>
-                    </div>
-                  )
-                })}
+          {phase === 'done' && preview && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-[11px] text-[var(--text-secondary)]">
+                <div>Moved: <b className="text-[var(--text-primary)]">{moved}</b></div>
+                <div>Skipped: <b className="text-[var(--text-primary)]">{skipped}</b></div>
+                <div>Errors: <b className={errorCount ? 'text-red-500' : 'text-[var(--text-primary)]'}>{errorCount}</b></div>
               </div>
-
-              {(job.errors?.length || 0) > 0 && (
+              {(preview.errors?.length || 0) > 0 && (
                 <div>
                   <button
                     onClick={() => setShowErrors((v) => !v)}
                     className="text-xs text-red-500 hover:underline"
                   >
-                    {showErrors ? 'Hide' : 'Show'} {job.errors.length} failure{job.errors.length === 1 ? '' : 's'}
+                    {showErrors ? 'Hide' : 'Show'} {preview.errors.length} failure{preview.errors.length === 1 ? '' : 's'}
                   </button>
                   {showErrors && (
                     <ul className="mt-1 text-[11px] bg-[var(--card-hover)] rounded p-2 space-y-1 max-h-40 overflow-y-auto">
-                      {job.errors.slice(0, 10).map((e, i) => (
-                        <li key={`${e._key || i}-${i}`} className="text-[var(--text-secondary)]">
-                          <code className="text-[var(--text-primary)]">{e._key || '—'}</code>
+                      {preview.errors.slice(0, 10).map((e, i) => (
+                        <li key={`${e.id || i}-${i}`} className="text-[var(--text-secondary)]">
+                          <code className="text-[var(--text-primary)]">{e.id || '—'}</code>
                           <span className="text-[var(--text-muted)]"> · {e.code}</span>
                           {e.detail && <span className="text-[var(--text-muted)]"> — {e.detail}</span>}
                         </li>
                       ))}
-                      {job.errors.length > 10 && (
-                        <li className="text-[var(--text-muted)] italic">+ {job.errors.length - 10} more (truncated)</li>
+                      {preview.errors.length > 10 && (
+                        <li className="text-[var(--text-muted)] italic">+ {preview.errors.length - 10} more (truncated)</li>
                       )}
                     </ul>
                   )}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {phase === 'error' && (
@@ -1008,20 +998,12 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
               </button>
               <button
                 onClick={runMigration}
-                disabled={busy || !preview || preview.will_move === 0}
+                disabled={busy || !preview || !String(reason || '').trim() || (preview?.counts?.filtered ?? 0) === 0}
                 className="text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {preview && preview.will_move === 0 ? 'Nothing to migrate' : `Migrate ${preview?.will_move || 0} receipt${preview?.will_move === 1 ? '' : 's'}`}
+                {(preview?.counts?.filtered ?? 0) === 0 ? 'Nothing to migrate' : `Migrate ${preview?.counts?.filtered || 0} receipt${(preview?.counts?.filtered || 0) === 1 ? '' : 's'}`}
               </button>
             </>
-          )}
-          {phase === 'running' && (
-            <button
-              onClick={onClose}
-              className="text-sm px-3 py-2 rounded-lg border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
-            >
-              Run in background
-            </button>
           )}
           {phase === 'done' && (
             <button
@@ -1045,60 +1027,84 @@ function ReceiptMigrationModal({ token, patch, onClose }) {
   )
 }
 
-function PreviewSummary({ preview }) {
-  const willMove = preview.will_move || 0
+function PreviewSummary({ preview, options, onOptionsChange, reason, onReasonChange, onRefresh }) {
+  const counts = preview?.counts || {}
+  const errors = Array.isArray(preview?.errors) ? preview.errors : []
+  const toMove = counts.filtered ?? 0
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2 text-[11px]">
-        <div className="rounded-lg bg-[var(--card-hover)] p-2">
-          <div className="text-[var(--text-muted)]">Will move</div>
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{willMove}</div>
+      <div className="rounded-lg border border-[var(--stroke)] bg-[var(--card-hover)]/30 p-3 space-y-2">
+        <div className="text-xs font-medium text-[var(--text-secondary)]">Migration options</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="text-[11px] text-[var(--text-muted)]">
+            Entry-mode filter
+            <select
+              value={options.filter_entry_mode}
+              onChange={(e) => onOptionsChange({ ...options, filter_entry_mode: e.target.value })}
+              className="mt-1 w-full px-2 py-1.5 border border-[var(--stroke)] rounded-md bg-[var(--card-bg-opaque)] text-[var(--text-primary)] text-xs"
+            >
+              <option value="all">All</option>
+              <option value="non_online_only">Offline/Others only</option>
+              <option value="online_only">Online only</option>
+            </select>
+          </label>
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+              <input type="checkbox" checked={!!options.include_draft} onChange={(e) => onOptionsChange({ ...options, include_draft: e.target.checked })} />
+              Include Draft
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+              <input type="checkbox" checked={!!options.include_needs_changes} onChange={(e) => onOptionsChange({ ...options, include_needs_changes: e.target.checked })} />
+              Include Needs Changes
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+              <input type="checkbox" checked={!!options.include_in_flight_intake_stage} onChange={(e) => onOptionsChange({ ...options, include_in_flight_intake_stage: e.target.checked })} />
+              Include in-flight (intake stage only)
+            </label>
+          </div>
         </div>
-        <div className="rounded-lg bg-[var(--card-hover)] p-2">
-          <div className="text-[var(--text-muted)]">Already correct</div>
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{preview.already_correct || 0}</div>
-        </div>
-        <div className="rounded-lg bg-[var(--card-hover)] p-2">
-          <div className="text-[var(--text-muted)]">Total in flight</div>
-          <div className="text-lg font-semibold text-[var(--text-primary)]">{preview.total || 0}</div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="px-3 py-1.5 text-xs rounded-md border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)]"
+          >
+            Refresh preview
+          </button>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            In-flight migration only affects receipts currently in the intake stage.
+          </span>
         </div>
       </div>
 
-      {willMove > 0 && (
-        <div className="rounded-lg border border-[var(--stroke)] divide-y divide-[var(--stroke)]">
-          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-[var(--text-muted)] bg-[var(--card-hover)]/40">
-            Receipts will be re-routed to:
-          </div>
-          {(preview.by_team || []).map((row) => (
-            <div key={row.team_id} className="px-3 py-2 flex items-center justify-between text-xs">
-              <span className="text-[var(--text-primary)]">
-                {row.team_name}
-                {row.missing && <span className="ml-1 text-red-500">(missing)</span>}
-                {!row.missing && row.is_active === false && <span className="ml-1 text-amber-500">(inactive)</span>}
-              </span>
-              <span className="text-[var(--text-secondary)]">{row.count}</span>
-            </div>
-          ))}
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div className="rounded-lg bg-[var(--card-hover)] p-2">
+          <div className="text-[var(--text-muted)]">Candidates</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{counts.candidates ?? 0}</div>
         </div>
-      )}
-
-      {(preview.unresolved || []).length > 0 && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-[var(--text-primary)]">
-          <div className="font-medium mb-1 flex items-center gap-1.5">
-            <FiAlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            Some receipts have no resolvable team
-          </div>
-          <ul className="text-[var(--text-secondary)] space-y-0.5">
-            {preview.unresolved.map((u) => (
-              <li key={u.category}><code>{u.category}</code> · {u.count}</li>
-            ))}
-          </ul>
-          <div className="text-[var(--text-muted)] mt-1">These will be skipped during migration. Map them to a team or set a default intake team to include them.</div>
+        <div className="rounded-lg bg-[var(--card-hover)] p-2">
+          <div className="text-[var(--text-muted)]">Filtered</div>
+          <div className="text-lg font-semibold text-[var(--text-primary)]">{toMove}</div>
         </div>
-      )}
+        <div className="rounded-lg bg-[var(--card-hover)] p-2">
+          <div className="text-[var(--text-muted)]">Errors</div>
+          <div className={`text-lg font-semibold ${errors.length ? 'text-red-500' : 'text-[var(--text-primary)]'}`}>{errors.length}</div>
+        </div>
+      </div>
 
-      {willMove === 0 && (
-        <div className="text-xs text-[var(--text-muted)]">Nothing needs to move under the new configuration.</div>
+      <div className="rounded-lg border border-[var(--stroke)] p-3">
+        <div className="text-xs font-medium text-[var(--text-secondary)]">Reason (required to run)</div>
+        <input
+          value={reason}
+          onChange={(e) => onReasonChange(e.target.value)}
+          className="mt-1 w-full px-3 py-2 border border-[var(--stroke)] rounded-lg bg-[var(--card-bg-opaque)] text-sm text-[var(--text-primary)]"
+          placeholder="e.g. Updated intake routing rules"
+        />
+      </div>
+
+      {toMove === 0 && (
+        <div className="text-xs text-[var(--text-muted)]">Nothing matches the current filters.</div>
       )}
     </div>
   )

@@ -44,6 +44,7 @@ const DEFAULTS = {
 
   // Receipt approval workflow (v2)
   receipt_intake_team_id: null,
+  receipt_intake_non_online_team_id: null,
   receipt_intake_teams_by_category: {},
   receipt_final_status_label: 'Completed',
   feature_flags: {
@@ -76,6 +77,7 @@ function mergeConfig(cfg) {
     ...DEFAULTS.feature_flags,
     ...((cfg && cfg.feature_flags && typeof cfg.feature_flags === 'object') ? cfg.feature_flags : {})
   }
+  if (next.receipt_intake_non_online_team_id == null) next.receipt_intake_non_online_team_id = DEFAULTS.receipt_intake_non_online_team_id
   if (!next.receipt_final_status_label) next.receipt_final_status_label = DEFAULTS.receipt_final_status_label
   next.receipt_intake_teams_by_category = {
     ...(DEFAULTS.receipt_intake_teams_by_category || {}),

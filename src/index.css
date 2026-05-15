@@ -8,12 +8,30 @@
 @tailwind utilities;
 
 @layer base {
-  html {
+  /*
+   * App shell fills the viewport; pages scroll inside DashboardLayout <main>, not on <body>.
+   * Login uses h-full overflow-y-auto on its page root.
+   */
+  html,
+  body,
+  #root {
     height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    margin: 0;
   }
   body {
-    min-height: 100%;
-    min-height: 100dvh;
+    background: var(--canvas);
+    color: var(--text);
+  }
+  /* Recharts defaults to an opaque white surface; keep charts on theme canvas */
+  .recharts-wrapper,
+  .recharts-surface {
+    background-color: transparent !important;
+  }
+  .recharts-responsive-container {
+    max-height: 100%;
   }
 }
 
