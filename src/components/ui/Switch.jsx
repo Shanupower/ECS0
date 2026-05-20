@@ -2,8 +2,12 @@ import * as React from 'react'
 import * as SwitchPrimitives from '@radix-ui/react-switch'
 import { cn } from '../../utils/cn'
 
-const Switch = React.forwardRef(({ className, ...props }, ref) => (
+const Switch = React.forwardRef(({ className, onChange, onCheckedChange, ...props }, ref) => (
   <SwitchPrimitives.Root
+    onCheckedChange={(checked) => {
+      onCheckedChange?.(checked)
+      onChange?.(checked)
+    }}
     className={cn(
       'peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dashboard-bg)]',

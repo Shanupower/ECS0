@@ -10,7 +10,6 @@ const buttonVariants = cva(
       variant: {
         default:
           'bg-[var(--accent)] text-white shadow-glass-sm hover:bg-[var(--accent-hover)]',
-        /** Alias used across the app for filled actions */
         primary:
           'bg-[var(--accent)] text-white shadow-glass-sm hover:bg-[var(--accent-hover)]',
         secondary:
@@ -33,13 +32,14 @@ const buttonVariants = cva(
   }
 )
 
-export const Button = React.forwardRef(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button'
-    return (
-      <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />
-    )
-  }
-)
+export const Button = React.forwardRef(function Button(
+  { className, variant, size, asChild = false, ...props },
+  ref
+) {
+  const Comp = asChild ? Slot : 'button'
+  return (
+    <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />
+  )
+})
 Button.displayName = 'Button'
 export { buttonVariants }
