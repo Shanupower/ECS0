@@ -6,8 +6,14 @@
 /** @typedef {'fullReceipt' | 'datesSearch' | 'minimal'} ReportFilterProfile */
 
 /**
- * @typedef {{ title: string, description: string, filterProfile: ReportFilterProfile }} ReportMeta
+ * @typedef {{ label: string, value: string }} DateBasisOption
+ * @typedef {{ title: string, description: string, filterProfile: ReportFilterProfile, defaultDateBasis?: string, dateBasisOptions?: DateBasisOption[], defaultFutureMonths?: number }} ReportMeta
  */
+
+export const DEFAULT_DATE_BASIS_OPTIONS = [
+  { value: 'receipt', label: 'Receipt date' },
+  { value: 'transaction', label: 'Transaction date' }
+]
 
 /** @type {Record<string, ReportMeta>} */
 export const REPORT_META = {
@@ -26,6 +32,16 @@ export const REPORT_META = {
     description: 'Applications and amounts grouped by product category.',
     filterProfile: 'fullReceipt'
   },
+  'product-detail': {
+    title: 'Product-wise Detail',
+    description: 'Product, scheme, client, date, branch, RM, CC, and amount detail.',
+    filterProfile: 'fullReceipt'
+  },
+  'category-summary': {
+    title: 'Category-wise Summary',
+    description: 'All product categories grouped by scheme and type, including FD cumulative type.',
+    filterProfile: 'fullReceipt'
+  },
   'mf-category': {
     title: 'Category-wise Mutual Fund',
     description: 'MF totals grouped by scheme category.',
@@ -37,9 +53,27 @@ export const REPORT_META = {
     filterProfile: 'fullReceipt'
   },
   'sip-report': {
-    title: 'SIP / Systematic',
-    description: 'SIP-tagged receipts with schedule and amount fields.',
-    filterProfile: 'fullReceipt'
+    title: 'SIP Due / End',
+    description: 'SIP receipts with product, scheme, client, next due date, and end date.',
+    filterProfile: 'fullReceipt',
+    defaultDateBasis: 'sip_due',
+    defaultFutureMonths: 6,
+    dateBasisOptions: [
+      { value: 'sip_due', label: 'Next due date' },
+      { value: 'sip_end', label: 'SIP end date' },
+      ...DEFAULT_DATE_BASIS_OPTIONS
+    ]
+  },
+  'fd-maturity': {
+    title: 'FD Maturity',
+    description: 'FD maturity report with product, scheme, client, and due dates.',
+    filterProfile: 'fullReceipt',
+    defaultDateBasis: 'fd_maturity',
+    defaultFutureMonths: 6,
+    dateBasisOptions: [
+      { value: 'fd_maturity', label: 'Maturity date' },
+      ...DEFAULT_DATE_BASIS_OPTIONS
+    ]
   },
   cashflow: {
     title: 'Cash Flow',
@@ -62,10 +96,22 @@ export function defaultDateRange() {
   }
 }
 
-export function getInitialReportFilters() {
+export function defaultFutureDateRange(months = 6) {
+  const from = new Date()
+  const to = new Date(from)
+  to.setMonth(to.getMonth() + months)
   return {
-    ...defaultDateRange(),
-    dateBasis: 'receipt',
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10)
+  }
+}
+
+export function getInitialReportFilters(slug) {
+  const meta = getReportMeta(slug)
+  const dateRange = meta.defaultFutureMonths ? defaultFutureDateRange(meta.defaultFutureMonths) : defaultDateRange()
+  return {
+    ...dateRange,
+    dateBasis: meta.defaultDateBasis || 'receipt',
     branchCode: '',
     empCode: '',
     category: '',
@@ -91,6 +137,7 @@ export function getReportMeta(slug) {
   return {
     title: label,
     description: 'Analytics report.',
-    filterProfile: 'fullReceipt'
+    filterProfile: 'fullReceipt',
+    dateBasisOptions: DEFAULT_DATE_BASIS_OPTIONS
   }
 }

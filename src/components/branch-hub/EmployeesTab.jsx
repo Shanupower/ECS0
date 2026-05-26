@@ -30,6 +30,7 @@ import {
   receiptDate,
   receiptEmpCode,
   receiptCategory,
+  scaleMonthlyTargetToDateRange,
 } from './utils'
 
 export default function EmployeesTab({
@@ -42,6 +43,7 @@ export default function EmployeesTab({
   onEditTarget,
   networkMode = false,
   branchBreakdown = [],
+  dateRange,
 }) {
   const [search, setSearch] = useState('')
 
@@ -98,18 +100,19 @@ export default function EmployeesTab({
     ;(employeePerformance || []).forEach((r) => {
       const code = r.emp_code || r.employee_code || ''
       const key = code || `__row_${byCode.size}`
+      const monthlyTarget = Number(r.effective_target || r.personal_target || 0)
+      const periodTarget = scaleMonthlyTargetToDateRange(monthlyTarget, dateRange?.from, dateRange?.to)
       const existing = byCode.get(key)
       if (existing) {
         existing.Achieved += Number(r.total_cc || r.total_investment || 0)
-        const t = Number(r.effective_target || r.personal_target || 0)
-        existing.Target = Math.max(existing.Target, t)
+        existing.Target = Math.max(existing.Target, periodTarget)
         if (!existing.name && r.employee_name) existing.name = r.employee_name
       } else {
         byCode.set(key, {
           emp_code: code,
           name: r.employee_name || code,
           Achieved: Number(r.total_cc || r.total_investment || 0),
-          Target: Number(r.effective_target || r.personal_target || 0),
+          Target: periodTarget,
         })
       }
     })
@@ -126,7 +129,7 @@ export default function EmployeesTab({
     })
     rows.sort((a, b) => b.Achieved - a.Achieved)
     return rows.slice(0, 12)
-  }, [employeePerformance])
+  }, [employeePerformance, dateRange?.from, dateRange?.to])
 
   // Compute per-employee last-14-day sparkline from recentReceipts.
   const perEmpSparklines = useMemo(() => {
@@ -456,7 +459,8 @@ export default function EmployeesTab({
                 const perf = (employeePerformance || []).find(
                   (p) => p.emp_code === u.emp_code
                 )
-                const target = Number(u.personal_monthly_target || perf?.effective_target || 0)
+                const monthlyTarget = Number(u.personal_monthly_target || perf?.effective_target || 0)
+                const target = scaleMonthlyTargetToDateRange(monthlyTarget, dateRange?.from, dateRange?.to)
                 const achieved = Number(perf?.total_cc || perf?.total_investment || 0)
                 const pct = target > 0 ? Math.min(100, (achieved / target) * 100) : 0
                 const atRisk = target > 0 && pct < paceBenchmark()

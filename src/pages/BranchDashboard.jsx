@@ -10,6 +10,8 @@ import KpiStat from '../components/branch-hub/KpiStat'
 import {
   formatCompactINR as fmtCompactINR,
   tooltipStyle as chartTooltipStyle,
+  tooltipLabelStyle as chartTooltipLabelStyle,
+  tooltipItemStyle as chartTooltipItemStyle,
   receiptAmount,
   receiptDate,
 } from '../components/branch-hub/utils'
@@ -629,7 +631,6 @@ export default function BranchDashboard() {
         percentage: total > 0 ? ((branch.total_investments || 0) / total * 100).toFixed(1) : 0
       }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 8) // Top 8 branches
   }
 
   if (loading) {
@@ -957,7 +958,7 @@ export default function BranchDashboard() {
                           {effectiveMonthly != null && (
                             <>
                               {' '}
-                              · target {formatCurrency(effectiveMonthly)}
+                              · target {formatCurrency(periodTarget)}
                               {pct != null ? ` (${pct}%)` : ''}
                             </>
                           )}
@@ -1023,6 +1024,7 @@ export default function BranchDashboard() {
                     angle={-45}
                     textAnchor="end"
                     height={80}
+                    interval={0}
                     tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                     tickLine={{ stroke: 'var(--stroke)' }}
                   />
@@ -1040,7 +1042,8 @@ export default function BranchDashboard() {
                       name === 'users' ? 'Users' : 'Collection/Credit'
                     ]}
                     contentStyle={chartTooltipStyle}
-                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                    labelStyle={chartTooltipLabelStyle}
+                    itemStyle={chartTooltipItemStyle}
                     cursor={{ fill: 'var(--card-hover)' }}
                   />
                   <Bar 
@@ -1107,12 +1110,13 @@ export default function BranchDashboard() {
                     <Tooltip 
                       formatter={(value) => [formatCurrency(value), 'Investment']}
                       contentStyle={chartTooltipStyle}
-                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                      labelStyle={chartTooltipLabelStyle}
+                      itemStyle={chartTooltipItemStyle}
                     />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex flex-col gap-2 max-w-xs w-full">
-                  {getBranchDistributionData().slice(0, 6).map((entry, index) => (
+                  {getBranchDistributionData().map((entry, index) => (
                     <div key={`legend-${index}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card-hover)] transition-colors">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div 
@@ -1176,7 +1180,8 @@ export default function BranchDashboard() {
                   return [formatCurrency(value), name]
                 }}
                 contentStyle={chartTooltipStyle}
-                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                labelStyle={chartTooltipLabelStyle}
+                itemStyle={chartTooltipItemStyle}
               />
               <Line 
                 type="monotone" 
@@ -1246,7 +1251,8 @@ export default function BranchDashboard() {
               <Tooltip 
                 formatter={(value) => [formatCurrency(value), 'Investment']}
                 contentStyle={chartTooltipStyle}
-                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                labelStyle={chartTooltipLabelStyle}
+                itemStyle={chartTooltipItemStyle}
               />
               <Bar dataKey="value" fill="#EF4444" radius={[8, 8, 0, 0]} />
             </BarChart>
@@ -1501,7 +1507,8 @@ export default function BranchDashboard() {
                                   <Tooltip 
                                     formatter={(value) => [formatCurrency(value), 'Investment']}
                                     contentStyle={chartTooltipStyle}
-                                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                                    labelStyle={chartTooltipLabelStyle}
+                                    itemStyle={chartTooltipItemStyle}
                                   />
                                   <Bar dataKey="investment" fill="#EF4444" radius={[8, 8, 0, 0]} />
                                 </BarChart>
@@ -1541,7 +1548,8 @@ export default function BranchDashboard() {
                                     ]}
                                     labelFormatter={(label) => `Date: ${new Date(label).toLocaleDateString('en-IN')}`}
                                     contentStyle={chartTooltipStyle}
-                                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}
+                                    labelStyle={chartTooltipLabelStyle}
+                                    itemStyle={chartTooltipItemStyle}
                                   />
                                   <Line 
                                     type="monotone" 

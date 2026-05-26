@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   PieChart,
@@ -39,9 +39,36 @@ export default function ReceiptsTab({
   leads,
   customers,
   branchStats,
+  branches = [],
 }) {
   const [overtimeMode, setOvertimeMode] = useState('amount') // 'amount' | 'count'
   const [heatmapMode, setHeatmapMode] = useState('employee') // 'employee' | 'branch'
+
+  const branchNameLookup = useMemo(() => {
+    const normalize = (value) => String(value ?? '').trim().toLowerCase().replace(/[.\s-]/g, '')
+    const map = new Map()
+    const add = (key, label) => {
+      const raw = String(key ?? '').trim()
+      const name = String(label ?? '').trim()
+      if (!raw || !name) return
+      map.set(raw, name)
+      map.set(raw.toLowerCase(), name)
+      map.set(normalize(raw), name)
+    }
+
+    ;(branches || []).forEach((b) => {
+      const label = b?.branch_name || b?.name || b?.branch || b?.branch_code || b?.code
+      ;[b?.id, b?._key, b?.branch_code, b?.code, b?.branch, b?.branch_name, b?.name].forEach((key) => add(key, label))
+    })
+    return map
+  }, [branches])
+
+  const resolveBranchLabel = useCallback((value) => {
+    const raw = String(value ?? '').trim()
+    if (!raw) return ''
+    const compact = raw.toLowerCase().replace(/[.\s-]/g, '')
+    return branchNameLookup.get(raw) || branchNameLookup.get(raw.toLowerCase()) || branchNameLookup.get(compact) || raw
+  }, [branchNameLookup])
 
   const pipeline = useMemo(() => {
     const leadsArr = Array.isArray(leads) ? leads : []
@@ -133,13 +160,13 @@ export default function ReceiptsTab({
     })
 
     const branchLabelForReceipt = (r) => {
+      const directName = r?.branch_name || r?.employee?.branch_name
+      if (directName) return directName
       return (
-        r?.branch_name ||
-        r?.branch_code ||
-        r?.branch ||
-        r?.employee?.branch_name ||
-        r?.employee?.branch_code ||
-        r?.employee?.branch ||
+        resolveBranchLabel(r?.branch_code) ||
+        resolveBranchLabel(r?.branch) ||
+        resolveBranchLabel(r?.employee?.branch_code) ||
+        resolveBranchLabel(r?.employee?.branch) ||
         '—'
       )
     }
@@ -166,7 +193,7 @@ export default function ReceiptsTab({
       .slice(0, 10)
     const maxVal = Math.max(1, ...rows.flatMap((r) => catList.map((c) => r[c] || 0)))
     return { rows, catList, maxVal }
-  }, [recentReceipts, heatmapMode])
+  }, [recentReceipts, heatmapMode, resolveBranchLabel])
 
   if (loading) {
     return (

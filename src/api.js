@@ -579,9 +579,12 @@ export const api={
   reportsMisSummary:(t,q)=>req('/api/reports/mis-summary',{token:t,query:q}),
   reportsMisTransactions:(t,q)=>req('/api/reports/mis-transactions',{token:t,query:q}),
   reportsProductSales:(t,q)=>req('/api/reports/product-sales',{token:t,query:q}),
+  reportsProductDetail:(t,q)=>req('/api/reports/product-detail',{token:t,query:q}),
+  reportsCategorySummary:(t,q)=>req('/api/reports/category-summary',{token:t,query:q}),
   reportsMfCategory:(t,q)=>req('/api/reports/mf-category',{token:t,query:q}),
   reportsMfFund:(t,q)=>req('/api/reports/mf-fund',{token:t,query:q}),
   reportsSipReport:(t,q)=>req('/api/reports/sip-report',{token:t,query:q}),
+  reportsFdMaturity:(t,q)=>req('/api/reports/fd-maturity',{token:t,query:q}),
   reportsCashflow:(t,q)=>req('/api/reports/cashflow',{token:t,query:q}),
   reportsPendingReceipts:(t,q)=>req('/api/reports/pending-receipts',{token:t,query:q})
 }

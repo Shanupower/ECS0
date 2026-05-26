@@ -7,7 +7,7 @@ import { ReportShell, ReportDataTable } from '../features/analytics/components/R
 import { ReportFilterBar } from '../features/analytics/components/ReportFilterBar.jsx'
 import { getReportMeta, getInitialReportFilters } from '../features/analytics/report-meta.js'
 import { Button } from '../components/ui/Button.jsx'
-import { downloadCsvClient, downloadReportFile } from '../features/analytics/lib/report-download.js'
+import { downloadReportFile } from '../features/analytics/lib/report-download.js'
 import { filtersToReportQuery } from '../features/analytics/lib/report-filters.js'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
@@ -48,8 +48,8 @@ function ServerPager({ page, pageSize, total, onChange }) {
 export default function AnalyticsReportPage() {
   const { slug } = useParams()
   const { token } = useAuth()
-  const defaults = React.useMemo(() => getInitialReportFilters(), [])
   const meta = React.useMemo(() => getReportMeta(slug), [slug])
+  const defaults = React.useMemo(() => getInitialReportFilters(slug), [slug])
   const [f, setF] = React.useState(defaults)
   const [page, setPage] = React.useState(1)
   /** Bumps when user clicks Apply so we refetch even if `f` and `page` are unchanged (React skips effect when deps are equal). */
@@ -60,16 +60,23 @@ export default function AnalyticsReportPage() {
 
   const patchFilters = (patch) => setF((prev) => ({ ...prev, ...patch }))
 
+  React.useEffect(() => {
+    setF(defaults)
+    setPage(1)
+    setPayload(null)
+    setFetchNonce((n) => n + 1)
+  }, [defaults])
+
   const apply = React.useCallback(() => {
     setPage(1)
     setFetchNonce((n) => n + 1)
   }, [])
 
   const resetFilters = React.useCallback(() => {
-    setF(getInitialReportFilters())
+    setF(getInitialReportFilters(slug))
     setPage(1)
     setFetchNonce((n) => n + 1)
-  }, [])
+  }, [slug])
 
   React.useEffect(() => {
     if (!token || !slug) return
@@ -90,6 +97,12 @@ export default function AnalyticsReportPage() {
           case 'product-sales':
             data = await api.reportsProductSales(token, q)
             break
+          case 'product-detail':
+            data = await api.reportsProductDetail(token, q)
+            break
+          case 'category-summary':
+            data = await api.reportsCategorySummary(token, q)
+            break
           case 'mf-category':
             data = await api.reportsMfCategory(token, q)
             break
@@ -98,6 +111,9 @@ export default function AnalyticsReportPage() {
             break
           case 'sip-report':
             data = await api.reportsSipReport(token, q)
+            break
+          case 'fd-maturity':
+            data = await api.reportsFdMaturity(token, q)
             break
           case 'cashflow':
             data = await api.reportsCashflow(token, q)
@@ -120,13 +136,9 @@ export default function AnalyticsReportPage() {
     }
   }, [token, slug, f, page, fetchNonce])
 
-  const exportMisCsv = () => {
+  const exportReport = (format) => {
     const q = filtersToReportQuery(f, { page: 1, pageSize: 50000 })
-    return downloadReportFile(token, 'mis-transactions', q, 'csv')
-  }
-  const exportMisXlsx = () => {
-    const q = filtersToReportQuery(f, { page: 1, pageSize: 50000 })
-    return downloadReportFile(token, 'mis-transactions', q, 'xlsx')
+    return downloadReportFile(token, slug, q, format)
   }
 
   if (slug === 'mis-summary') {
@@ -147,6 +159,7 @@ export default function AnalyticsReportPage() {
                   value: String(payload.previous_month_totals?.applications ?? '—')
                 },
                 { label: 'Prev. month amount', value: formatMoney(payload.previous_month_totals?.amount) },
+                { label: 'Prev. month CC', value: formatMoney(payload.previous_month_totals?.collection_credit) },
                 {
                   label: 'Prev. month incentive',
                   value:
@@ -164,13 +177,19 @@ export default function AnalyticsReportPage() {
             onApply={apply}
             onReset={resetFilters}
             filterProfile={meta.filterProfile}
+            dateBasisOptions={meta.dateBasisOptions}
             showIncludePending
           />
         }
         actions={
-          <Button variant="secondary" asChild>
-            <Link to="/analytics">Back</Link>
-          </Button>
+          <>
+            <Button variant="secondary" asChild>
+              <Link to="/analytics">Back</Link>
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => exportReport('csv').catch((e) => setErr(e.message))}>
+              Export CSV
+            </Button>
+          </>
         }
       >
         {err && (
@@ -219,6 +238,10 @@ export default function AnalyticsReportPage() {
                 <dt className="text-[var(--dashboard-muted)]">Amount</dt>
                 <dd className="tabular-nums">{formatMoney(payload.previous_month_totals?.amount)}</dd>
               </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-[var(--dashboard-muted)]">CC</dt>
+                <dd className="tabular-nums">{formatMoney(payload.previous_month_totals?.collection_credit)}</dd>
+              </div>
             </dl>
           </div>
         </div>
@@ -231,6 +254,7 @@ export default function AnalyticsReportPage() {
                   <th className="px-4 py-2">Product type</th>
                   <th className="px-4 py-2">Applications</th>
                   <th className="px-4 py-2">Amount</th>
+                  <th className="px-4 py-2">CC</th>
                   <th className="px-4 py-2">Incentive</th>
                 </tr>
               </thead>
@@ -240,6 +264,7 @@ export default function AnalyticsReportPage() {
                     <td className="px-4 py-2">{r.product_type}</td>
                     <td className="px-4 py-2 tabular-nums">{r.applications}</td>
                     <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
+                    <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>
                     <td className="px-4 py-2 tabular-nums">
                       {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
                     </td>
@@ -256,6 +281,7 @@ export default function AnalyticsReportPage() {
                   <th className="px-4 py-2">Category</th>
                   <th className="px-4 py-2">Applications</th>
                   <th className="px-4 py-2">Amount</th>
+                  <th className="px-4 py-2">CC</th>
                   <th className="px-4 py-2">Incentive</th>
                 </tr>
               </thead>
@@ -265,6 +291,7 @@ export default function AnalyticsReportPage() {
                     <td className="px-4 py-2">{r.category}</td>
                     <td className="px-4 py-2 tabular-nums">{r.applications}</td>
                     <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
+                    <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>
                     <td className="px-4 py-2 tabular-nums">
                       {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
                     </td>
@@ -281,6 +308,7 @@ export default function AnalyticsReportPage() {
                   <th className="px-4 py-2">Company / fund</th>
                   <th className="px-4 py-2">Applications</th>
                   <th className="px-4 py-2">Amount</th>
+                  <th className="px-4 py-2">CC</th>
                   <th className="px-4 py-2">Incentive</th>
                 </tr>
               </thead>
@@ -290,6 +318,7 @@ export default function AnalyticsReportPage() {
                     <td className="px-4 py-2">{r.company_fund_name}</td>
                     <td className="px-4 py-2 tabular-nums">{r.applications}</td>
                     <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
+                    <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>
                     <td className="px-4 py-2 tabular-nums">
                       {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
                     </td>
@@ -313,15 +342,28 @@ export default function AnalyticsReportPage() {
   let columns = []
   if (slug === 'mis-transactions') {
     if (groupBy) {
-      columns = [
-        ch.accessor('group_key', { header: 'Group' }),
-        ch.accessor('applications', { header: 'Applications' }),
-        ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
-        ch.accessor('incentive_amount', {
-          header: 'Incentive',
-          cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
-        })
-      ]
+      columns = groupBy === 'rm'
+        ? [
+            ch.accessor('group_key', { header: 'RM Code' }),
+            ch.accessor('employee_name', { header: 'Employee Name' }),
+            ch.accessor('applications', { header: 'Applications' }),
+            ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+            ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+            ch.accessor('incentive_amount', {
+              header: 'Incentive',
+              cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+            })
+          ]
+        : [
+            ch.accessor('group_key', { header: groupBy === 'branch' ? 'Branch Code' : 'Group' }),
+            ch.accessor('applications', { header: 'Applications' }),
+            ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+            ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+            ch.accessor('incentive_amount', {
+              header: 'Incentive',
+              cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+            })
+          ]
     } else {
       columns = [
         ch.accessor('date', { header: 'Date' }),
@@ -333,6 +375,7 @@ export default function AnalyticsReportPage() {
         ch.accessor('months', { header: 'Months' }),
         ch.accessor('transaction_type', { header: 'Txn type' }),
         ch.accessor('investment_amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+        ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
         ch.accessor('incentive_paid', {
           header: 'Incentive',
           cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
@@ -348,6 +391,7 @@ export default function AnalyticsReportPage() {
       ch.accessor(key, { header: slug === 'mf-category' ? 'Category' : 'Product' }),
       ch.accessor('applications', { header: 'Applications' }),
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('incentive_amount', {
         header: 'Incentive',
         cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
@@ -358,8 +402,42 @@ export default function AnalyticsReportPage() {
       ch.accessor('fund_name', { header: 'Fund' }),
       ch.accessor('applications', { header: 'Applications' }),
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('incentive_amount', {
         header: 'Incentive',
+        cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+      })
+    ]
+  } else if (slug === 'product-detail') {
+    columns = [
+      ch.accessor('date', { header: 'Date' }),
+      ch.accessor('receipt_number', { header: 'Receipt #' }),
+      ch.accessor('client_name', { header: 'Client' }),
+      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('issuer', { header: 'Issuer' }),
+      ch.accessor('scheme_name', { header: 'Scheme' }),
+      ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('incentive_amount', {
+        header: 'SI',
+        cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+      }),
+      ch.accessor('branch_code', { header: 'Branch Code' }),
+      ch.accessor('emp_code', { header: 'RM' }),
+      ch.accessor('status', { header: 'Status' })
+    ]
+  } else if (slug === 'category-summary') {
+    columns = [
+      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('issuer_name', { header: 'Issuer' }),
+      ch.accessor('scheme_name', { header: 'Scheme' }),
+      ch.accessor('type', { header: 'Type' }),
+      ch.accessor('fd_payout_frequency', { header: 'FD Payout' }),
+      ch.accessor('applications', { header: 'Applications' }),
+      ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('incentive_amount', {
+        header: 'SI',
         cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
       })
     ]
@@ -385,21 +463,37 @@ export default function AnalyticsReportPage() {
     ]
   } else if (slug === 'sip-report') {
     columns = [
+      ch.accessor('date', { header: 'Receipt Date' }),
+      ch.accessor('product_category', { header: 'Product' }),
       ch.accessor('client_name', { header: 'Client' }),
       ch.accessor('folio', { header: 'Folio' }),
       ch.accessor('scheme', { header: 'Scheme' }),
       ch.accessor('sip_amount', { header: 'SIP amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('frequency', { header: 'Frequency' }),
       ch.accessor('start_date', { header: 'Start' }),
+      ch.accessor('next_due_date', { header: 'Next Due' }),
       ch.accessor('end_date', { header: 'End' }),
+      ch.accessor('branch_code', { header: 'Branch Code' }),
+      ch.accessor('emp_code', { header: 'RM' }),
       ch.accessor('status', { header: 'Status' })
     ]
-  }
-
-  const exportClientCsv = () => {
-    if (!rows.length) return
-    const keys = Object.keys(rows[0])
-    downloadCsvClient(`${slug}`, keys, rows.map((row) => keys.map((k) => row[k])))
+  } else if (slug === 'fd-maturity') {
+    columns = [
+      ch.accessor('receipt_date', { header: 'Receipt Date' }),
+      ch.accessor('maturity_date', { header: 'Maturity Date' }),
+      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('issuer', { header: 'Issuer' }),
+      ch.accessor('scheme_name', { header: 'Scheme' }),
+      ch.accessor('type', { header: 'Type' }),
+      ch.accessor('fd_payout_frequency', { header: 'FD Payout' }),
+      ch.accessor('client_name', { header: 'Client' }),
+      ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('maturity_amount', { header: 'Maturity Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('branch_code', { header: 'Branch Code' }),
+      ch.accessor('emp_code', { header: 'RM' })
+    ]
   }
 
   return (
@@ -413,6 +507,7 @@ export default function AnalyticsReportPage() {
           onApply={apply}
           onReset={resetFilters}
           filterProfile={meta.filterProfile}
+          dateBasisOptions={meta.dateBasisOptions}
           showGroupBy={slug === 'mis-transactions'}
           showIncludePending={slug !== 'pending-receipts'}
         />
@@ -422,21 +517,12 @@ export default function AnalyticsReportPage() {
           <Button variant="secondary" asChild>
             <Link to="/analytics">Back</Link>
           </Button>
-          {slug === 'mis-transactions' && (
-            <>
-              <Button type="button" variant="secondary" onClick={() => exportMisCsv().catch((e) => setErr(e.message))}>
-                Export CSV
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => exportMisXlsx().catch((e) => setErr(e.message))}>
-                Export Excel
-              </Button>
-            </>
-          )}
-          {slug !== 'mis-transactions' && slug !== 'mis-summary' && (
-            <Button type="button" variant="secondary" onClick={exportClientCsv} disabled={!rows.length}>
-              Export CSV
-            </Button>
-          )}
+          <Button type="button" variant="secondary" onClick={() => exportReport('csv').catch((e) => setErr(e.message))}>
+            Export CSV
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => exportReport('xlsx').catch((e) => setErr(e.message))}>
+            Export Excel
+          </Button>
         </>
       }
     >
@@ -449,7 +535,7 @@ export default function AnalyticsReportPage() {
       {!loading && slug !== 'mis-summary' && (
         <>
           {columns.length > 0 && <ReportDataTable columns={columns} data={rows} pageSize={25} />}
-          {(slug === 'mis-transactions' || slug === 'sip-report' || slug === 'pending-receipts') &&
+          {(slug === 'mis-transactions' || slug === 'product-detail' || slug === 'sip-report' || slug === 'fd-maturity' || slug === 'pending-receipts') &&
             !groupBy && <ServerPager page={page} pageSize={25} total={total} onChange={setPage} />}
         </>
       )}

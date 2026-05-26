@@ -38,7 +38,8 @@ function SectionLabel({ children }) {
  *   onReset?: () => void,
  *   showGroupBy?: boolean,
  *   showIncludePending?: boolean,
- *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal'
+ *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal',
+ *   dateBasisOptions?: Array<{ value: string, label: string }>
  * }} props
  */
 export function ReportFilterBar({
@@ -56,7 +57,11 @@ export function ReportFilterBar({
   onReset,
   showGroupBy,
   showIncludePending,
-  filterProfile = 'fullReceipt'
+  filterProfile = 'fullReceipt',
+  dateBasisOptions = [
+    { value: 'receipt', label: 'Receipt date' },
+    { value: 'transaction', label: 'Transaction date' }
+  ]
 }) {
   const showScope = filterProfile === 'fullReceipt'
   const showDatesAndSearch = filterProfile !== 'minimal'
@@ -93,13 +98,16 @@ export function ReportFilterBar({
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Date basis</label>
-                <Select value={dateBasis || 'receipt'} onValueChange={(v) => onChange({ dateBasis: v })}>
+                <Select value={dateBasis || dateBasisOptions[0]?.value || 'receipt'} onValueChange={(v) => onChange({ dateBasis: v })}>
                   <SelectTrigger className="min-h-10">
                     <SelectValue placeholder="Receipt date" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="receipt">Receipt date</SelectItem>
-                    <SelectItem value="transaction">Transaction date</SelectItem>
+                    {dateBasisOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
