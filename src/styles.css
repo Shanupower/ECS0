@@ -8,13 +8,12 @@
   --text: var(--text-primary);
   --muted: var(--text-muted);
   --shadow: var(--shadow-card);
-  --accent: var(--accent);
+  /* --accent is defined in theme.css; do not self-reference here */
 }
 .dark { --ring: rgba(41,151,255,0.5) }
 
 *{ box-sizing:border-box }
-html,body,#root{ height:100% }
-body{ margin:0 }
+/* Viewport lock lives in index.css @layer base (html, body, #root) */
 
 /* Shell */
 .app-wrap{ min-height:100%; display:grid; place-items:start; padding:28px }

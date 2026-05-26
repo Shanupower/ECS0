@@ -99,7 +99,7 @@ export default function CreateReceiptPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
-    <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]">
+    <div className="flex h-full max-h-[100dvh] min-h-0 overflow-hidden bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]">
       <Sidebar
         userRole={user?.role}
         empCode={user?.emp_code}

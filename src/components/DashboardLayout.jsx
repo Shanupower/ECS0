@@ -69,7 +69,7 @@ export default function DashboardLayout() {
 
   return (
     <>
-      <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors duration-200">
+      <div className="flex h-full max-h-[100dvh] min-h-0 overflow-hidden bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] transition-colors duration-200">
         <Sidebar
           userRole={user?.role}
           empCode={user?.emp_code}
@@ -97,10 +97,15 @@ export default function DashboardLayout() {
             Page gutters live here only (max-w-7xl + padding). Child routes should use w-full min-w-0
             and avoid stacking extra asymmetric horizontal padding.
           */}
-          <main ref={mainRef} className="flex-1 min-h-0 overflow-auto bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)]">
+          <main
+            ref={mainRef}
+            className="flex flex-1 flex-col min-h-0 overflow-hidden bg-[var(--dashboard-bg)] dark:bg-[var(--dashboard-bg)] text-[var(--dashboard-text)]"
+          >
             <HandoffBanner />
-            <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6 min-w-0 pb-[max(12px,env(safe-area-inset-bottom))]">
-              <Outlet />
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+              <div className="max-w-7xl mx-auto min-w-0 bg-[var(--dashboard-bg)] p-3 sm:p-4 lg:p-6 pb-[max(12px,env(safe-area-inset-bottom))]">
+                <Outlet />
+              </div>
             </div>
           </main>
         </div>

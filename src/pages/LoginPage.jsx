@@ -30,7 +30,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--canvas)] flex items-center justify-center p-4 pb-safe pt-safe transition-colors duration-200">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[var(--canvas)] flex items-center justify-center p-4 pb-safe pt-safe transition-colors duration-200">
       <div className="w-full min-w-0 max-w-md">
         <div className="flex justify-end mb-4">
           <DarkModeToggle />

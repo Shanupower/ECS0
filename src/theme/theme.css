@@ -357,6 +357,233 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+/* KPI cards: Indian short label by default; hover grows card and shows exact amount */
+.dashboard-kpi-expandable {
+  position: relative;
+  overflow: visible;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    border-color 0.2s ease;
+  transform-origin: center center;
+}
+
+.dashboard-kpi-expandable.dashboard-widget-card:hover,
+.dashboard-kpi-expandable:hover {
+  transform: scale(1.06);
+  box-shadow: var(--shadow-lg);
+  z-index: 25;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--dashboard-border));
+}
+
+.dashboard-kpi-expandable .kpi-stat-value {
+  overflow: visible;
+}
+
+.dashboard-kpi-expandable .kpi-short,
+.dashboard-kpi-expandable .kpi-full {
+  white-space: nowrap;
+}
+
+.dashboard-kpi-expandable .kpi-full {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.dashboard-kpi-expandable:hover .kpi-short {
+  opacity: 0;
+}
+
+.dashboard-kpi-expandable:hover .kpi-full {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dashboard-kpi-expandable:hover .kpi-stat-value {
+  z-index: 2;
+}
+
+/* Icon top-right so value text is never clipped by flex / overflow */
+.dashboard-kpi-expandable > .flex {
+  position: relative;
+  display: block;
+}
+
+.dashboard-kpi-expandable .dashboard-kpi-content {
+  width: 100%;
+  padding-right: 3.25rem;
+  overflow: visible;
+}
+
+.dashboard-kpi-expandable .dashboard-kpi-icon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  transition: opacity 0.2s ease;
+}
+
+.dashboard-kpi-expandable:hover .dashboard-kpi-icon {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dashboard-kpi-expandable:hover .dashboard-kpi-content {
+  padding-right: 0;
+}
+
+.dashboard-kpi-expandable-sm {
+  position: relative;
+  overflow: visible;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transform-origin: center;
+}
+
+.dashboard-kpi-expandable-sm:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+}
+
+.dashboard-kpi-expandable-sm .kpi-short,
+.dashboard-kpi-expandable-sm .kpi-full {
+  white-space: nowrap;
+  transition: opacity 0.25s ease;
+}
+
+.dashboard-kpi-expandable-sm .kpi-full {
+  position: absolute;
+  left: 0;
+  top: 1.25rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dashboard-kpi-expandable-sm:hover .kpi-short {
+  opacity: 0;
+}
+
+.dashboard-kpi-expandable-sm:hover .kpi-full {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Dashboard KPI / widget grids – consistent gutters (see DashboardPage layout constants) */
+.dashboard-kpi-grid {
+  gap: 1.25rem;
+}
+@media (min-width: 640px) {
+  .dashboard-kpi-grid {
+    gap: 1.5rem;
+  }
+}
+
+/* react-grid-layout dashboard — gutters match dashboard-kpi-grid (1.5rem) */
+.dashboard-rgl {
+  min-height: 120px;
+}
+
+.dashboard-grid-item-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-grid-item-shell .dashboard-widget-card {
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-widget-branch-performance {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-snapshot-list-body {
+  scrollbar-width: thin;
+}
+
+.dashboard-snapshot-list.dashboard-widget-card,
+.dashboard-widget-card.dashboard-snapshot-list {
+  overflow: hidden;
+}
+
+/* RGL v2 merges .react-grid-item onto this element — do not animate transform here */
+.dashboard-grid-item.react-grid-item {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.dashboard-grid-view .dashboard-grid-item.react-grid-item {
+  transition: transform 0.2s ease;
+}
+
+.dashboard-grid-edit .dashboard-grid-item.react-grid-item {
+  cursor: grab;
+}
+
+.dashboard-grid-edit .dashboard-grid-item.react-grid-item.react-draggable-dragging {
+  cursor: grabbing;
+  z-index: 30;
+}
+
+/* Wiggle on inner shell only — transform on .react-grid-item breaks grid positioning */
+.dashboard-grid-edit .dashboard-grid-item-shell {
+  animation: dashboard-widget-wiggle 0.35s ease-in-out infinite alternate;
+}
+
+@keyframes dashboard-widget-wiggle {
+  from { transform: rotate(-0.4deg); }
+  to { transform: rotate(0.4deg); }
+}
+
+.dashboard-grid-drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--card-bg-opaque);
+  border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--stroke));
+  pointer-events: none;
+}
+
+.dashboard-grid-drag-grip {
+  display: block;
+  width: 14px;
+  height: 2px;
+  background: var(--text-muted);
+  box-shadow: 0 4px 0 var(--text-muted), 0 8px 0 var(--text-muted);
+  border-radius: 1px;
+}
+
+.dashboard-grid-item-body--edit {
+  padding-top: 0.5rem;
+}
+
+.dashboard-grid-edit .dashboard-kpi-expandable:hover {
+  transform: none;
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-grid-edit .dashboard-kpi-expandable:hover .dashboard-kpi-icon {
+  opacity: 1;
+}
+
+.react-grid-placeholder {
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  border: 2px dashed var(--accent) !important;
+  border-radius: 1rem;
+  opacity: 0.85 !important;
+}
+
 /* Customize modal overlay and panel */
 .dashboard-customize-overlay {
   backdrop-filter: blur(8px);

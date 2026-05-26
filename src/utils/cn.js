@@ -1,8 +1,11 @@
+import clsx from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
 /**
- * Combine class names; falsy values are omitted.
- * @param {...(string|undefined|null|false)} classes
+ * Merge Tailwind classes safely (shadcn-style).
+ * @param {...import('clsx').ClassValue} inputs
  * @returns {string}
  */
-export function cn(...classes) {
-  return classes.filter(Boolean).join(' ')
+export function cn(...inputs) {
+  return twMerge(clsx(inputs))
 }

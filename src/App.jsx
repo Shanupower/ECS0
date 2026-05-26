@@ -22,6 +22,8 @@ import PortfolioReviewPage from './pages/PortfolioReviewPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
 import TeamsAdminPage from './pages/TeamsAdminPage.jsx'
 import ApprovalsQueuePage from './pages/ApprovalsQueuePage.jsx'
+import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage.jsx'
+import AnalyticsReportPage from './pages/AnalyticsReportPage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { canAccessSystemSettings } from './constants/system-settings-access.js'
@@ -31,9 +33,9 @@ function PageTransition({ children }) {
   const location = useLocation()
   
   return (
-    <div 
+    <div
       key={location.pathname}
-      className="page-transition-enter"
+      className="page-transition-enter min-w-0 w-full"
     >
       {children}
     </div>
@@ -76,6 +78,26 @@ function AppContent() {
           <Route 
             path="dashboard" 
             element={<PageTransition><DashboardPage/></PageTransition>}
+          />
+          <Route
+            path="analytics"
+            element={
+              <PageTransition>
+                <AdminRoute>
+                  <AnalyticsDashboardPage />
+                </AdminRoute>
+              </PageTransition>
+            }
+          />
+          <Route
+            path="analytics/reports/:slug"
+            element={
+              <PageTransition>
+                <AdminRoute>
+                  <AnalyticsReportPage />
+                </AdminRoute>
+              </PageTransition>
+            }
           />
           <Route
             path="branches"
@@ -173,7 +195,9 @@ export default function App(){
     <AuthProvider>
       <AppConfigProvider>
         <ToastProvider>
-          <AppContent />
+          <div className="h-[100dvh] max-h-[100dvh] min-h-0 overflow-hidden">
+            <AppContent />
+          </div>
         </ToastProvider>
       </AppConfigProvider>
     </AuthProvider>

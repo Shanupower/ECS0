@@ -1,112 +1,37 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Label } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
-import CSVExport from '../components/CSVExport'
 import { Card, Button, SegmentedControl, Switch, Skeleton } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
+import DashboardWidgetGrid from '../features/dashboard/DashboardWidgetGrid.jsx'
+import { renderDashboardWidget } from '../features/dashboard/widgets/index.jsx'
 import {
-  FiTrendingUp,
-  FiFileText,
+  ALL_WIDGET_IDS,
+  WIDGET_LABELS,
+  migrateWidgetIds,
+  defaultWidgetIdsForRole,
+  defaultDashboardPrefs,
+  layoutForUser,
+  filterLayout,
+  buildDesignedLayout,
+  ensureLayoutForWidgets,
+  isWidgetAllowed
+} from '../features/dashboard/dashboard-layout.js'
+import { scaleMonthlyTargetToDateRange, toSafeNumber } from '../features/dashboard/dashboard-utils.js'
+import { getCategoryLabel } from '../features/dashboard/dashboard-chart-constants.js'
+import {
   FiCalendar,
-  FiBarChart,
-  FiActivity,
-  FiUsers,
-  FiUser,
   FiRefreshCw,
   FiAlertCircle,
-  FiMapPin,
-  FiAward,
-  FiCheckSquare,
   FiSettings,
-  FiTarget,
-  FiPieChart,
-  FiList,
-  FiMessageCircle,
-  FiAlertTriangle,
-  FiGlobe,
-  FiX
+  FiX,
+  FiMove,
+  FiRotateCcw
 } from 'react-icons/fi'
-import { FaRupeeSign } from 'react-icons/fa'
 
-const ALL_WIDGET_IDS = [
-  'kpi_cards', 'overdue_tasks', 'by_category', 'daily_timeline', 'branch_performance',
-  'target_vs_actual', 'recent_receipts', 'status_breakdown', 'category_donut', 'monthly_cc_si',
-  'top_employees', 'leads_snapshot', 'issues_snapshot', 'average_ticket', 'cc_vs_si', 'investor_heatmap'
-]
-/* Chart colors: vibrant, no black or dark gray (works in light and dark mode) */
-const CHART_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0d9488', '#e11d48', '#0284c7', '#65a30d', '#ca8a04', '#db2777']
-
-/* Donut: spaced hues so adjacent slices are easy to tell apart (light + dark UI) */
-const DONUT_COLORS = [
-  '#2563eb', '#ea580c', '#7c3aed', '#16a34a', '#dc2626', '#0891b2',
-  '#ca8a04', '#c026d3', '#4f46e5', '#65a30d', '#db2777', '#0f766e'
-]
-
-/** Prorate a monthly target across calendar months overlapping [fromStr, toStr] (YYYY-MM-DD, inclusive). */
-function scaleMonthlyTargetToDateRange(monthlyAmount, fromStr, toStr) {
-  let m = monthlyAmount
-  if (m == null) m = 0
-  else if (typeof m !== 'number') {
-    const s = String(m).replace(/,/g, '').trim()
-    const n = Number(s)
-    m = Number.isFinite(n) ? n : 0
-  } else if (!Number.isFinite(m)) m = 0
-  if (!(m > 0)) return m
-  if (!fromStr || !toStr) return m
-
-  const parseLocalNoon = (iso) => {
-    const parts = String(iso).split('-').map((x) => parseInt(x, 10))
-    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null
-    const [y, mo, d] = parts
-    return new Date(y, mo - 1, d, 12, 0, 0)
-  }
-
-  const from = parseLocalNoon(fromStr)
-  const to = parseLocalNoon(toStr)
-  if (!from || !to || from > to) return 0
-
-  let total = 0
-  let cur = new Date(from.getFullYear(), from.getMonth(), 1, 12, 0, 0)
-  const lastMonthStart = new Date(to.getFullYear(), to.getMonth(), 1, 12, 0, 0)
-
-  while (cur <= lastMonthStart) {
-    const y = cur.getFullYear()
-    const monthIdx = cur.getMonth()
-    const monthStart = new Date(y, monthIdx, 1, 12, 0, 0)
-    const monthEnd = new Date(y, monthIdx + 1, 0, 12, 0, 0)
-    const daysInMonth = monthEnd.getDate()
-    const rangeStart = from > monthStart ? from : monthStart
-    const rangeEnd = to < monthEnd ? to : monthEnd
-    if (rangeStart <= rangeEnd) {
-      const overlapDays = Math.floor((rangeEnd - rangeStart) / 86400000) + 1
-      total += m * (overlapDays / daysInMonth)
-    }
-    cur.setMonth(cur.getMonth() + 1)
-  }
-  return total
-}
-
-const WIDGET_LABELS = {
-  kpi_cards: 'KPI cards',
-  overdue_tasks: 'Overdue tasks',
-  by_category: 'By Category (bar)',
-  daily_timeline: 'Daily Timeline',
-  branch_performance: 'Branch Performance',
-  target_vs_actual: 'Target vs actual',
-  recent_receipts: 'Recent receipts',
-  status_breakdown: 'Status breakdown',
-  category_donut: 'Category donut',
-  monthly_cc_si: 'Monthly CC/SI',
-  top_employees: 'Top employees',
-  leads_snapshot: 'Leads snapshot',
-  issues_snapshot: 'Issues snapshot',
-  average_ticket: 'Average ticket',
-  cc_vs_si: 'CC vs SI',
-  investor_heatmap: 'India heatmap'
-}
+const DASHBOARD_STACK = 'space-y-8'
 
 export default function DashboardPage() {
   const { token, user, refreshUser } = useAuth()
@@ -123,11 +48,13 @@ export default function DashboardPage() {
   const [leadsSnapshot, setLeadsSnapshot] = useState([])
   const [issuesSnapshot, setIssuesSnapshot] = useState([])
   const [issuesSnapshotTotal, setIssuesSnapshotTotal] = useState(0)
-  const [investorLocations, setInvestorLocations] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCustomizeModal, setShowCustomizeModal] = useState(false)
   const [customizeSelection, setCustomizeSelection] = useState([])
+  const [editLayout, setEditLayout] = useState(false)
+  const [resettingDashboard, setResettingDashboard] = useState(false)
+  const [layoutDraft, setLayoutDraft] = useState({ lg: [] })
   const [showBranchBreakdownModal, setShowBranchBreakdownModal] = useState(false)
   const [branchBreakdownLoading, setBranchBreakdownLoading] = useState(false)
   const [branchBreakdownError, setBranchBreakdownError] = useState('')
@@ -156,10 +83,19 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin'
   const isEmployee = user?.role === 'employee'
   const isBranchManager = user?.role === 'manager' || user?.role === 'branch'
-  const effectiveWidgetIds = (user?.dashboard_widgets != null && Array.isArray(user.dashboard_widgets))
-    ? user.dashboard_widgets
-    : ALL_WIDGET_IDS
-  const showWidget = (id) => effectiveWidgetIds.includes(id)
+  const defaultPrefsOptions = useMemo(
+    () => ({ includePendingApprovals: approvalFlagOn }),
+    [approvalFlagOn]
+  )
+  const effectiveWidgetIds = useMemo(
+    () => migrateWidgetIds(
+      user?.dashboard_widgets != null && Array.isArray(user.dashboard_widgets)
+        ? user.dashboard_widgets
+        : defaultWidgetIdsForRole(isAdmin, defaultPrefsOptions)
+    ) || defaultWidgetIdsForRole(isAdmin, defaultPrefsOptions),
+    [user?.dashboard_widgets, isAdmin, defaultPrefsOptions]
+  )
+  const showWidget = useCallback((id) => effectiveWidgetIds.includes(id), [effectiveWidgetIds])
 
   useEffect(() => {
     // Keep viewMode aligned with role defaults on role load (avoid stale initial state).
@@ -237,9 +173,29 @@ export default function DashboardPage() {
         setRecentReceipts(receipts.items || receipts.data || receipts || [])
       } catch { setRecentReceipts([]) }
       try {
-        const perf = await api.getEmployeePerformance(token, { from: dateRange.from, to: dateRange.to, ...(queryParams.branch_code && { branch_code: queryParams.branch_code }) })
-        setTopEmployees(Array.isArray(perf) ? perf.slice(0, 5) : [])
-      } catch { setTopEmployees([]) }
+        const perfQuery = {
+          from: dateRange.from,
+          to: dateRange.to,
+          date_basis: dateBasis,
+          includePending: includePending ? '1' : '0'
+        }
+        if (
+          viewMode === 'branch' ||
+          (!isAdmin && (user?.role === 'manager' || user?.role === 'branch'))
+        ) {
+          const bc = user?.branch_code || user?.branch
+          if (bc) perfQuery.branch_code = String(bc).trim()
+        }
+        const perf = await api.getEmployeePerformance(token, perfQuery)
+        const rows = Array.isArray(perf) ? perf : (perf?.items || perf?.data || [])
+        const ranked = [...(Array.isArray(rows) ? rows : [])].sort(
+          (a, b) => (Number(b.total_investment) || 0) - (Number(a.total_investment) || 0)
+        )
+        setTopEmployees(ranked.slice(0, 5))
+      } catch (perfErr) {
+        console.error('Top employees load error:', perfErr)
+        setTopEmployees([])
+      }
       try {
         const leads = await api.listLeads(token, { limit: '50' })
         setLeadsSnapshot(leads.items || leads.data || leads || [])
@@ -247,8 +203,8 @@ export default function DashboardPage() {
       try {
         // Backend expects `size` (not `limit`) and admin can view ALL issues via `/api/issues`.
         const issuesRes = isAdmin
-          ? await api.listIssues(token, { status: 'open', page: '1', size: '200', sort: 'created_at:desc' })
-          : await api.listMyIssues(token, { status: 'open', page: '1', size: '200', sort: 'created_at:desc' })
+          ? await api.listIssues(token, { status: 'open', page: '1', size: '5', sort: 'created_at:desc' })
+          : await api.listMyIssues(token, { status: 'open', page: '1', size: '5', sort: 'created_at:desc' })
 
         const items = issuesRes?.items || issuesRes?.data || issuesRes || []
         setIssuesSnapshot(items)
@@ -257,11 +213,6 @@ export default function DashboardPage() {
         setIssuesSnapshot([])
         setIssuesSnapshotTotal(0)
       }
-      try {
-        const loc = await api.getInvestorLocations(token, { from: dateRange.from, to: dateRange.to, date_basis: dateBasis, includePending: includePending ? '1' : '0' })
-        setInvestorLocations(loc?.byState ? loc : null)
-      } catch { setInvestorLocations(null) }
-      
     } catch (err) {
       console.error('Dashboard load error:', err)
       if (err.response?.data?.detail) {
@@ -332,15 +283,6 @@ export default function DashboardPage() {
     }).format(amount || 0)
   }
 
-  // Make sure backend numbers (or numeric strings) are safely converted for calculations.
-  // This prevents `NaN%` progress bars when values arrive as formatted strings.
-  const toSafeNumber = (v) => {
-    if (v == null) return 0
-    if (typeof v === 'number') return Number.isFinite(v) ? v : 0
-    const s = String(v).replace(/,/g, '').trim()
-    const n = Number(s)
-    return Number.isFinite(n) ? n : 0
-  }
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN', { 
@@ -349,17 +291,6 @@ export default function DashboardPage() {
     })
   }
 
-  // Map raw category codes to display labels so every bar has a visible label (fixes "unknown" bar)
-  const CATEGORY_LABELS = {
-    MF: 'MF',
-    FD: 'FD',
-    BOND: 'BOND',
-    INS: 'Insurance',
-    NCD: 'Bonds/NCD',
-    GOVT_FD: 'Government Schemes',
-    MISC: 'Misc'
-  }
-  const getCategoryLabel = (c) => (c && CATEGORY_LABELS[c]) || (c || 'Other')
   const categoryChartData = (categoryStats || []).map((r) => ({
     ...r,
     category: getCategoryLabel(r.category),
@@ -393,28 +324,53 @@ export default function DashboardPage() {
     }
   }
 
-  const monthlyTargetBasis = useMemo(() => {
-    if (summary?.effective_target != null) return toSafeNumber(summary.effective_target)
-    return toSafeNumber(summary?.branch_target)
-  }, [summary])
+  const targetMetrics = useMemo(() => {
+    let monthlyBasis = 0
+    let targetBasisHint = null
 
-  const periodTargetNum = useMemo(
-    () => scaleMonthlyTargetToDateRange(monthlyTargetBasis, dateRange.from, dateRange.to),
-    [monthlyTargetBasis, dateRange.from, dateRange.to]
-  )
+    if (isAdmin && viewMode === 'all') {
+      if (branchStats?.branches?.length) {
+        const branches = branchStats.branches
+        monthlyBasis =
+          branchStats.total_monthly_target != null && branchStats.total_monthly_target !== ''
+            ? toSafeNumber(branchStats.total_monthly_target)
+            : branches.reduce((s, b) => s + toSafeNumber(b.total_target), 0)
+        targetBasisHint = 'All branches — sum of monthly targets (prorated to selected dates)'
+      }
+    } else if (summary?.effective_target != null) {
+      monthlyBasis = toSafeNumber(summary.effective_target)
+      if (summary?.personal_target != null) {
+        targetBasisHint = 'Personal monthly target'
+      } else if (summary?.allocated_target != null) {
+        targetBasisHint = 'Your share of branch target pool'
+      }
+    } else {
+      monthlyBasis = toSafeNumber(summary?.branch_target)
+      if (monthlyBasis > 0) {
+        targetBasisHint = viewMode === 'branch' ? 'Your branch monthly target' : 'Branch monthly target'
+      }
+    }
 
-  // Personal view: compare personal CC (same scope as KPIs) to personal target or branch target fallback.
-  const targetActualCc = summary?.collection_credit_earned || 0
-  const targetActualCcLabel = 'Actual CC (selected scope):'
+    const periodTargetNum = scaleMonthlyTargetToDateRange(monthlyBasis, dateRange.from, dateRange.to)
+    const targetActualCc = summary?.collection_credit_earned ?? 0
+    const actualNum = toSafeNumber(targetActualCc)
+    const hasTarget = periodTargetNum > 0
+    const targetProgressPct = hasTarget
+      ? (actualNum >= periodTargetNum
+          ? 100
+          : Math.min(100, Math.max(0, (actualNum / periodTargetNum) * 100)))
+      : null
 
-  const actualNum = toSafeNumber(targetActualCc)
-  const targetProgressPct = periodTargetNum > 0
-    ? (actualNum >= periodTargetNum
-        ? 100
-        : Math.min(100, Math.max(0, (actualNum / periodTargetNum) * 100)))
-    : 0
-
-  // (intentionally no debug logging; target vs actual is visible via the bar itself)
+    return {
+      periodTargetNum,
+      targetProgressPct,
+      targetActualCc,
+      targetActualCcLabel: 'Actual CC (selected scope):',
+      targetBasisHint,
+      hasTarget,
+      targetLoading: isAdmin && viewMode === 'all' && !!summary && !branchStats
+    }
+  }, [summary, branchStats, isAdmin, viewMode, dateRange.from, dateRange.to])
 
   const datePresets = [
     { label: 'This month', getValue: () => {
@@ -467,8 +423,125 @@ export default function DashboardPage() {
     return { branches, totalTarget, totalCc, overallPct, monthlySum }
   }, [branchStats, dateRange.from, dateRange.to])
 
+  useEffect(() => {
+    if (!user) return
+    const base = layoutForUser(user, isAdmin, defaultPrefsOptions)
+    const allowed = (migrateWidgetIds(
+      user?.dashboard_widgets != null && Array.isArray(user.dashboard_widgets)
+        ? user.dashboard_widgets
+        : defaultWidgetIdsForRole(isAdmin, defaultPrefsOptions)
+    ) || defaultWidgetIdsForRole(isAdmin, defaultPrefsOptions)).filter((id) =>
+      isWidgetAllowed(id, { isAdmin, viewMode, approvalFlagOn })
+    )
+    setLayoutDraft(ensureLayoutForWidgets(base, allowed, isAdmin))
+  }, [user?.dashboard_widgets, user?.dashboard_layout, isAdmin, viewMode, approvalFlagOn, defaultPrefsOptions])
+
+  const widgetCtx = useMemo(() => ({
+    summary,
+    isAdmin,
+    isEmployee,
+    isBranchManager,
+    viewMode,
+    ...targetMetrics,
+    categoryChartData,
+    dailyStats,
+    branchStats,
+    monthlyCcSi,
+    recentReceipts,
+    topEmployees,
+    leadsSnapshot,
+    issuesSnapshot,
+    issuesSnapshotTotal,
+    allBranchesTargetSummary,
+    overdueTasks,
+    dateRange,
+    formatCurrency,
+    formatDate,
+    navigate,
+    scaleMonthlyTargetToDateRange,
+    toSafeNumber,
+    openBranchBreakdown,
+    approvalFlagOn,
+    approvalsCount
+  }), [
+    summary, isAdmin, isEmployee, isBranchManager, viewMode, targetMetrics,
+    categoryChartData, dailyStats, branchStats, monthlyCcSi, recentReceipts,
+    topEmployees, leadsSnapshot, issuesSnapshot, issuesSnapshotTotal,
+    allBranchesTargetSummary, overdueTasks, dateRange, navigate,
+    approvalFlagOn, approvalsCount
+  ])
+
+  const activeWidgetIds = useMemo(() => {
+    if (!summary) return []
+    return effectiveWidgetIds.filter((id) => isWidgetAllowed(id, widgetCtx))
+  }, [effectiveWidgetIds, widgetCtx, summary])
+
+  const gridLayout = useMemo(
+    () => ensureLayoutForWidgets(layoutDraft, activeWidgetIds, isAdmin),
+    [layoutDraft, activeWidgetIds, isAdmin]
+  )
+
+  useEffect(() => {
+    if (!summary || editLayout) return
+    setLayoutDraft((prev) => ensureLayoutForWidgets(prev, activeWidgetIds, isAdmin))
+  }, [summary, activeWidgetIds, editLayout, isAdmin])
+
+  const handleSaveLayout = async () => {
+    try {
+      const visible = effectiveWidgetIds
+      const layoutToSave = ensureLayoutForWidgets(
+        filterLayout(layoutDraft, activeWidgetIds),
+        activeWidgetIds,
+        isAdmin
+      )
+      await api.updateMyProfile(token, {
+        dashboard_widgets: visible,
+        dashboard_layout: layoutToSave
+      })
+      await refreshUser()
+      setEditLayout(false)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleStartEditLayout = () => {
+    setLayoutDraft(ensureLayoutForWidgets(layoutDraft, activeWidgetIds, isAdmin))
+    setEditLayout(true)
+  }
+
+  const handleCancelEditLayout = () => {
+    const base = layoutForUser(user, isAdmin, defaultPrefsOptions)
+    setLayoutDraft(ensureLayoutForWidgets(base, activeWidgetIds, isAdmin))
+    setEditLayout(false)
+  }
+
+  const handleResetDashboard = async () => {
+    const confirmed = window.confirm(
+      'Reset your dashboard to the default widgets and layout? Your current arrangement will be replaced.'
+    )
+    if (!confirmed) return
+    setResettingDashboard(true)
+    try {
+      const defaults = defaultDashboardPrefs(isAdmin, defaultPrefsOptions)
+      await api.updateMyProfile(token, {
+        dashboard_widgets: defaults.dashboard_widgets,
+        dashboard_layout: defaults.dashboard_layout
+      })
+      setLayoutDraft(defaults.dashboard_layout)
+      setCustomizeSelection([...defaults.dashboard_widgets])
+      setEditLayout(false)
+      setShowCustomizeModal(false)
+      await refreshUser()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setResettingDashboard(false)
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className={DASHBOARD_STACK}>
       {/* Hero: welcome + refresh */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -476,10 +549,37 @@ export default function DashboardPage() {
             {isEmployee ? 'My Performance' : 'Dashboard'}
           </h1>
           <p className="text-helper mt-1">
-            {isEmployee ? 'Track your personal performance metrics' : 'Overview of financial transactions'}
+            {isEmployee
+              ? 'Your personal dashboard — customize widgets and layout; saved to your account only.'
+              : 'Overview of financial transactions. Customize widgets and layout; each user has their own saved dashboard.'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {editLayout ? (
+            <>
+              <Button
+                variant="secondary"
+                icon={<FiRotateCcw className="w-4 h-4" />}
+                onClick={handleResetDashboard}
+                disabled={resettingDashboard}
+              >
+                Reset to default
+              </Button>
+              <Button variant="secondary" onClick={handleCancelEditLayout} disabled={resettingDashboard}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveLayout} disabled={resettingDashboard}>Done</Button>
+            </>
+          ) : (
+            <Button
+              variant="secondary"
+              icon={<FiMove className="w-4 h-4" />}
+              onClick={handleStartEditLayout}
+              disabled={loading || !summary}
+            >
+              Edit layout
+            </Button>
+          )}
           <Button
             variant="secondary"
             icon={<FiSettings className="w-4 h-4" />}
@@ -522,7 +622,9 @@ export default function DashboardPage() {
                   <h2 id="customize-dashboard-title" className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">
                     Customize dashboard
                   </h2>
-                  <p className="text-sm text-[var(--text-muted)] mt-0.5">Choose which widgets to show on your dashboard</p>
+                  <p className="text-sm text-[var(--text-muted)] mt-0.5">
+                    Choose widgets for your dashboard. Layout is saved to your account only — not shared with other users.
+                  </p>
                 </div>
               </div>
               <button
@@ -536,7 +638,11 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {ALL_WIDGET_IDS.map((id) => {
+                {ALL_WIDGET_IDS.filter((id) => {
+                  if (id === 'pending_approvals') return approvalFlagOn
+                  if (id === 'service_income_earned' || id === 'cc_vs_si' || id === 'branch_performance') return isAdmin
+                  return true
+                }).map((id) => {
                   const checked = customizeSelection.includes(id)
                   const toggle = () => {
                     if (checked) setCustomizeSelection((s) => s.filter((x) => x !== id))
@@ -569,14 +675,30 @@ export default function DashboardPage() {
                 })}
               </div>
             </div>
-            <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--stroke)] bg-[var(--card-hover)]/30 px-6 py-4">
-              <Button variant="secondary" onClick={() => setShowCustomizeModal(false)}>
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--stroke)] bg-[var(--card-hover)]/30 px-6 py-4">
+              <Button
+                variant="secondary"
+                icon={<FiRotateCcw className="w-4 h-4" />}
+                onClick={handleResetDashboard}
+                disabled={resettingDashboard}
+              >
+                Reset to default
+              </Button>
+              <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => setShowCustomizeModal(false)} disabled={resettingDashboard}>
                 Cancel
               </Button>
               <Button
+                disabled={resettingDashboard}
                 onClick={async () => {
                   try {
-                    await api.updateMyProfile(token, { dashboard_widgets: customizeSelection })
+                    const migrated = migrateWidgetIds(customizeSelection)
+                    const nextLayout = buildDesignedLayout(migrated, isAdmin)
+                    await api.updateMyProfile(token, {
+                      dashboard_widgets: migrated,
+                      dashboard_layout: nextLayout
+                    })
+                    setLayoutDraft(nextLayout)
                     await refreshUser()
                     setShowCustomizeModal(false)
                   } catch (err) {
@@ -586,16 +708,17 @@ export default function DashboardPage() {
               >
                 Save changes
               </Button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Compact filter bar */}
-      <Card padding="md" hover={false}>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-end gap-4">
+      <Card padding="lg" hover={false}>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-5">
+            <div className="flex flex-wrap items-end gap-5">
               <div className="flex items-center gap-2">
                 <FiCalendar className="w-5 h-5 text-[var(--accent)]" />
                 <span className="text-body font-medium text-[var(--text-primary)] tracking-wide">
@@ -665,7 +788,7 @@ export default function DashboardPage() {
             </label>
           </div>
           {(isAdmin || isEmployee || isBranchManager) && (
-            <div className="flex items-center gap-3 pt-2 border-t border-[var(--stroke)]">
+            <div className="flex items-center gap-3 pt-4 mt-1 border-t border-[var(--stroke)]">
               <span className="text-label text-[var(--text-secondary)]">View</span>
               <SegmentedControl
                 options={viewModeOptions}
@@ -678,20 +801,13 @@ export default function DashboardPage() {
       </Card>
 
       {loading && (
-        <div className="space-y-6">
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
-            {Array.from({ length: isAdmin ? 5 : 4 }).map((_, i) => (
+        <div className={DASHBOARD_STACK}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 6 }).map((_, i) => (
               <Card key={i} padding="md">
                 <Skeleton variant="line" lines={3} />
               </Card>
             ))}
-          </div>
-          <Card padding="lg">
-            <Skeleton variant="line" lines={4} />
-          </Card>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <Card padding="lg"><Skeleton variant="block" className="h-[350px]" /></Card>
-            <Card padding="lg"><Skeleton variant="block" className="h-[350px]" /></Card>
           </div>
         </div>
       )}
@@ -704,686 +820,38 @@ export default function DashboardPage() {
       )}
 
       {!loading && !error && summary && (
-        <div className="space-y-6">
-          {showWidget('target_vs_actual') && (summary.effective_target != null || summary.branch_target != null) && monthlyTargetBasis > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-2 mb-2">
-                <FiTarget className="w-5 h-5 text-[var(--accent)]" />
-                <h3 className="text-title font-semibold text-[var(--text)]">Target vs actual</h3>
-              </div>
-              <div>
-                <div className="flex justify-between text-small mb-1">
-                  <span className="text-[var(--text-muted)]">
-                    Target for selected period
-                    {viewMode === 'personal' && summary?.personal_target != null && (
-                      <span className="block text-[10px] text-[var(--text-muted)]/90 mt-0.5">Basis: personal monthly</span>
-                    )}
-                    {viewMode === 'personal' && summary?.personal_target == null && summary?.allocated_target != null && (
-                      <span className="block text-[10px] text-[var(--text-muted)]/90 mt-0.5">Basis: allocated from branch pool</span>
-                    )}
-                    {viewMode === 'personal' && summary?.personal_target == null && summary?.allocated_target == null && summary?.branch_target != null && (
-                      <span className="block text-[10px] text-[var(--text-muted)]/90 mt-0.5">Basis: branch monthly (allocation unavailable)</span>
-                    )}
-                  </span>
-                  <span className="font-medium text-[var(--accent)]">{formatCurrency(periodTargetNum)}</span>
-                </div>
-                <div className="h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${targetProgressPct}%`,
-                      // Force solid fill so we can isolate any gradient/background issues.
-                      // Use literal color to bypass any CSS variable/theming issues.
-                      backgroundColor: 'var(--accent, #0071e3)',
-                      backgroundImage: 'none',
-                      opacity: 1,
-                      display: 'block',
-                      height: '100%',
-                      minHeight: '10px'
-                    }}
-                  />
-                </div>
-                <div className="text-helper mt-1">{targetActualCcLabel} {formatCurrency(targetActualCc || 0)}</div>
-              </div>
-            </Card>
-          )}
-
-          {showWidget('average_ticket') && summary.total_receipts > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--success-muted)]">
-                  <FaRupeeSign className="h-5 w-5 text-[var(--success)]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-small font-medium text-[var(--text-muted)]">Average ticket</p>
-                  <p className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
-                    {formatCurrency((summary.total_investments || 0) / summary.total_receipts)}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* KPI Cards */}
-          {showWidget('kpi_cards') && (
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin && summary.service_income_earned !== undefined ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Receipts</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{summary.total_receipts ?? 0}</div>
-                  <div className="text-helper mt-1">
-                    {isAdmin
-                      ? (viewMode === 'personal' ? 'Personal' : viewMode === 'branch' ? 'Your branch' : 'All branches')
-                      : (viewMode === 'personal' ? 'Personal' : 'Your branch')}
-                  </div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-card flex items-center justify-center">
-                  <FiFileText className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)]" />
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Investments</div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--success)]">{formatCurrency(summary.total_investments || 0)}</div>
-                  <div className="text-helper mt-1">Investment amount in the selected period</div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--success-muted)] rounded-xl flex items-center justify-center">
-                  <FiTrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--success)]" aria-hidden />
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Total Customers</div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-primary)]">{summary.total_customers ?? 0}</div>
-                  <div className="text-helper mt-1">Customers in the selected scope</div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-xl flex items-center justify-center">
-                  <FiUsers className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)]" />
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-small font-medium text-[var(--text-muted)] mb-1">Collection/Credit Earned</div>
-                  <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--warn)]">
-                    {formatCurrency(summary.collection_credit_earned || summary.commissions_total || 0)}
-                  </div>
-                  <div className="text-helper mt-1">Sum of CC on qualifying receipts</div>
-                </div>
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--warn-muted)] rounded-xl flex items-center justify-center">
-                  <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--warn)]" />
-                </div>
-              </div>
-            </Card>
-
-            {isAdmin && summary.service_income_earned !== undefined && (
-              <Card padding="lg" hover className="dashboard-widget-card animate-dashboard-widget">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-small font-medium text-[var(--text-muted)] mb-1">Service Income Earned</div>
-                    <div className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(summary.service_income_earned || 0)}</div>
-                    <div className="text-helper mt-1">Admin-only SI</div>
-                  </div>
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[var(--accent-muted)] rounded-card flex items-center justify-center">
-                    <FiAward className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)]" />
-                  </div>
-                </div>
-              </Card>
-            )}
-          </div>
-          )}
-
-          {/* Small widgets grid – 2–3 per row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {showWidget('cc_vs_si') && isAdmin && (summary.collection_credit_earned != null || summary.service_income_earned != null) && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warn-muted)]">
-                  <FiAward className="h-4 w-4 text-[var(--warn)]" />
-                </div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">CC vs SI</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3 transition-colors hover:border-[var(--stroke-strong)]">
-                  <div className="text-xs font-medium text-[var(--text-muted)]">CC</div>
-                  <div className="mt-0.5 text-lg font-bold tracking-tight text-[var(--warn)]">{formatCurrency(summary.collection_credit_earned || summary.commissions_total || 0)}</div>
-                </div>
-                <div className="rounded-lg border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3 transition-colors hover:border-[var(--stroke-strong)]">
-                  <div className="text-xs font-medium text-[var(--text-muted)]">SI</div>
-                  <div className="mt-0.5 text-lg font-bold tracking-tight text-[var(--success)]">{formatCurrency(summary.service_income_earned || 0)}</div>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {showWidget('status_breakdown') && summary.status_counts && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
-                  <FiPieChart className="h-4 w-4 text-[var(--accent)]" />
-                </div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">Status breakdown</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(Object.entries(summary.status_counts || {})).map(([status, count]) => (
-                  <div key={status} className="flex items-center gap-1.5 rounded-lg bg-[var(--card-hover)]/60 px-2.5 py-1.5">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        status === 'Completed'
-                          ? 'bg-[var(--success)]'
-                          : status === 'Pending'
-                            ? 'bg-[var(--warn)]'
-                            : (status === 'Failed' || status === 'Rejected')
-                              ? 'bg-[var(--error)]'
-                              : status === 'Cancelled'
-                                ? 'bg-amber-400'
-                                : 'bg-amber-400'
-                      }`}
-                    />
-                    <span className="text-xs font-medium text-[var(--text-primary)]">{status}</span>
-                    <span className="text-xs text-[var(--text-muted)]">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {showWidget('leads_snapshot') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
-                    <FiUser className="h-4 w-4 text-[var(--accent)]" />
-                  </div>
-                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Leads</h3>
-                </div>
-                <Link to="/leads" className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]">View all</Link>
-              </div>
-              <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{Array.isArray(leadsSnapshot) ? leadsSnapshot.length : 0}</p>
-            </Card>
-          )}
-
-          {showWidget('issues_snapshot') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warn-muted)]">
-                    <FiAlertTriangle className="h-4 w-4 text-[var(--warn)]" />
-                  </div>
-                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Open issues</h3>
-                </div>
-                <Link
-                  to={isAdmin ? '/issues?status=open' : '/my-issues?status=open'}
-                  className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+        <div className={DASHBOARD_STACK}>
+          {editLayout && (
+            <div className="sticky top-0 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-muted)]/50 backdrop-blur-sm px-4 py-3">
+              <p className="text-sm text-[var(--accent)] font-medium">
+                Drag widgets to rearrange, then tap Done. Layout is saved to your account only.
+              </p>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<FiRotateCcw className="w-3.5 h-3.5" />}
+                  onClick={handleResetDashboard}
+                  disabled={resettingDashboard}
                 >
-                  View all
-                </Link>
+                  Reset
+                </Button>
+                <Button variant="secondary" size="sm" onClick={handleCancelEditLayout} disabled={resettingDashboard}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSaveLayout} disabled={resettingDashboard}>Done</Button>
               </div>
-              <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{issuesSnapshotTotal}</p>
-            </Card>
-          )}
-
-          {approvalFlagOn && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
-                    <FiCheckSquare className="h-4 w-4 text-[var(--accent)]" />
-                  </div>
-                  <h3 className="text-base font-semibold text-[var(--text-primary)]">My pending approvals</h3>
-                </div>
-                <Link to="/approvals" className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]">
-                  View queue
-                </Link>
-              </div>
-              <p className="text-lg font-bold tracking-tight text-[var(--text-primary)]">{approvalsCount}</p>
-              <p className="text-[11px] text-[var(--text-muted)] mt-1">Receipts waiting on your team.</p>
-            </Card>
-          )}
-
-          {showWidget('top_employees') && topEmployees.length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warn-muted)]">
-                  <FiAward className="h-4 w-4 text-[var(--warn)]" />
-                </div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">Top employees</h3>
-              </div>
-              <ul className="space-y-1">
-                {topEmployees.slice(0, 4).map((emp, i) => (
-                  <li key={emp.emp_code || i} className="flex justify-between gap-2 text-xs py-0.5">
-                    <span className="text-[var(--text-primary)] truncate">#{i + 1} {emp.employee_name || emp.emp_code}</span>
-                    <span className="text-[var(--text-muted)] ml-2 shrink-0 text-right">
-                      <span className="block">{formatCurrency(emp.total_investment)}</span>
-                      {emp.effective_target != null && (
-                        <span className="block text-[10px] text-[var(--text-muted)]">
-                          Target {formatCurrency(emp.effective_target)}
-                        </span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {showWidget('monthly_cc_si') && monthlyCcSi.length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--success-muted)]">
-                  <FiTrendingUp className="h-4 w-4 text-[var(--success)]" />
-                </div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">Monthly CC / SI</h3>
-              </div>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={monthlyCcSi} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
-                  <YAxis stroke="var(--text-muted)" tick={{ fontSize: 10 }} width={36} tickFormatter={v => `₹${(v / 1e5).toFixed(0)}L`} />
-                  <Tooltip
-                    formatter={(v) => formatCurrency(v)}
-                    labelFormatter={l => `Month: ${l}`}
-                    contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '8px' }}
-                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                    itemStyle={{ color: 'var(--text-primary)' }}
-                  />
-                  <Bar dataKey="cc" fill="#2563eb" name="CC" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="si" fill="#059669" name="SI" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          )}
-          </div>
-
-          {/* Tasks / Issues summary */}
-          {showWidget('overdue_tasks') && (
-          <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-title font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
-                  <FiCheckSquare className="w-4 h-4 text-[var(--accent)]" />
-                </div>
-                Overdue tasks
-                {overdueTasks.length > 0 && (
-                  <span className="text-caption font-normal text-[var(--text-muted)]">({overdueTasks.length})</span>
-                )}
-              </h3>
-              <Link to="/tasks" className="text-caption font-medium text-[var(--accent)] hover:underline">
-                View all
-              </Link>
             </div>
-            {overdueTasks.length === 0 ? (
-              <p className="text-body text-[var(--text-muted)]">No overdue tasks.</p>
-            ) : (
-              <ul className="space-y-2">
-                {overdueTasks.slice(0, 5).map((task) => (
-                  <li key={task._key} className="flex justify-between items-center py-2 border-b border-[var(--stroke)] last:border-0">
-                    <span className="text-[var(--text)] font-medium truncate flex-1">{task.title}</span>
-                    <span className="text-small text-[var(--text-muted)] ml-2 flex-shrink-0">{task.due_date}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
           )}
 
-          {showWidget('recent_receipts') && recentReceipts.length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
-                    <FiList className="w-4 h-4 text-[var(--accent)]" />
-                  </div>
-                  <h3 className="text-title font-semibold text-[var(--text-primary)]">Recent receipts</h3>
-                </div>
-                <Link to="/transactions" className="text-sm font-medium text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)]">View all</Link>
-              </div>
-              <ul className="space-y-0">
-                {recentReceipts.slice(0, 5).map((r) => (
-                  <li key={r._key || r.id} className="flex justify-between py-2.5 text-sm border-b border-[var(--stroke)] last:border-0 last:pb-0">
-                    <span className="text-[var(--text-primary)] truncate font-medium">{r.receipt_no || r.receipt_number || '—'}</span>
-                    <span className="text-[var(--text-muted)] ml-3 shrink-0">{formatCurrency(r.transaction?.amount ?? r.investment_amount ?? 0)}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {showWidget('investor_heatmap') && investorLocations && Object.keys(investorLocations).length > 0 && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent-muted)]">
-                  <FiGlobe className="w-4 h-4 text-[var(--accent)]" />
-                </div>
-                <h3 className="text-title font-semibold text-[var(--text-primary)]">Investor locations (India)</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(investorLocations).slice(0, 12).map(([state, data]) => (
-                  <div key={state} className="rounded-xl border border-[var(--stroke)] bg-[var(--card-hover)]/60 px-3 py-2 text-small transition-colors hover:border-[var(--stroke-strong)]">
-                    <span className="font-medium text-[var(--text-primary)]">{state}</span>
-                    <span className="text-[var(--text-muted)] ml-2">({data.count}, {formatCurrency(data.amount)})</span>
-                  </div>
-                ))}
-              </div>
-              {Object.keys(investorLocations).length > 12 && <p className="text-helper mt-3">+{Object.keys(investorLocations).length - 12} more states</p>}
-            </Card>
-          )}
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-          {showWidget('by_category') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-card flex items-center justify-center mr-3 bg-[var(--dashboard-primary)]/12">
-                    <FiBarChart className="w-5 h-5 text-[var(--dashboard-primary)]" />
-                  </div>
-                  <div>
-                    <h3 className="text-title font-semibold text-[var(--text)]">By Category</h3>
-                    <p className="text-small text-[var(--text-muted)]">Investment breakdown</p>
-                  </div>
-                </div>
-              </div>
-              {categoryChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={350}>
-                  <BarChart data={categoryChartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <defs>
-                      <linearGradient id="colorCategory" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--dashboard-primary)" stopOpacity={0.95} />
-                        <stop offset="95%" stopColor="var(--dashboard-primary)" stopOpacity={0.75} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.3} />
-                    <XAxis dataKey="category" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} tickLine={{ stroke: 'var(--stroke)' }} />
-                    <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} tickLine={{ stroke: 'var(--stroke)' }} tickFormatter={(v) => `₹${(v / 100000).toFixed(1)}L`} />
-                    <Tooltip
-                      formatter={(value) => [formatCurrency(value), 'Amount']}
-                      labelFormatter={(label) => `Category: ${label}`}
-                      contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '12px', boxShadow: 'var(--shadow-card)', padding: '12px 16px' }}
-                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                      itemStyle={{ color: 'var(--text-primary)' }}
-                      cursor={{ fill: 'rgba(37, 99, 235, 0.08)' }}
-                    />
-                    <Bar dataKey="amount" fill="url(#colorCategory)" radius={[8, 8, 0, 0]} maxBarSize={60} onClick={(payload) => payload?.rawCategory != null && navigate(`/transactions?category=${encodeURIComponent(payload.rawCategory)}`)} cursor="pointer" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-center py-12 text-[var(--text-muted)]">
-                  <FiBarChart className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No category data available</p>
-                </div>
-              )}
-            </Card>
-          )}
-
-          {showWidget('category_donut') && categoryChartData.length > 0 && (() => {
-            const donutTotal = categoryChartData.reduce((s, d) => s + d.amount, 0)
-            const formatDonutCenter = (n) => {
-              if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`
-              if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`
-              return formatCurrency(n)
-            }
-            const DonutCenterLabel = (props) => {
-              const v = props.viewBox || {}
-              const cx = props.cx ?? v.cx ?? (v.x != null && v.width != null ? v.x + v.width / 2 : null)
-              const cy = props.cy ?? v.cy ?? (v.y != null && v.height != null ? v.y + v.height / 2 : null)
-              if (cx == null || cy == null) return null
-              return (
-                <g>
-                <text
-                  x={cx}
-                  y={cy - 12}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{ fontSize: 13, fill: 'var(--text-primary)' }}
-                >
-                  Total
-                </text>
-                  <text x={cx} y={cy + 12} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 20, fontWeight: 700, fill: 'var(--text-primary)' }}>{formatDonutCenter(donutTotal)}</text>
-                </g>
-              )
-            }
-            return (
-              <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-                <div className="flex items-center gap-2 mb-4">
-                  <FiPieChart className="w-5 h-5 text-[var(--accent)]" />
-                  <h3 className="text-title font-semibold text-[var(--text)]">By category</h3>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center sm:items-stretch gap-4">
-                  <div className="[filter:drop-shadow(0_8px_24px_rgba(0,0,0,0.12))] flex-shrink-0" style={{ width: 'min(100%, 360px)' }}>
-                    <ResponsiveContainer width="100%" height={320}>
-                      <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                        <Pie
-                          data={categoryChartData}
-                          dataKey="amount"
-                          nameKey="category"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={88}
-                          outerRadius={140}
-                          paddingAngle={2}
-                          label={false}
-                        >
-                          <Label content={<DonutCenterLabel />} position="center" />
-                          {categoryChartData.map((_, i) => (
-                            <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value, name, props) => {
-                            const pct = donutTotal > 0 ? ((value / donutTotal) * 100).toFixed(1) : 0
-                            return [`${formatCurrency(value)} · ${pct}%`, name]
-                          }}
-                          contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '12px', padding: '10px 14px' }}
-                          labelStyle={{ color: 'var(--text-primary)', marginBottom: 4, fontWeight: 600 }}
-                          itemStyle={{ color: 'var(--text-primary)' }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <ul className="flex flex-col justify-center gap-2.5 flex-1 min-w-0">
-                    {categoryChartData.map((d, i) => {
-                      const pct = donutTotal > 0 ? ((d.amount / donutTotal) * 100).toFixed(0) : 0
-                      return (
-                        <li key={d.category} className="flex items-center gap-2.5">
-                          <span className="h-3 w-3 rounded-sm flex-shrink-0" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }} />
-                          <span className="text-sm font-medium text-[var(--text-primary)] truncate">{d.category}</span>
-                          <span className="text-sm text-[var(--text-primary)] font-semibold flex-shrink-0">{pct}%</span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              </Card>
-            )
-          })()}
-
-          {showWidget('daily_timeline') && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-[var(--success-muted)] rounded-card flex items-center justify-center mr-3">
-                    <FiActivity className="w-5 h-5 text-[var(--success)]" />
-                  </div>
-                  <div>
-                    <h3 className="text-title font-semibold text-[var(--text)]">Daily Timeline</h3>
-                    <p className="text-small text-[var(--text-muted)]">Investment trends</p>
-                  </div>
-                </div>
-              </div>
-              {dailyStats.length > 0 ? (
-                <ResponsiveContainer width="100%" height={350}>
-                  <LineChart data={dailyStats} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <defs>
-                      <linearGradient id="colorTimeline" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--dashboard-primary)" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="var(--dashboard-primary)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--stroke)" opacity={0.3} />
-                    <XAxis dataKey="date" tickFormatter={formatDate} stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} tickLine={{ stroke: 'var(--stroke)' }} />
-                    <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} tickLine={{ stroke: 'var(--stroke)' }} tickFormatter={(v) => `₹${(v / 100000).toFixed(1)}L`} />
-                    <Tooltip
-                      formatter={(value) => [formatCurrency(value), 'Amount']}
-                      labelFormatter={(label) => `Date: ${formatDate(label)}`}
-                      contentStyle={{ backgroundColor: 'var(--card-bg-opaque)', border: '1px solid var(--stroke)', borderRadius: '12px', boxShadow: 'var(--shadow-card)', padding: '12px 16px' }}
-                      labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                      itemStyle={{ color: 'var(--text-primary)' }}
-                      cursor={{ stroke: 'var(--dashboard-primary)' }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="amount"
-                      stroke="var(--dashboard-primary)"
-                      strokeWidth={3}
-                      dot={{ fill: 'var(--dashboard-primary)', strokeWidth: 2, r: 5 }}
-                      activeDot={{ r: 7 }}
-                      fill="url(#colorTimeline)"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-center py-12 text-[var(--text-muted)]">
-                  <FiActivity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No daily data available</p>
-                </div>
-              )}
-            </Card>
-          )}
-          </div>
-
-          {isAdmin && <CSVExport token={token} user={user} />}
-
-          {/* Branch leaderboard */}
-          {showWidget('branch_performance') && branchStats && isAdmin && viewMode === 'all' && allBranchesTargetSummary && (
-            <Card padding="md" hover className="dashboard-widget-card animate-dashboard-widget">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
-                <div className="flex items-center">
-                  <FiMapPin className="w-5 h-5 text-[var(--accent)] mr-2" />
-                  <h3 className="text-title font-semibold text-[var(--text)]">Branch Performance Overview</h3>
-                </div>
-                <p className="text-helper text-[var(--text-muted)]">All branches · period from filters above</p>
-              </div>
-
-              {/* Aggregated target vs actual (CC) */}
-              <div className="mb-6 rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-4">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <FiTarget className="w-4 h-4 text-[var(--accent)]" />
-                    <span className="text-sm font-semibold text-[var(--text-primary)]">Target summary (all branches)</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-small">
-                  <div>
-                    <div className="text-[var(--text-muted)] mb-0.5">Combined target (period)</div>
-                    <div className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(allBranchesTargetSummary.totalTarget)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-muted)] mb-0.5">Collection / credit (actual)</div>
-                    <div className="text-lg font-bold text-[var(--warn)]">{formatCurrency(allBranchesTargetSummary.totalCc)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-muted)] mb-0.5">Attainment vs target</div>
-                    <div className="text-lg font-bold text-[var(--accent)]">
-                      {allBranchesTargetSummary.totalTarget > 0
-                        ? `${allBranchesTargetSummary.overallPct.toFixed(1)}%`
-                        : '—'}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-[var(--text-muted)]">
-                  Target basis: Branch monthly
-                </div>
-                {allBranchesTargetSummary.totalTarget > 0 && (
-                  <div className="mt-3 h-2.5 bg-[var(--stroke)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${allBranchesTargetSummary.overallPct}%`,
-                        backgroundColor: 'var(--accent, #0071e3)',
-                        maxWidth: '100%'
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="max-h-[560px] overflow-y-auto pr-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {allBranchesTargetSummary.branches.map((branch, index) => {
-                    const monthlyBranchTarget = toSafeNumber(branch.total_target)
-                    const tgt = scaleMonthlyTargetToDateRange(
-                      monthlyBranchTarget,
-                      dateRange.from,
-                      dateRange.to
-                    )
-                    const cc = toSafeNumber(branch.commissions ?? branch.total_cc)
-                    const branchPct = tgt > 0 ? Math.min(100, Math.max(0, (cc / tgt) * 100)) : null
-                    return (
-                      <button
-                        key={branch.branch_code || branch.branch || index}
-                        type="button"
-                        onClick={() => openBranchBreakdown(branch)}
-                        className="text-left rounded-card border border-[var(--stroke)] bg-[var(--card-hover)] p-4 hover:shadow-card hover:bg-[var(--card-bg)] transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center min-w-0">
-                            <div className="w-8 h-8 bg-[var(--accent-muted)] rounded-full flex items-center justify-center mr-3 shrink-0">
-                              <span className="text-small font-bold text-[var(--accent)]">#{index + 1}</span>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-small font-medium text-[var(--text)] truncate">{branch.branch || branch.branch_name || 'Unknown Branch'}</div>
-                              <div className="text-xs text-[var(--text-muted)] truncate">{branch.branch_code ? `Code: ${branch.branch_code}` : (branch.branch_name || branch.branch || '')}</div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-small gap-2">
-                            <span className="text-[var(--text-muted)] shrink-0">Target (period)</span>
-                            <span className="font-medium text-[var(--text)] text-right">{formatCurrency(tgt)}</span>
-                          </div>
-                          <div className="flex justify-between text-small gap-2">
-                            <span className="text-[var(--text-muted)] shrink-0">CC (actual)</span>
-                            <span className="font-medium text-[var(--text)] text-right">{formatCurrency(cc)}</span>
-                          </div>
-                          {branchPct != null && (
-                            <div className="pt-1">
-                              <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
-                                <span>vs target</span>
-                                <span>{branchPct.toFixed(0)}%</span>
-                              </div>
-                              <div className="h-1.5 bg-[var(--stroke)] rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-[var(--accent)]"
-                                  style={{ width: `${branchPct}%`, maxWidth: '100%' }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex justify-between text-small border-t border-[var(--stroke)]/80 pt-2 mt-2">
-                            <span className="text-[var(--text-muted)]">Investments</span>
-                            <span className="font-medium text-[var(--text)]">{formatCurrency(branch.total_investments || 0)}</span>
-                          </div>
-                          <div className="flex justify-between text-small">
-                            <span className="text-[var(--text-muted)]">Receipts</span>
-                            <span className="font-medium text-[var(--text)]">{branch.total_receipts || 0}</span>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </Card>
-          )}
+          <DashboardWidgetGrid
+            layout={gridLayout}
+            editMode={editLayout}
+            onLayoutChange={setLayoutDraft}
+            widgetIds={activeWidgetIds}
+            isAdmin={isAdmin}
+            renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
+          />
         </div>
       )}
 
@@ -1437,7 +905,7 @@ export default function DashboardPage() {
                     const allocated = first?.allocated_target != null ? toSafeNumber(first.allocated_target) : (unset > 0 ? remaining / unset : 0)
                     const periodBranchTarget = scaleMonthlyTargetToDateRange(monthly, dateRange.from, dateRange.to)
                     return (
-                      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-5 sm:gap-6">
                         <div className="rounded-card border border-[var(--stroke)] bg-[var(--card-hover)]/50 p-3">
                           <div className="text-xs text-[var(--text-muted)]">Branch target (monthly)</div>
                           <div className="font-semibold text-[var(--text-primary)]">{formatCurrency(monthly)}</div>

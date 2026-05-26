@@ -56,7 +56,8 @@ export function TopHeader({
   }, [])
 
   return (
-    <header className="relative z-40 flex-shrink-0 min-h-14 px-2 sm:px-4 lg:px-6 py-2 flex items-center gap-1.5 sm:gap-4 border-b border-[var(--dashboard-border)] bg-[var(--dashboard-card)]/80 dark:bg-[var(--dashboard-card)] backdrop-blur-xl">
+    <header className="relative z-40 flex-shrink-0 min-h-14 w-full min-w-0 px-2 sm:px-4 lg:px-6 py-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-3 border-b border-[var(--dashboard-border)] bg-[var(--dashboard-card)]/80 dark:bg-[var(--dashboard-card)] backdrop-blur-xl">
+      <div className="flex items-center gap-1.5 shrink-0">
       {onMenuClick && (
         <button
           type="button"
@@ -67,10 +68,11 @@ export function TopHeader({
           <Menu className="w-5 h-5" />
         </button>
       )}
-      <div className="min-w-0 flex-1 max-w-[min(100%,28rem)]">
+      </div>
+      <div className="min-w-0 max-w-md w-full justify-self-start">
         <GlobalSearch inputRef={searchRef} />
       </div>
-      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+      <div className="flex items-center justify-end gap-1 sm:gap-2 flex-shrink-0 min-w-0 justify-self-end">
         {isAdmin && (
           <span className="hidden sm:inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-medium bg-[var(--dashboard-primary)]/15 text-[var(--dashboard-primary)] border border-[var(--dashboard-primary)]/30">
             <Shield className="w-3.5 h-3.5" />
