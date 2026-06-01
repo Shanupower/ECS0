@@ -48,7 +48,8 @@ const DEFAULTS = {
   receipt_intake_teams_by_category: {},
   receipt_final_status_label: 'Completed',
   feature_flags: {
-    receipts_approval_v2: false
+    receipts_approval_v2: false,
+    dashboard_editable_layout: true
   }
 }
 

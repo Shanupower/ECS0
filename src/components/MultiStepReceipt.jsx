@@ -542,7 +542,7 @@ function StepHeader({ step, productType }) {
   )
 }
 
-const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government Schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
+const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds', GOVT_FD: 'Government Schemes', MISC: 'Misc Services', NCD: 'NCD' }
 
 function isBondNcdProductType(productType) {
   return productType === 'BOND' || productType === 'NCD'

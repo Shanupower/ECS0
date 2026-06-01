@@ -7,8 +7,8 @@ export const RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS = [
   { value: 'FD', label: 'Fixed Deposit' },
   { value: 'GOVT_FD', label: 'Government Schemes' },
   { value: 'INS', label: 'Insurance' },
-  { value: 'BOND', label: 'Bonds (BOND)' },
-  { value: 'NCD', label: 'Bonds/NCD (NCD)' },
+  { value: 'BOND', label: 'Bonds' },
+  { value: 'NCD', label: 'NCD' },
   { value: 'MISC', label: 'Misc Services' },
   { value: 'Other', label: 'Other' }
 ]

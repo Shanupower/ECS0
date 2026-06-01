@@ -215,6 +215,10 @@ export default function SystemSettingsPage() {
         <p className="text-[11px] text-[var(--text-muted)] mt-1">Default cadence used when marking a customer reviewed if they have no explicit cadence.</p>
       </Section>
 
+      <Section title="Dashboard UI">
+        <DashboardUiSection draft={draft} setDraft={setDraft} />
+      </Section>
+
       <Section title="Tasks — labels">
         <ObjectListEditor
           value={draft.task_labels || []}
@@ -318,10 +322,39 @@ const INTAKE_PRODUCT_ROWS = [
   { key: 'FD', label: 'Fixed Deposit' },
   { key: 'GOVT_FD', label: 'Government Schemes' },
   { key: 'INS', label: 'Insurance' },
-  { key: 'BOND', label: 'Bonds (BOND)' },
-  { key: 'NCD', label: 'Bonds/NCD (NCD)' },
+  { key: 'BOND', label: 'Bonds' },
+  { key: 'NCD', label: 'NCD' },
   { key: 'MISC', label: 'Misc Services' }
 ]
+
+function DashboardUiSection({ draft, setDraft }) {
+  const flags = draft.feature_flags || {}
+  const editableLayoutOn = flags.dashboard_editable_layout !== false
+
+  return (
+    <div className="p-3 rounded-lg border border-[var(--stroke)] bg-[var(--card-hover)]/40">
+      <label className="flex items-start gap-3 select-none">
+        <input
+          type="checkbox"
+          checked={editableLayoutOn}
+          onChange={(e) => setDraft({
+            ...draft,
+            feature_flags: { ...flags, dashboard_editable_layout: e.target.checked }
+          })}
+          className="mt-1"
+        />
+        <span>
+          <span className="block text-sm font-medium text-[var(--text-primary)]">
+            Enable editable dashboard layout
+          </span>
+          <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
+            When off, users keep the Customize widget picker, but drag-and-drop layout editing is hidden and dashboards render in the fixed legacy section order.
+          </span>
+        </span>
+      </label>
+    </div>
+  )
+}
 
 function ReceiptApprovalSection({ draft, setDraft }) {
   const { token } = useAuth()

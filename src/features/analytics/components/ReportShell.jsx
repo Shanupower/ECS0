@@ -10,7 +10,13 @@ import {
 import { Button } from '../../../components/ui/Button.jsx'
 import { cn } from '../../../utils/cn'
 
-export function ReportDataTable({ columns, data, pageSize = 25 }) {
+export function ReportDataTable({
+  columns,
+  data,
+  pageSize = 25,
+  totalRows = [],
+  formatTotalValue = (_field, value) => value
+}) {
   const table = useReactTable({
     data,
     columns,
@@ -50,6 +56,29 @@ export function ReportDataTable({ columns, data, pageSize = 25 }) {
                 </tr>
               ))}
             </tbody>
+            {totalRows.length > 0 && (
+              <tfoot className="border-t-2 border-[var(--dashboard-border)] bg-[var(--dashboard-border)]/15">
+                {totalRows.map((totalRow) => (
+                  <tr key={totalRow.label}>
+                    {table.getVisibleLeafColumns().map((column, index) => {
+                      const hasValue = Object.prototype.hasOwnProperty.call(totalRow.values, column.id)
+                      return (
+                        <td
+                          key={column.id}
+                          className="px-4 py-3 font-semibold text-[var(--dashboard-text)] whitespace-nowrap tabular-nums"
+                        >
+                          {index === 0
+                            ? totalRow.label
+                            : hasValue
+                              ? formatTotalValue(column.id, totalRow.values[column.id])
+                              : ''}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

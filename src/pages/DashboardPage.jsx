@@ -6,6 +6,7 @@ import { api } from '../api'
 import { Card, Button, SegmentedControl, Switch, Skeleton } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import DashboardWidgetGrid from '../features/dashboard/DashboardWidgetGrid.jsx'
+import DashboardStaticLayout from '../features/dashboard/DashboardStaticLayout.jsx'
 import { renderDashboardWidget } from '../features/dashboard/widgets/index.jsx'
 import {
   ALL_WIDGET_IDS,
@@ -83,6 +84,7 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin'
   const isEmployee = user?.role === 'employee'
   const isBranchManager = user?.role === 'manager' || user?.role === 'branch'
+  const dashboardEditableLayout = cfg?.feature_flags?.dashboard_editable_layout !== false
   const defaultPrefsOptions = useMemo(
     () => ({ includePendingApprovals: approvalFlagOn }),
     [approvalFlagOn]
@@ -486,6 +488,12 @@ export default function DashboardPage() {
     setLayoutDraft((prev) => ensureLayoutForWidgets(prev, activeWidgetIds, isAdmin))
   }, [summary, activeWidgetIds, editLayout, isAdmin])
 
+  useEffect(() => {
+    if (!dashboardEditableLayout && editLayout) {
+      setEditLayout(false)
+    }
+  }, [dashboardEditableLayout, editLayout])
+
   const handleSaveLayout = async () => {
     try {
       const visible = effectiveWidgetIds
@@ -550,12 +558,16 @@ export default function DashboardPage() {
           </h1>
           <p className="text-helper mt-1">
             {isEmployee
-              ? 'Your personal dashboard — customize widgets and layout; saved to your account only.'
-              : 'Overview of financial transactions. Customize widgets and layout; each user has their own saved dashboard.'}
+              ? (dashboardEditableLayout
+                  ? 'Your personal dashboard — customize widgets and layout; saved to your account only.'
+                  : 'Your personal dashboard — customize widgets; layout follows the fixed company dashboard.')
+              : (dashboardEditableLayout
+                  ? 'Overview of financial transactions. Customize widgets and layout; each user has their own saved dashboard.'
+                  : 'Overview of financial transactions. Customize widgets; layout follows the fixed company dashboard.')}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {editLayout ? (
+          {dashboardEditableLayout && editLayout ? (
             <>
               <Button
                 variant="secondary"
@@ -570,7 +582,7 @@ export default function DashboardPage() {
               </Button>
               <Button onClick={handleSaveLayout} disabled={resettingDashboard}>Done</Button>
             </>
-          ) : (
+          ) : dashboardEditableLayout ? (
             <Button
               variant="secondary"
               icon={<FiMove className="w-4 h-4" />}
@@ -579,7 +591,7 @@ export default function DashboardPage() {
             >
               Edit layout
             </Button>
-          )}
+          ) : null}
           <Button
             variant="secondary"
             icon={<FiSettings className="w-4 h-4" />}
@@ -623,7 +635,9 @@ export default function DashboardPage() {
                     Customize dashboard
                   </h2>
                   <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                    Choose widgets for your dashboard. Layout is saved to your account only — not shared with other users.
+                    {dashboardEditableLayout
+                      ? 'Choose widgets for your dashboard. Layout is saved to your account only — not shared with other users.'
+                      : 'Choose widgets for your dashboard. Layout follows the fixed company dashboard.'}
                   </p>
                 </div>
               </div>
@@ -676,14 +690,16 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--stroke)] bg-[var(--card-hover)]/30 px-6 py-4">
-              <Button
-                variant="secondary"
-                icon={<FiRotateCcw className="w-4 h-4" />}
-                onClick={handleResetDashboard}
-                disabled={resettingDashboard}
-              >
-                Reset to default
-              </Button>
+              {dashboardEditableLayout ? (
+                <Button
+                  variant="secondary"
+                  icon={<FiRotateCcw className="w-4 h-4" />}
+                  onClick={handleResetDashboard}
+                  disabled={resettingDashboard}
+                >
+                  Reset to default
+                </Button>
+              ) : <span />}
               <div className="flex gap-3">
               <Button variant="secondary" onClick={() => setShowCustomizeModal(false)} disabled={resettingDashboard}>
                 Cancel
@@ -693,12 +709,16 @@ export default function DashboardPage() {
                 onClick={async () => {
                   try {
                     const migrated = migrateWidgetIds(customizeSelection)
-                    const nextLayout = buildDesignedLayout(migrated, isAdmin)
-                    await api.updateMyProfile(token, {
-                      dashboard_widgets: migrated,
-                      dashboard_layout: nextLayout
-                    })
-                    setLayoutDraft(nextLayout)
+                    if (dashboardEditableLayout) {
+                      const nextLayout = buildDesignedLayout(migrated, isAdmin)
+                      await api.updateMyProfile(token, {
+                        dashboard_widgets: migrated,
+                        dashboard_layout: nextLayout
+                      })
+                      setLayoutDraft(nextLayout)
+                    } else {
+                      await api.updateMyProfile(token, { dashboard_widgets: migrated })
+                    }
                     await refreshUser()
                     setShowCustomizeModal(false)
                   } catch (err) {
@@ -821,7 +841,7 @@ export default function DashboardPage() {
 
       {!loading && !error && summary && (
         <div className={DASHBOARD_STACK}>
-          {editLayout && (
+          {dashboardEditableLayout && editLayout && (
             <div className="sticky top-0 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-muted)]/50 backdrop-blur-sm px-4 py-3">
               <p className="text-sm text-[var(--accent)] font-medium">
                 Drag widgets to rearrange, then tap Done. Layout is saved to your account only.
@@ -844,14 +864,21 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <DashboardWidgetGrid
-            layout={gridLayout}
-            editMode={editLayout}
-            onLayoutChange={setLayoutDraft}
-            widgetIds={activeWidgetIds}
-            isAdmin={isAdmin}
-            renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
-          />
+          {dashboardEditableLayout ? (
+            <DashboardWidgetGrid
+              layout={gridLayout}
+              editMode={editLayout}
+              onLayoutChange={setLayoutDraft}
+              widgetIds={activeWidgetIds}
+              isAdmin={isAdmin}
+              renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
+            />
+          ) : (
+            <DashboardStaticLayout
+              widgetIds={activeWidgetIds}
+              renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
+            />
+          )}
         </div>
       )}
 
