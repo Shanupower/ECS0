@@ -65,8 +65,8 @@ export const REPORT_META = {
     ]
   },
   'fd-maturity': {
-    title: 'FD Maturity',
-    description: 'FD maturity report with product, scheme, client, and due dates.',
+    title: 'Maturity Report',
+    description: 'All product maturity report with product category, scheme, client, and due dates.',
     filterProfile: 'fullReceipt',
     defaultDateBasis: 'fd_maturity',
     defaultFutureMonths: 6,
@@ -112,12 +112,16 @@ export function getInitialReportFilters(slug) {
   return {
     ...dateRange,
     dateBasis: meta.defaultDateBasis || 'receipt',
-    branchCode: '',
-    empCode: '',
-    category: '',
+    branchCodes: [],
+    empCodes: [],
+    productCategories: [],
+    schemeCategories: [],
+    investorIds: [],
     search: '',
     groupBy: '',
     includePending: true,
+    hideCc: false,
+    hideSi: false,
     viewMode: ''
   }
 }

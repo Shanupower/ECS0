@@ -13,12 +13,399 @@ import {
   RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS,
   RECEIPT_PRODUCT_CATEGORY_KEYS
 } from '../../../data/receipt_product_categories.js'
-
-const PRODUCT_CATEGORY_ALL = '__all__'
+import {
+  buildInvestorOptions,
+  filterBranchOptions,
+  filterInvestorOptions,
+  filterRmOptions,
+  formatBranchOptionLabel,
+  formatInvestorOptionLabel,
+  formatRmOptionLabel,
+  toggleListValue
+} from '../lib/report-filters.js'
+import { api } from '../../../api.js'
 
 function SectionLabel({ children }) {
   return (
     <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--dashboard-muted)] mb-2">{children}</p>
+  )
+}
+
+function SelectionChips({ items = [], onRemove, onClear }) {
+  if (!items.length) return null
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {items.map((item) => (
+        <span
+          key={item.key}
+          className="inline-flex items-center gap-1 rounded-lg border border-[var(--dashboard-border)] bg-[var(--dashboard-border)]/25 px-2 py-0.5 text-xs text-[var(--dashboard-text)]"
+        >
+          <span className="truncate max-w-[200px]">{item.label}</span>
+          <button
+            type="button"
+            onClick={() => onRemove(item.key)}
+            className="text-[var(--dashboard-muted)] hover:text-[var(--dashboard-text)]"
+            aria-label={`Remove ${item.label}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        onClick={onClear}
+        className="px-2 py-0.5 text-xs text-[var(--dashboard-muted)] hover:text-[var(--dashboard-text)]"
+      >
+        Clear all
+      </button>
+    </div>
+  )
+}
+
+function ChipToggleMultiSelect({ value = [], onChange, options = [], emptyLabel }) {
+  if (!options.length) {
+    return <div className="text-xs text-[var(--dashboard-muted)]">{emptyLabel}</div>
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {options.map((opt) => {
+        const id = typeof opt === 'string' ? opt : opt.value
+        const label = typeof opt === 'string' ? opt : opt.label
+        const active = (value || []).includes(id)
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(toggleListValue(value, id))}
+            className={`px-2 py-1 text-[11px] rounded-lg border transition-colors ${
+              active
+                ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+                : 'border-[var(--dashboard-border)] bg-[var(--dashboard-card)] text-[var(--dashboard-muted)] hover:bg-[var(--dashboard-border)]/40'
+            }`}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SearchableMultiFilterDropdown({
+  value = [],
+  options = [],
+  onChange,
+  filterOptions,
+  formatOptionLabel,
+  placeholder,
+  fallbackPlaceholder,
+  allLabel,
+  emptyLabel,
+  metaKey = 'email'
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState('')
+  const listboxId = React.useId()
+  const selectedSet = React.useMemo(() => new Set((value || []).map(String)), [value])
+  const filtered = React.useMemo(() => filterOptions(options, query).slice(0, 50), [filterOptions, options, query])
+  const selectedOptions = React.useMemo(
+    () => options.filter((o) => selectedSet.has(String(o.value))),
+    [options, selectedSet]
+  )
+  const triggerLabel =
+    selectedOptions.length === 0
+      ? placeholder
+      : selectedOptions.length === 1
+        ? formatOptionLabel(selectedOptions[0])
+        : `${selectedOptions.length} selected`
+
+  const toggle = (optValue) => {
+    onChange(toggleListValue(value, optValue))
+  }
+
+  if (!options.length) {
+    return (
+      <Input
+        placeholder={fallbackPlaceholder}
+        value={(value || []).join(', ')}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          )
+        }
+        className="min-h-10"
+      />
+    )
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        placeholder={open ? placeholder : triggerLabel}
+        value={open ? query : ''}
+        readOnly={!open && selectedOptions.length > 0}
+        onFocus={() => {
+          setOpen(true)
+          setQuery('')
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false)
+            setQuery('')
+          }
+        }}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 150)
+        }}
+        className="min-h-10 pr-16"
+      />
+      {selectedOptions.length > 0 && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            onChange([])
+            setQuery('')
+            setOpen(false)
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs text-[var(--dashboard-muted)] hover:bg-[var(--dashboard-border)]/50 hover:text-[var(--dashboard-text)]"
+        >
+          Clear
+        </button>
+      )}
+      {open && (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-1 text-sm text-[var(--dashboard-text)] shadow-glass-md"
+        >
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange([])
+              setOpen(false)
+              setQuery('')
+            }}
+            className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left hover:bg-[var(--dashboard-border)]/40"
+          >
+            <span>{allLabel}</span>
+            <span className="text-xs text-[var(--dashboard-muted)]">No filter</span>
+          </button>
+          {filtered.map((option) => {
+            const checked = selectedSet.has(String(option.value))
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={checked}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => toggle(option.value)}
+                className="flex w-full items-start justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-[var(--dashboard-border)]/40"
+              >
+                <span className="min-w-0 flex items-start gap-2">
+                  <span
+                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      checked ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--dashboard-border)]'
+                    }`}
+                  >
+                    {checked ? '✓' : ''}
+                  </span>
+                  <span>
+                    <span className="block truncate font-medium">{option.label}</span>
+                    {option[metaKey] ? (
+                      <span className="block truncate text-xs text-[var(--dashboard-muted)]">{option[metaKey]}</span>
+                    ) : null}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-md bg-[var(--dashboard-border)]/35 px-1.5 py-0.5 text-xs text-[var(--dashboard-muted)]">
+                  {option.value}
+                </span>
+              </button>
+            )
+          })}
+          {filtered.length === 0 && (
+            <div className="px-2 py-3 text-sm text-[var(--dashboard-muted)]">{emptyLabel}</div>
+          )}
+        </div>
+      )}
+      <SelectionChips
+        items={selectedOptions.map((o) => ({ key: o.value, label: formatOptionLabel(o) }))}
+        onRemove={(key) => onChange((value || []).filter((v) => String(v) !== String(key)))}
+        onClear={() => onChange([])}
+      />
+    </div>
+  )
+}
+
+function InvestorMultiSelect({ value = [], selectedOptions = [], onChange, token }) {
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState('')
+  const [searchOptions, setSearchOptions] = React.useState([])
+  const [loading, setLoading] = React.useState(false)
+  const [picked, setPicked] = React.useState(() => selectedOptions)
+  const listboxId = React.useId()
+  const selectedSet = React.useMemo(() => new Set((value || []).map(String)), [value])
+
+  React.useEffect(() => {
+    setPicked((prev) => {
+      const map = new Map(prev.map((o) => [String(o.value), o]))
+      for (const id of value || []) {
+        const key = String(id)
+        if (!map.has(key)) map.set(key, { value: key, label: key })
+      }
+      return Array.from(map.values()).filter((o) => selectedSet.has(String(o.value)))
+    })
+  }, [value, selectedSet])
+
+  const filtered = React.useMemo(() => filterInvestorOptions(searchOptions, query).slice(0, 50), [searchOptions, query])
+
+  React.useEffect(() => {
+    if (!open || !token) return
+    const q = query.trim()
+    if (q.length < 2) {
+      setSearchOptions([])
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    const timer = window.setTimeout(() => {
+      api
+        .searchInvestors(token, { q, limit: '20' })
+        .then((result) => {
+          if (!cancelled) setSearchOptions(buildInvestorOptions(result))
+        })
+        .catch(() => {
+          if (!cancelled) setSearchOptions([])
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [open, query, token])
+
+  const addInvestor = (option) => {
+    const key = String(option.value)
+    if (!selectedSet.has(key)) {
+      onChange([...(value || []), key])
+      setPicked((prev) => {
+        const map = new Map(prev.map((o) => [String(o.value), o]))
+        map.set(key, option)
+        return Array.from(map.values())
+      })
+    }
+    setQuery('')
+  }
+
+  if (!token) {
+    return (
+      <Input
+        placeholder="Investor IDs (comma-separated)"
+        value={(value || []).join(', ')}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          )
+        }
+        className="min-h-10"
+      />
+    )
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        placeholder={
+          picked.length ? `${picked.length} investor(s) selected — search to add more` : 'Search investor by name, PAN, or ID'
+        }
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false)
+            setQuery('')
+          }
+        }}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 150)
+        }}
+        className="min-h-10"
+      />
+      {open && (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-1 text-sm shadow-glass-md"
+        >
+          {query.trim().length < 2 && (
+            <div className="px-2 py-3 text-sm text-[var(--dashboard-muted)]">Type at least 2 characters to search.</div>
+          )}
+          {query.trim().length >= 2 && loading && (
+            <div className="px-2 py-3 text-sm text-[var(--dashboard-muted)]">Searching investors…</div>
+          )}
+          {query.trim().length >= 2 &&
+            !loading &&
+            filtered.map((option) => {
+              const checked = selectedSet.has(String(option.value))
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addInvestor(option)}
+                  disabled={checked}
+                  className="flex w-full items-start justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-[var(--dashboard-border)]/40 disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{option.label}</span>
+                    <span className="block truncate text-xs text-[var(--dashboard-muted)]">
+                      {[option.pan, option.mobile].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--dashboard-muted)]">{checked ? 'Added' : option.value}</span>
+                </button>
+              )
+            })}
+          {query.trim().length >= 2 && !loading && filtered.length === 0 && (
+            <div className="px-2 py-3 text-sm text-[var(--dashboard-muted)]">No matching investor found.</div>
+          )}
+        </div>
+      )}
+      <SelectionChips
+        items={picked.filter((o) => selectedSet.has(String(o.value))).map((o) => ({
+          key: o.value,
+          label: formatInvestorOptionLabel(o)
+        }))}
+        onRemove={(key) => onChange((value || []).filter((v) => String(v) !== String(key)))}
+        onClear={() => onChange([])}
+      />
+    </div>
   )
 }
 
@@ -27,53 +414,77 @@ function SectionLabel({ children }) {
  *   from: string,
  *   to: string,
  *   dateBasis: string,
- *   branchCode: string,
- *   empCode: string,
- *   category: string,
+ *   branchCodes: string[],
+ *   empCodes: string[],
+ *   productCategories: string[],
+ *   schemeCategories: string[],
+ *   investorIds: string[],
  *   search: string,
  *   groupBy: string,
  *   includePending: boolean,
+ *   hideCc: boolean,
+ *   hideSi: boolean,
  *   onChange: (patch: object) => void,
  *   onApply: () => void,
  *   onReset?: () => void,
  *   showGroupBy?: boolean,
  *   showIncludePending?: boolean,
+ *   token?: string,
  *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal',
  *   dateBasisOptions?: Array<{ value: string, label: string }>
+ *   branchOptions?: Array<{ value: string, label: string, type?: string, aliases?: string[], searchText: string }>
+ *   rmOptions?: Array<{ value: string, label: string, email?: string, role?: string, searchText: string }>
+ *   schemeCategoryOptions?: string[]
  * }} props
  */
 export function ReportFilterBar({
   from,
   to,
   dateBasis,
-  branchCode,
-  empCode,
-  category,
-  search,
+  branchCodes,
+  empCodes,
+  productCategories,
+  schemeCategories,
+  investorIds,
   groupBy,
   includePending,
+  hideCc,
+  hideSi,
   onChange,
   onApply,
   onReset,
   showGroupBy,
   showIncludePending,
+  token,
   filterProfile = 'fullReceipt',
   dateBasisOptions = [
     { value: 'receipt', label: 'Receipt date' },
     { value: 'transaction', label: 'Transaction date' }
-  ]
+  ],
+  branchOptions = [],
+  rmOptions = [],
+  schemeCategoryOptions = []
 }) {
   const showScope = filterProfile === 'fullReceipt'
   const showDatesAndSearch = filterProfile !== 'minimal'
   const completedOnly = includePending === false
-  const categoryTrimmed = (category || '').trim()
   const productCategoryRows = React.useMemo(() => {
     const rows = [...RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS]
-    if (categoryTrimmed && !RECEIPT_PRODUCT_CATEGORY_KEYS.has(categoryTrimmed)) {
-      rows.push({ value: categoryTrimmed, label: `${categoryTrimmed} (custom)` })
+    for (const v of productCategories || []) {
+      if (v && !RECEIPT_PRODUCT_CATEGORY_KEYS.has(v)) {
+        rows.push({ value: v, label: `${v} (custom)` })
+      }
     }
     return rows
-  }, [categoryTrimmed])
+  }, [productCategories])
+
+  const schemeRows = React.useMemo(() => {
+    const base = (schemeCategoryOptions || []).map((c) => ({ value: c, label: c }))
+    for (const v of schemeCategories || []) {
+      if (v && !base.some((r) => r.value === v)) base.push({ value: v, label: v })
+    }
+    return base.sort((a, b) => a.label.localeCompare(b.label))
+  }, [schemeCategoryOptions, schemeCategories])
 
   return (
     <div className="rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)]/80 backdrop-blur-sm p-4 sm:p-5 space-y-4">
@@ -117,43 +528,54 @@ export function ReportFilterBar({
           {showScope && (
             <div>
               <SectionLabel>Scope</SectionLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Branch code</label>
-                  <Input
-                    placeholder="Admin filter"
-                    value={branchCode}
-                    onChange={(e) => onChange({ branchCode: e.target.value })}
-                    className="min-h-10"
+                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Branches</label>
+                  <SearchableMultiFilterDropdown
+                    value={branchCodes || []}
+                    options={branchOptions}
+                    onChange={(branchCodes) => onChange({ branchCodes })}
+                    filterOptions={filterBranchOptions}
+                    formatOptionLabel={formatBranchOptionLabel}
+                    placeholder="Search branches"
+                    fallbackPlaceholder="Branch codes"
+                    allLabel="All branches"
+                    emptyLabel="No matching branch found."
+                    metaKey="type"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">RM (emp code)</label>
-                  <Input
-                    placeholder="Emp code"
-                    value={empCode}
-                    onChange={(e) => onChange({ empCode: e.target.value })}
-                    className="min-h-10"
+                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Employees</label>
+                  <SearchableMultiFilterDropdown
+                    value={empCodes || []}
+                    options={rmOptions}
+                    onChange={(empCodes) => onChange({ empCodes })}
+                    filterOptions={filterRmOptions}
+                    formatOptionLabel={formatRmOptionLabel}
+                    placeholder="Search employees"
+                    fallbackPlaceholder="Emp codes"
+                    allLabel="All employees"
+                    emptyLabel="No matching employee found."
+                    metaKey="email"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Product category</label>
-                  <Select
-                    value={categoryTrimmed || PRODUCT_CATEGORY_ALL}
-                    onValueChange={(v) => onChange({ category: v === PRODUCT_CATEGORY_ALL ? '' : v })}
-                  >
-                    <SelectTrigger className="min-h-10">
-                      <SelectValue placeholder="All categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={PRODUCT_CATEGORY_ALL}>All categories</SelectItem>
-                      {productCategoryRows.map((row) => (
-                        <SelectItem key={row.value} value={row.value}>
-                          {row.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Products</label>
+                  <ChipToggleMultiSelect
+                    value={productCategories || []}
+                    onChange={(productCategories) => onChange({ productCategories })}
+                    options={productCategoryRows}
+                    emptyLabel="No product categories configured."
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Categories (MF scheme)</label>
+                  <ChipToggleMultiSelect
+                    value={schemeCategories || []}
+                    onChange={(schemeCategories) => onChange({ schemeCategories })}
+                    options={schemeRows}
+                    emptyLabel="Loading scheme categories…"
+                  />
                 </div>
               </div>
             </div>
@@ -163,12 +585,11 @@ export function ReportFilterBar({
             <SectionLabel>Search</SectionLabel>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
               <div className="flex-1 min-w-0">
-                <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Text</label>
-                <Input
-                  placeholder="Receipt / investor…"
-                  value={search}
-                  onChange={(e) => onChange({ search: e.target.value })}
-                  className="min-h-10 w-full"
+                <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Investors</label>
+                <InvestorMultiSelect
+                  value={investorIds || []}
+                  onChange={(investorIds) => onChange({ investorIds, search: '' })}
+                  token={token}
                 />
               </div>
               {showGroupBy && (
@@ -196,7 +617,7 @@ export function ReportFilterBar({
       {showIncludePending && showScope && (
         <div>
           <SectionLabel>Options</SectionLabel>
-          <div className="flex flex-col gap-1.5 max-w-md">
+          <div className="grid gap-3 md:grid-cols-3">
             <div className="flex items-center gap-3">
               <Switch
                 id="completed-only"
@@ -207,10 +628,22 @@ export function ReportFilterBar({
                 Completed receipts only
               </label>
             </div>
-            <p className="text-xs text-[var(--dashboard-muted)] pl-[3.25rem]">
-              When off, pending and draft rows are included (matches broad KPI views).
-            </p>
+            <div className="flex items-center gap-3">
+              <Switch id="hide-cc" checked={!!hideCc} onCheckedChange={(checked) => onChange({ hideCc: checked })} />
+              <label htmlFor="hide-cc" className="text-sm font-medium text-[var(--dashboard-text)] cursor-pointer">
+                Hide CC
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch id="hide-si" checked={!!hideSi} onCheckedChange={(checked) => onChange({ hideSi: checked })} />
+              <label htmlFor="hide-si" className="text-sm font-medium text-[var(--dashboard-text)] cursor-pointer">
+                Hide SI
+              </label>
+            </div>
           </div>
+          <p className="mt-2 text-xs text-[var(--dashboard-muted)]">
+            Hide CC/SI affects on-screen reports and downloaded CSV/Excel files.
+          </p>
         </div>
       )}
 

@@ -8,7 +8,9 @@ import { ReportFilterBar } from '../features/analytics/components/ReportFilterBa
 import { getReportMeta, getInitialReportFilters } from '../features/analytics/report-meta.js'
 import { Button } from '../components/ui/Button.jsx'
 import { downloadReportFile } from '../features/analytics/lib/report-download.js'
-import { filtersToReportQuery } from '../features/analytics/lib/report-filters.js'
+import { buildBranchOptions, buildRmOptions, filtersToReportQuery } from '../features/analytics/lib/report-filters.js'
+import { buildReportTotalRows, formatReportTotalValue, sumNumericFields } from '../features/analytics/lib/report-totals.js'
+import { RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS } from '../data/receipt_product_categories.js'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 function formatMoney(n) {
@@ -18,6 +20,14 @@ function formatMoney(n) {
   } catch {
     return String(n)
   }
+}
+
+const PRODUCT_CATEGORY_LABELS = new Map(RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS.map((option) => [option.value, option.label]))
+
+function formatProductCategory(value) {
+  const key = String(value ?? '').trim()
+  if (!key) return '—'
+  return PRODUCT_CATEGORY_LABELS.get(key) || key
 }
 
 function ServerPager({ page, pageSize, total, onChange }) {
@@ -45,6 +55,56 @@ function ServerPager({ page, pageSize, total, onChange }) {
   )
 }
 
+const AGGREGATE_TOTAL_FIELDS = ['applications', 'amount', 'collection_credit', 'incentive_amount']
+
+function visibleMetricFields(fields, { hideCc, hideSi }) {
+  return fields.filter((field) => {
+    if (hideCc && field === 'collection_credit') return false
+    if (hideSi && (field === 'incentive_amount' || field === 'incentive_paid')) return false
+    return true
+  })
+}
+
+function hideSensitiveColumns(columns, { hideCc, hideSi }) {
+  return columns.filter((column) => {
+    const id = column.id || column.accessorKey
+    if (hideCc && id === 'collection_credit') return false
+    if (hideSi && (id === 'incentive_amount' || id === 'incentive_paid')) return false
+    return true
+  })
+}
+
+function getReportTotalFields(slug, groupBy) {
+  if (slug === 'mis-transactions') {
+    return groupBy ? AGGREGATE_TOTAL_FIELDS : ['investment_amount', 'collection_credit', 'incentive_paid']
+  }
+  if (slug === 'product-sales' || slug === 'mf-category' || slug === 'mf-fund' || slug === 'category-summary') {
+    return AGGREGATE_TOTAL_FIELDS
+  }
+  if (slug === 'product-detail') return ['amount', 'collection_credit', 'incentive_amount']
+  if (slug === 'cashflow') return ['purchase', 'sip', 'switch_in', 'redemption', 'switch_out', 'net_flow']
+  if (slug === 'pending-receipts') return ['amount']
+  if (slug === 'sip-report') return ['sip_amount', 'collection_credit', 'incentive_amount']
+  if (slug === 'fd-maturity') return ['amount', 'maturity_amount', 'collection_credit', 'incentive_amount']
+  return []
+}
+
+function AggregateTotalFooter({ rows, fields = AGGREGATE_TOTAL_FIELDS }) {
+  const totals = sumNumericFields(rows, fields)
+  return (
+    <tfoot className="border-t-2 border-[var(--dashboard-border)] bg-[var(--dashboard-border)]/15">
+      <tr>
+        <td className="px-4 py-3 font-semibold text-[var(--dashboard-text)]">Total</td>
+        {fields.map((field) => (
+          <td key={field} className="px-4 py-3 font-semibold text-[var(--dashboard-text)] tabular-nums">
+            {formatReportTotalValue(field, totals[field])}
+          </td>
+        ))}
+      </tr>
+    </tfoot>
+  )
+}
+
 export default function AnalyticsReportPage() {
   const { slug } = useParams()
   const { token } = useAuth()
@@ -57,8 +117,27 @@ export default function AnalyticsReportPage() {
   const [loading, setLoading] = React.useState(false)
   const [err, setErr] = React.useState('')
   const [payload, setPayload] = React.useState(null)
+  const [users, setUsers] = React.useState([])
+  const [branches, setBranches] = React.useState([])
+  const [schemeCategoryOptions, setSchemeCategoryOptions] = React.useState([])
+  const branchOptions = React.useMemo(() => buildBranchOptions(branches), [branches])
+  const rmOptions = React.useMemo(() => buildRmOptions(users), [users])
+  const hideCc = !!f.hideCc
+  const hideSi = !!f.hideSi
+  const aggregateTotalFields = React.useMemo(
+    () => visibleMetricFields(AGGREGATE_TOTAL_FIELDS, { hideCc, hideSi }),
+    [hideCc, hideSi]
+  )
+  const rmOptionByCode = React.useMemo(() => {
+    const map = new Map()
+    rmOptions.forEach((option) => map.set(option.value, option))
+    return map
+  }, [rmOptions])
 
-  const patchFilters = (patch) => setF((prev) => ({ ...prev, ...patch }))
+  const patchFilters = (patch) => {
+    setF((prev) => ({ ...prev, ...patch }))
+    setPage(1)
+  }
 
   React.useEffect(() => {
     setF(defaults)
@@ -66,6 +145,34 @@ export default function AnalyticsReportPage() {
     setPayload(null)
     setFetchNonce((n) => n + 1)
   }, [defaults])
+
+  React.useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    Promise.all([
+      api.listUsers(token).catch(() => []),
+      api.listBranches(token, { includeInactive: '1' }).catch(() => []),
+      api.reportsFilterOptions(token).catch(() => ({ scheme_categories: [] }))
+    ])
+      .then(([usersRes, branchesRes, filterOpts]) => {
+        if (cancelled) return
+        setUsers(Array.isArray(usersRes) ? usersRes : usersRes?.items || [])
+        setBranches(Array.isArray(branchesRes) ? branchesRes : branchesRes?.items || [])
+        setSchemeCategoryOptions(
+          Array.isArray(filterOpts?.scheme_categories) ? filterOpts.scheme_categories : []
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsers([])
+          setBranches([])
+          setSchemeCategoryOptions([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token])
 
   const apply = React.useCallback(() => {
     setPage(1)
@@ -143,7 +250,7 @@ export default function AnalyticsReportPage() {
 
   if (slug === 'mis-summary') {
     const chartData = (payload?.product_summary || []).map((r) => ({
-      name: r.product_type,
+      name: formatProductCategory(r.product_type),
       amount: Number(r.amount) || 0
     }))
     return (
@@ -159,15 +266,15 @@ export default function AnalyticsReportPage() {
                   value: String(payload.previous_month_totals?.applications ?? '—')
                 },
                 { label: 'Prev. month amount', value: formatMoney(payload.previous_month_totals?.amount) },
-                { label: 'Prev. month CC', value: formatMoney(payload.previous_month_totals?.collection_credit) },
-                {
+                !hideCc && { label: 'Prev. month CC', value: formatMoney(payload.previous_month_totals?.collection_credit) },
+                !hideSi && {
                   label: 'Prev. month incentive',
                   value:
                     payload.previous_month_totals?.incentive_amount == null
                       ? '—'
                       : formatMoney(payload.previous_month_totals?.incentive_amount)
                 }
-              ]
+              ].filter(Boolean)
             : []
         }
         filters={
@@ -176,8 +283,11 @@ export default function AnalyticsReportPage() {
             onChange={patchFilters}
             onApply={apply}
             onReset={resetFilters}
+            token={token}
             filterProfile={meta.filterProfile}
             dateBasisOptions={meta.dateBasisOptions}
+            branchOptions={branchOptions}
+            rmOptions={rmOptions}
             showIncludePending
           />
         }
@@ -238,10 +348,10 @@ export default function AnalyticsReportPage() {
                 <dt className="text-[var(--dashboard-muted)]">Amount</dt>
                 <dd className="tabular-nums">{formatMoney(payload.previous_month_totals?.amount)}</dd>
               </div>
-              <div className="flex justify-between gap-4">
+              {!hideCc && <div className="flex justify-between gap-4">
                 <dt className="text-[var(--dashboard-muted)]">CC</dt>
                 <dd className="tabular-nums">{formatMoney(payload.previous_month_totals?.collection_credit)}</dd>
-              </div>
+              </div>}
             </dl>
           </div>
         </div>
@@ -254,23 +364,24 @@ export default function AnalyticsReportPage() {
                   <th className="px-4 py-2">Product type</th>
                   <th className="px-4 py-2">Applications</th>
                   <th className="px-4 py-2">Amount</th>
-                  <th className="px-4 py-2">CC</th>
-                  <th className="px-4 py-2">Incentive</th>
+                  {!hideCc && <th className="px-4 py-2">CC</th>}
+                  {!hideSi && <th className="px-4 py-2">Incentive</th>}
                 </tr>
               </thead>
               <tbody>
                 {(payload.product_summary || []).map((r) => (
                   <tr key={r.product_type} className="border-t border-[var(--dashboard-border)]/60">
-                    <td className="px-4 py-2">{r.product_type}</td>
+                    <td className="px-4 py-2">{formatProductCategory(r.product_type)}</td>
                     <td className="px-4 py-2 tabular-nums">{r.applications}</td>
                     <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
-                    <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>
-                    <td className="px-4 py-2 tabular-nums">
+                    {!hideCc && <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>}
+                    {!hideSi && <td className="px-4 py-2 tabular-nums">
                       {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
+              <AggregateTotalFooter rows={payload.product_summary || []} fields={aggregateTotalFields} />
             </table>
           </div>
           <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">MF category summary</h3>
@@ -281,8 +392,8 @@ export default function AnalyticsReportPage() {
                   <th className="px-4 py-2">Category</th>
                   <th className="px-4 py-2">Applications</th>
                   <th className="px-4 py-2">Amount</th>
-                  <th className="px-4 py-2">CC</th>
-                  <th className="px-4 py-2">Incentive</th>
+                  {!hideCc && <th className="px-4 py-2">CC</th>}
+                  {!hideSi && <th className="px-4 py-2">Incentive</th>}
                 </tr>
               </thead>
               <tbody>
@@ -291,13 +402,14 @@ export default function AnalyticsReportPage() {
                     <td className="px-4 py-2">{r.category}</td>
                     <td className="px-4 py-2 tabular-nums">{r.applications}</td>
                     <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
-                    <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>
-                    <td className="px-4 py-2 tabular-nums">
+                    {!hideCc && <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>}
+                    {!hideSi && <td className="px-4 py-2 tabular-nums">
                       {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
+              <AggregateTotalFooter rows={payload.mf_category_summary || []} fields={aggregateTotalFields} />
             </table>
           </div>
           <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">Company / fund sales</h3>
@@ -308,8 +420,8 @@ export default function AnalyticsReportPage() {
                   <th className="px-4 py-2">Company / fund</th>
                   <th className="px-4 py-2">Applications</th>
                   <th className="px-4 py-2">Amount</th>
-                  <th className="px-4 py-2">CC</th>
-                  <th className="px-4 py-2">Incentive</th>
+                  {!hideCc && <th className="px-4 py-2">CC</th>}
+                  {!hideSi && <th className="px-4 py-2">Incentive</th>}
                 </tr>
               </thead>
               <tbody>
@@ -318,13 +430,14 @@ export default function AnalyticsReportPage() {
                     <td className="px-4 py-2">{r.company_fund_name}</td>
                     <td className="px-4 py-2 tabular-nums">{r.applications}</td>
                     <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
-                    <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>
-                    <td className="px-4 py-2 tabular-nums">
+                    {!hideCc && <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>}
+                    {!hideSi && <td className="px-4 py-2 tabular-nums">
                       {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
+              <AggregateTotalFooter rows={payload.issuer_sales || []} fields={aggregateTotalFields} />
             </table>
           </div>
         </div>
@@ -344,8 +457,23 @@ export default function AnalyticsReportPage() {
     if (groupBy) {
       columns = groupBy === 'rm'
         ? [
-            ch.accessor('group_key', { header: 'RM Code' }),
-            ch.accessor('employee_name', { header: 'Employee Name' }),
+            ch.accessor('group_key', {
+              header: 'RM',
+              cell: (c) => {
+                const code = String(c.getValue() || '').trim()
+                const name = c.row.original.employee_name || rmOptionByCode.get(code)?.label || ''
+                return (
+                  <div className="min-w-0">
+                    <div className="font-medium text-[var(--dashboard-text)]">{name || code || 'Unknown RM'}</div>
+                    {code && (
+                      <div className="text-xs text-[var(--dashboard-muted)]">
+                        Emp code: {code}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+            }),
             ch.accessor('applications', { header: 'Applications' }),
             ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
             ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
@@ -382,13 +510,16 @@ export default function AnalyticsReportPage() {
         }),
         ch.accessor('application_number', { header: 'Application #' }),
         ch.accessor('emp_code', { header: 'RM' }),
-        ch.accessor('product_category', { header: 'Product' })
+        ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) })
       ]
     }
   } else if (slug === 'product-sales' || slug === 'mf-category') {
     const key = slug === 'mf-category' ? 'category' : 'product_type'
     columns = [
-      ch.accessor(key, { header: slug === 'mf-category' ? 'Category' : 'Product' }),
+      ch.accessor(key, {
+        header: slug === 'mf-category' ? 'Category' : 'Product',
+        cell: (c) => (slug === 'mf-category' ? c.getValue() : formatProductCategory(c.getValue()))
+      }),
       ch.accessor('applications', { header: 'Applications' }),
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
@@ -413,7 +544,7 @@ export default function AnalyticsReportPage() {
       ch.accessor('date', { header: 'Date' }),
       ch.accessor('receipt_number', { header: 'Receipt #' }),
       ch.accessor('client_name', { header: 'Client' }),
-      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('issuer', { header: 'Issuer' }),
       ch.accessor('scheme_name', { header: 'Scheme' }),
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
@@ -428,7 +559,7 @@ export default function AnalyticsReportPage() {
     ]
   } else if (slug === 'category-summary') {
     columns = [
-      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('issuer_name', { header: 'Issuer' }),
       ch.accessor('scheme_name', { header: 'Scheme' }),
       ch.accessor('type', { header: 'Type' }),
@@ -455,7 +586,7 @@ export default function AnalyticsReportPage() {
     columns = [
       ch.accessor('receipt_id', { header: 'Receipt ID' }),
       ch.accessor('client_name', { header: 'Client' }),
-      ch.accessor('product_type', { header: 'Product' }),
+      ch.accessor('product_type', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('current_stage', { header: 'Stage' }),
       ch.accessor('assigned_to', { header: 'Assigned' }),
@@ -464,12 +595,16 @@ export default function AnalyticsReportPage() {
   } else if (slug === 'sip-report') {
     columns = [
       ch.accessor('date', { header: 'Receipt Date' }),
-      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('client_name', { header: 'Client' }),
       ch.accessor('folio', { header: 'Folio' }),
       ch.accessor('scheme', { header: 'Scheme' }),
       ch.accessor('sip_amount', { header: 'SIP amount', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('incentive_amount', {
+        header: 'SI',
+        cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+      }),
       ch.accessor('frequency', { header: 'Frequency' }),
       ch.accessor('start_date', { header: 'Start' }),
       ch.accessor('next_due_date', { header: 'Next Due' }),
@@ -482,7 +617,7 @@ export default function AnalyticsReportPage() {
     columns = [
       ch.accessor('receipt_date', { header: 'Receipt Date' }),
       ch.accessor('maturity_date', { header: 'Maturity Date' }),
-      ch.accessor('product_category', { header: 'Product' }),
+      ch.accessor('product_category', { header: 'Product Category', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('issuer', { header: 'Issuer' }),
       ch.accessor('scheme_name', { header: 'Scheme' }),
       ch.accessor('type', { header: 'Type' }),
@@ -491,10 +626,23 @@ export default function AnalyticsReportPage() {
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('maturity_amount', { header: 'Maturity Amount', cell: (c) => formatMoney(c.getValue()) }),
       ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('incentive_amount', {
+        header: 'SI',
+        cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+      }),
       ch.accessor('branch_code', { header: 'Branch Code' }),
       ch.accessor('emp_code', { header: 'RM' })
     ]
   }
+  columns = hideSensitiveColumns(columns, { hideCc, hideSi })
+
+  const totalRows = payload
+    ? buildReportTotalRows({
+        rows,
+        fields: visibleMetricFields(getReportTotalFields(slug, groupBy), { hideCc, hideSi }),
+        filteredTotals: payload.totals
+      })
+    : []
 
   return (
     <ReportShell
@@ -506,8 +654,12 @@ export default function AnalyticsReportPage() {
           onChange={patchFilters}
           onApply={apply}
           onReset={resetFilters}
+          token={token}
           filterProfile={meta.filterProfile}
           dateBasisOptions={meta.dateBasisOptions}
+          branchOptions={branchOptions}
+          rmOptions={rmOptions}
+          schemeCategoryOptions={schemeCategoryOptions}
           showGroupBy={slug === 'mis-transactions'}
           showIncludePending={slug !== 'pending-receipts'}
         />
@@ -534,7 +686,15 @@ export default function AnalyticsReportPage() {
       {loading && <p className="text-sm text-[var(--dashboard-muted)]">Loading…</p>}
       {!loading && slug !== 'mis-summary' && (
         <>
-          {columns.length > 0 && <ReportDataTable columns={columns} data={rows} pageSize={25} />}
+          {columns.length > 0 && (
+            <ReportDataTable
+              columns={columns}
+              data={rows}
+              pageSize={25}
+              totalRows={totalRows}
+              formatTotalValue={formatReportTotalValue}
+            />
+          )}
           {(slug === 'mis-transactions' || slug === 'product-detail' || slug === 'sip-report' || slug === 'fd-maturity' || slug === 'pending-receipts') &&
             !groupBy && <ServerPager page={page} pageSize={25} total={total} onChange={setPage} />}
         </>

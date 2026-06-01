@@ -576,6 +576,7 @@ export const api={
   // Reports / Business Analytics (GET /api/reports/*)
   // -------------------------------------------------------------------------
   reportsRegistry:(t)=>req('/api/reports/registry',{token:t}),
+  reportsFilterOptions:(t)=>req('/api/reports/filter-options',{token:t}),
   reportsMisSummary:(t,q)=>req('/api/reports/mis-summary',{token:t,query:q}),
   reportsMisTransactions:(t,q)=>req('/api/reports/mis-transactions',{token:t,query:q}),
   reportsProductSales:(t,q)=>req('/api/reports/product-sales',{token:t,query:q}),

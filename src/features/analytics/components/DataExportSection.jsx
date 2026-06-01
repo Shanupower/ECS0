@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { Download, ExternalLink, Loader2 } from 'lucide-react'
 import { ReportFilterBar } from './ReportFilterBar.jsx'
 import { getInitialReportFilters } from '../report-meta.js'
-import { filtersToReportQuery } from '../lib/report-filters.js'
+import { buildBranchOptions, buildRmOptions, filtersToReportQuery } from '../lib/report-filters.js'
 import { downloadExportFile, downloadReportFile } from '../lib/report-download.js'
+import { api } from '../../../api.js'
 import { useToast } from '../../../components/ui/Toast.jsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/Card.jsx'
 import { Button } from '../../../components/ui/Button.jsx'
@@ -16,9 +17,42 @@ export default function DataExportSection({ token }) {
   const defaults = React.useMemo(() => getInitialReportFilters(), [])
   const [f, setF] = React.useState(defaults)
   const [exporting, setExporting] = React.useState(null)
+  const [users, setUsers] = React.useState([])
+  const [branches, setBranches] = React.useState([])
+  const [schemeCategoryOptions, setSchemeCategoryOptions] = React.useState([])
+  const branchOptions = React.useMemo(() => buildBranchOptions(branches), [branches])
+  const rmOptions = React.useMemo(() => buildRmOptions(users), [users])
 
   const patchFilters = (patch) => setF((prev) => ({ ...prev, ...patch }))
   const resetFilters = () => setF(getInitialReportFilters())
+
+  React.useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    Promise.all([
+      api.listUsers(token).catch(() => []),
+      api.listBranches(token, { includeInactive: '1' }).catch(() => []),
+      api.reportsFilterOptions(token).catch(() => ({ scheme_categories: [] }))
+    ])
+      .then(([usersRes, branchesRes, filterOpts]) => {
+        if (cancelled) return
+        setUsers(Array.isArray(usersRes) ? usersRes : usersRes?.items || [])
+        setBranches(Array.isArray(branchesRes) ? branchesRes : branchesRes?.items || [])
+        setSchemeCategoryOptions(
+          Array.isArray(filterOpts?.scheme_categories) ? filterOpts.scheme_categories : []
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsers([])
+          setBranches([])
+          setSchemeCategoryOptions([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token])
 
   const runExport = async (key, fn) => {
     if (!token) return
@@ -60,7 +94,11 @@ export default function DataExportSection({ token }) {
           onChange={patchFilters}
           onApply={() => {}}
           onReset={resetFilters}
+          token={token}
           filterProfile="fullReceipt"
+          branchOptions={branchOptions}
+          rmOptions={rmOptions}
+          schemeCategoryOptions={schemeCategoryOptions}
           showIncludePending
         />
 
