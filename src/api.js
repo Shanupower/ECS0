@@ -587,5 +587,6 @@ export const api={
   reportsSipReport:(t,q)=>req('/api/reports/sip-report',{token:t,query:q}),
   reportsFdMaturity:(t,q)=>req('/api/reports/fd-maturity',{token:t,query:q}),
   reportsCashflow:(t,q)=>req('/api/reports/cashflow',{token:t,query:q}),
-  reportsPendingReceipts:(t,q)=>req('/api/reports/pending-receipts',{token:t,query:q})
+  reportsPendingReceipts:(t,q)=>req('/api/reports/pending-receipts',{token:t,query:q}),
+  reportsCustomerDetail:(t,q)=>req('/api/reports/customer-detail',{token:t,query:q})
 }

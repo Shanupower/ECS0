@@ -105,6 +105,145 @@ function AggregateTotalFooter({ rows, fields = AGGREGATE_TOTAL_FIELDS }) {
   )
 }
 
+function MetricTable({ title, headers, rows, renderRow, emptyMessage = 'No data in this period.' }) {
+  if (!rows?.length) return null
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-[var(--dashboard-text)]">{title}</h4>
+      <div className="overflow-x-auto rounded-xl border border-[var(--dashboard-border)]">
+        <table className="w-full text-sm">
+          <thead className="bg-[var(--dashboard-border)]/20 text-left text-[var(--dashboard-muted)]">
+            <tr>
+              {headers.map((h) => (
+                <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-t border-[var(--dashboard-border)]/60">
+                {renderRow(row)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!rows.length && <p className="text-xs text-[var(--dashboard-muted)]">{emptyMessage}</p>}
+    </div>
+  )
+}
+
+function CustomerDetailBreakdown({ customer, hideCc, hideSi }) {
+  const p = customer.profile || {}
+  const s = customer.summary || {}
+  const metricCells = (row) => (
+    <>
+      <td className="px-3 py-2 tabular-nums">{row.applications}</td>
+      <td className="px-3 py-2 tabular-nums">{formatMoney(row.amount ?? row.total_investment)}</td>
+      {!hideCc && <td className="px-3 py-2 tabular-nums">{formatMoney(row.collection_credit)}</td>}
+      {!hideSi && (
+        <td className="px-3 py-2 tabular-nums">
+          {row.incentive_amount == null ? '—' : formatMoney(row.incentive_amount)}
+        </td>
+      )}
+    </>
+  )
+  const metricHeaders = ['Applications', 'Amount', ...(hideCc ? [] : ['CC']), ...(hideSi ? [] : ['SI'])]
+
+  return (
+    <div className="rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-4 sm:p-5 space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">Customer ID</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{customer.customer_id}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">Name</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{p.name || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">PAN</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{p.pan || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">Mobile</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{p.mobile || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">City / State</p>
+          <p className="font-medium text-[var(--dashboard-text)]">
+            {[p.city, p.state].filter(Boolean).join(', ') || '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">Zip / PIN</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{p.pin || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">Branch</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{p.branch || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--dashboard-muted)]">RM</p>
+          <p className="font-medium text-[var(--dashboard-text)]">{p.relationship_manager || '—'}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-4 text-sm border-t border-[var(--dashboard-border)]/60 pt-3">
+        <span>
+          <span className="text-[var(--dashboard-muted)]">Applications: </span>
+          <span className="font-semibold tabular-nums">{s.applications ?? 0}</span>
+        </span>
+        <span>
+          <span className="text-[var(--dashboard-muted)]">Total investment: </span>
+          <span className="font-semibold tabular-nums">{formatMoney(s.total_investment)}</span>
+        </span>
+        {!hideCc && (
+          <span>
+            <span className="text-[var(--dashboard-muted)]">CC: </span>
+            <span className="font-semibold tabular-nums">{formatMoney(s.collection_credit)}</span>
+          </span>
+        )}
+      </div>
+      <MetricTable
+        title="By product"
+        headers={['Product', ...metricHeaders]}
+        rows={customer.by_product}
+        renderRow={(row) => (
+          <>
+            <td className="px-3 py-2">{formatProductCategory(row.product_category)}</td>
+            {metricCells(row)}
+          </>
+        )}
+      />
+      <MetricTable
+        title="By MF scheme category"
+        headers={['Category', ...metricHeaders]}
+        rows={customer.by_scheme_category}
+        renderRow={(row) => (
+          <>
+            <td className="px-3 py-2">{row.scheme_category}</td>
+            {metricCells(row)}
+          </>
+        )}
+      />
+      <MetricTable
+        title="By fund / scheme"
+        headers={['Issuer', 'Scheme', ...metricHeaders]}
+        rows={customer.by_fund}
+        renderRow={(row) => (
+          <>
+            <td className="px-3 py-2">{row.issuer}</td>
+            <td className="px-3 py-2">{row.scheme_name}</td>
+            {metricCells(row)}
+          </>
+        )}
+      />
+    </div>
+  )
+}
+
 export default function AnalyticsReportPage() {
   const { slug } = useParams()
   const { token } = useAuth()
@@ -187,6 +326,12 @@ export default function AnalyticsReportPage() {
 
   React.useEffect(() => {
     if (!token || !slug) return
+    if (slug === 'customer-detail' && (!f.investorIds || f.investorIds.length === 0)) {
+      setPayload(null)
+      setLoading(false)
+      setErr('')
+      return
+    }
     let cancelled = false
     ;(async () => {
       setLoading(true)
@@ -228,6 +373,9 @@ export default function AnalyticsReportPage() {
           case 'pending-receipts':
             data = await api.reportsPendingReceipts(token, q)
             break
+          case 'customer-detail':
+            data = await api.reportsCustomerDetail(token, q)
+            break
           default:
             throw new Error('Unknown report')
         }
@@ -244,8 +392,166 @@ export default function AnalyticsReportPage() {
   }, [token, slug, f, page, fetchNonce])
 
   const exportReport = (format) => {
+    if (slug === 'customer-detail' && (!f.investorIds || f.investorIds.length === 0)) {
+      return Promise.reject(new Error('Select at least one customer'))
+    }
     const q = filtersToReportQuery(f, { page: 1, pageSize: 50000 })
     return downloadReportFile(token, slug, q, format)
+  }
+
+  const customerDetailFilterBar = (
+    <ReportFilterBar
+      {...f}
+      onChange={patchFilters}
+      onApply={apply}
+      onReset={resetFilters}
+      token={token}
+      filterProfile={meta.filterProfile}
+      requireInvestorSelection
+      dateBasisOptions={meta.dateBasisOptions}
+      branchOptions={branchOptions}
+      rmOptions={rmOptions}
+      schemeCategoryOptions={schemeCategoryOptions}
+      showIncludePending
+    />
+  )
+
+  if (slug === 'customer-detail') {
+    const txnRows = payload?.transactions?.rows || []
+    const txnTotal = payload?.transactions?.total ?? 0
+    const txnTotals = payload?.transactions?.totals
+    const ch = createColumnHelper()
+    const txnColumns = hideSensitiveColumns(
+      [
+        ch.accessor('customer_name', { header: 'Customer' }),
+        ch.accessor('date', { header: 'Date' }),
+        ch.accessor('receipt_number', { header: 'Receipt #' }),
+        ch.accessor('product_category', {
+          header: 'Product',
+          cell: (c) => formatProductCategory(c.getValue())
+        }),
+        ch.accessor('issuer', { header: 'Issuer' }),
+        ch.accessor('scheme_name', { header: 'Scheme' }),
+        ch.accessor('transaction_type', { header: 'Txn type' }),
+        ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+        ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+        ch.accessor('incentive_amount', {
+          header: 'SI',
+          cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+        }),
+        ch.accessor('branch_code', { header: 'Branch' }),
+        ch.accessor('emp_code', { header: 'RM' }),
+        ch.accessor('status', { header: 'Status' })
+      ],
+      { hideCc, hideSi }
+    )
+    const txnTotalRows = txnTotals
+      ? [
+          {
+            label: 'Total',
+            values: {
+              amount: txnTotals.amount,
+              collection_credit: hideCc ? undefined : txnTotals.collection_credit,
+              incentive_amount: hideSi ? undefined : txnTotals.incentive_amount
+            }
+          }
+        ]
+      : []
+
+    return (
+      <ReportShell
+        title={meta.title}
+        description={meta.description}
+        summaryCards={
+          payload?.grand_totals
+            ? [
+                { label: 'Applications', value: String(payload.grand_totals.applications ?? 0) },
+                { label: 'Total investment', value: formatMoney(payload.grand_totals.total_investment) },
+                !hideCc && { label: 'Collection credit', value: formatMoney(payload.grand_totals.collection_credit) }
+              ].filter(Boolean)
+            : []
+        }
+        filters={customerDetailFilterBar}
+        actions={
+          <>
+            <Button variant="secondary" asChild>
+              <Link to="/analytics">Back</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!f.investorIds?.length}
+              onClick={() => exportReport('csv').catch((e) => setErr(e.message))}
+            >
+              Export CSV
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!f.investorIds?.length}
+              onClick={() => exportReport('xlsx').catch((e) => setErr(e.message))}
+            >
+              Export Excel
+            </Button>
+          </>
+        }
+      >
+        {err && (
+          <div className="rounded-xl border border-[var(--error)]/40 bg-[var(--error-muted)] px-4 py-3 text-sm text-[var(--error)]">
+            {err}
+          </div>
+        )}
+        {!f.investorIds?.length && (
+          <p className="text-sm text-[var(--dashboard-muted)]">
+            Search and select one or more customers, then apply filters to load the report.
+          </p>
+        )}
+        {loading && <p className="text-sm text-[var(--dashboard-muted)]">Loading…</p>}
+        {!loading && payload && (
+          <div className="space-y-6">
+            {(payload.customers || []).map((customer) => {
+              const useAccordion = (payload.customers || []).length > 1
+              const title = customer.profile?.name || `Customer ${customer.customer_id}`
+              const body = <CustomerDetailBreakdown customer={customer} hideCc={hideCc} hideSi={hideSi} />
+              if (!useAccordion) {
+                return (
+                  <div key={String(customer.customer_id)}>
+                    <h3 className="text-base font-semibold text-[var(--dashboard-text)] mb-3">{title}</h3>
+                    {body}
+                  </div>
+                )
+              }
+              return (
+                <details
+                  key={String(customer.customer_id)}
+                  className="rounded-2xl border border-[var(--dashboard-border)] open:bg-[var(--dashboard-card)]/50"
+                  open
+                >
+                  <summary className="cursor-pointer px-4 py-3 font-semibold text-[var(--dashboard-text)]">
+                    {title}
+                    <span className="ml-2 text-xs font-normal text-[var(--dashboard-muted)]">
+                      ID {customer.customer_id}
+                    </span>
+                  </summary>
+                  <div className="px-2 pb-4">{body}</div>
+                </details>
+              )
+            })}
+            <div className="space-y-3">
+              <h3 className="text-base font-semibold text-[var(--dashboard-text)]">Transactions</h3>
+              <ReportDataTable
+                columns={txnColumns}
+                data={txnRows}
+                pageSize={25}
+                totalRows={txnTotalRows}
+                formatTotalValue={formatReportTotalValue}
+              />
+              <ServerPager page={page} pageSize={25} total={txnTotal} onChange={setPage} />
+            </div>
+          </div>
+        )}
+      </ReportShell>
+    )
   }
 
   if (slug === 'mis-summary') {

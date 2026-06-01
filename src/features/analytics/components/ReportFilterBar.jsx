@@ -430,7 +430,8 @@ function InvestorMultiSelect({ value = [], selectedOptions = [], onChange, token
  *   showGroupBy?: boolean,
  *   showIncludePending?: boolean,
  *   token?: string,
- *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal',
+ *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail',
+ *   requireInvestorSelection?: boolean,
  *   dateBasisOptions?: Array<{ value: string, label: string }>
  *   branchOptions?: Array<{ value: string, label: string, type?: string, aliases?: string[], searchText: string }>
  *   rmOptions?: Array<{ value: string, label: string, email?: string, role?: string, searchText: string }>
@@ -457,6 +458,7 @@ export function ReportFilterBar({
   showIncludePending,
   token,
   filterProfile = 'fullReceipt',
+  requireInvestorSelection = false,
   dateBasisOptions = [
     { value: 'receipt', label: 'Receipt date' },
     { value: 'transaction', label: 'Transaction date' }
@@ -465,9 +467,13 @@ export function ReportFilterBar({
   rmOptions = [],
   schemeCategoryOptions = []
 }) {
-  const showScope = filterProfile === 'fullReceipt'
+  const isCustomerDetail = filterProfile === 'customerDetail'
+  const showScope = filterProfile === 'fullReceipt' || isCustomerDetail
   const showDatesAndSearch = filterProfile !== 'minimal'
   const completedOnly = includePending === false
+  const needsInvestors = requireInvestorSelection || isCustomerDetail
+  const hasInvestors = (investorIds || []).length > 0
+  const canApply = !needsInvestors || hasInvestors
   const productCategoryRows = React.useMemo(() => {
     const rows = [...RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS]
     for (const v of productCategories || []) {
@@ -492,6 +498,20 @@ export function ReportFilterBar({
         <p className="text-sm text-[var(--dashboard-muted)]">
           This report loads a fixed snapshot from the server. Use refresh to reload.
         </p>
+      )}
+
+      {isCustomerDetail && (
+        <div>
+          <SectionLabel>Customers (required)</SectionLabel>
+          <InvestorMultiSelect
+            value={investorIds || []}
+            onChange={(investorIds) => onChange({ investorIds, search: '' })}
+            token={token}
+          />
+          {!hasInvestors && (
+            <p className="mt-2 text-xs text-[var(--dashboard-muted)]">Select at least one customer to run this report.</p>
+          )}
+        </div>
       )}
 
       {showDatesAndSearch && (
@@ -581,6 +601,7 @@ export function ReportFilterBar({
             </div>
           )}
 
+          {!isCustomerDetail && (
           <div>
             <SectionLabel>Search</SectionLabel>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
@@ -611,6 +632,7 @@ export function ReportFilterBar({
               )}
             </div>
           </div>
+          )}
         </>
       )}
 
@@ -648,7 +670,7 @@ export function ReportFilterBar({
       )}
 
       <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[var(--dashboard-border)]/60">
-        <Button type="button" onClick={onApply}>
+        <Button type="button" onClick={onApply} disabled={!canApply}>
           {filterProfile === 'minimal' ? 'Refresh' : 'Apply filters'}
         </Button>
         {onReset && (

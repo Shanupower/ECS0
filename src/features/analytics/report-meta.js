@@ -3,7 +3,7 @@
  * Aligns titles/descriptions with backend REPORT_REGISTRY (routes/reports.js).
  */
 
-/** @typedef {'fullReceipt' | 'datesSearch' | 'minimal'} ReportFilterProfile */
+/** @typedef {'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail'} ReportFilterProfile */
 
 /**
  * @typedef {{ label: string, value: string }} DateBasisOption
@@ -84,6 +84,12 @@ export const REPORT_META = {
     title: 'Pending Receipts',
     description: 'Receipts not yet completed, with days pending.',
     filterProfile: 'fullReceipt'
+  },
+  'customer-detail': {
+    title: 'Customer Detail Report',
+    description:
+      'Select one or more customers to see product, category, fund, and transaction breakdowns for the filtered period.',
+    filterProfile: 'customerDetail'
   }
 }
 

@@ -31,6 +31,25 @@ export default function AnalyticsDashboardPage() {
     }
   }, [token])
 
+  const reportSections = React.useMemo(() => {
+    const order = ['Operational Reports', 'Customers Report']
+    const byGroup = new Map()
+    for (const r of reports) {
+      const group = r.group || 'Operational Reports'
+      if (!byGroup.has(group)) byGroup.set(group, [])
+      byGroup.get(group).push(r)
+    }
+    const sections = []
+    for (const name of order) {
+      if (byGroup.has(name)) sections.push({ name, items: byGroup.get(name) })
+      byGroup.delete(name)
+    }
+    for (const [name, items] of byGroup) {
+      sections.push({ name, items })
+    }
+    return sections
+  }, [reports])
+
   return (
     <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-8">
       <div className="mb-8">
@@ -49,31 +68,41 @@ export default function AnalyticsDashboardPage() {
       {loading ? (
         <p className="text-sm text-[var(--dashboard-muted)]">Loading report catalog…</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {reports.map((r) => {
-            const Icon = Lucide[r.icon] || Lucide.FileBarChart
-            const slug = r.id || r.path?.split('/').pop()
-            return (
-              <Card key={r.id} className="overflow-hidden flex flex-col hover:border-[var(--accent)]/40 transition-colors">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)]/10 text-[var(--accent)]">
-                      <Icon className="h-5 w-5" aria-hidden />
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-base">{r.title}</CardTitle>
-                      <CardDescription className="mt-1 line-clamp-3">{r.description}</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 mt-auto">
-                  <Button asChild className="w-full">
-                    <Link to={`/analytics/reports/${slug}`}>Open report</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )
-          })}
+        <div className="space-y-10">
+          {reportSections.map((section) => (
+            <section key={section.name}>
+              <h2 className="text-lg font-semibold text-[var(--dashboard-text)] mb-4">{section.name}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {section.items.map((r) => {
+                  const Icon = Lucide[r.icon] || Lucide.FileBarChart
+                  const slug = r.id || r.path?.split('/').pop()
+                  return (
+                    <Card
+                      key={r.id}
+                      className="overflow-hidden flex flex-col hover:border-[var(--accent)]/40 transition-colors"
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)]/10 text-[var(--accent)]">
+                            <Icon className="h-5 w-5" aria-hidden />
+                          </div>
+                          <div className="min-w-0">
+                            <CardTitle className="text-base">{r.title}</CardTitle>
+                            <CardDescription className="mt-1 line-clamp-3">{r.description}</CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0 mt-auto">
+                        <Button asChild className="w-full">
+                          <Link to={`/analytics/reports/${slug}`}>Open report</Link>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>
