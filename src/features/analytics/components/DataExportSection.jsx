@@ -74,6 +74,9 @@ export default function DataExportSection({ token }) {
   const exportMisXlsx = () =>
     runExport('mis-xlsx', () => downloadReportFile(token, 'mis-transactions', misQuery(), 'xlsx'))
 
+  const exportMisPdf = () =>
+    runExport('mis-pdf', () => downloadReportFile(token, 'mis-transactions', misQuery(), 'pdf'))
+
   const exportUsers = () => runExport('users', () => downloadExportFile(token, 'users'))
   const exportBranches = () => runExport('branches', () => downloadExportFile(token, 'branches'))
 
@@ -118,6 +121,14 @@ export default function DataExportSection({ token }) {
               <Download className="h-4 w-4" aria-hidden />
             )}
             Download Excel
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={exportMisPdf}>
+            {exporting === 'mis-pdf' ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden />
+            )}
+            Download PDF
           </Button>
           <Button variant="outline" asChild className="ml-auto sm:ml-0">
             <Link to="/analytics/reports/mis-transactions">

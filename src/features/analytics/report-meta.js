@@ -19,17 +19,12 @@ export const DEFAULT_DATE_BASIS_OPTIONS = [
 export const REPORT_META = {
   'mis-summary': {
     title: 'MIS Summary',
-    description: 'Product totals, MF categories, issuer sales, and previous-month comparison.',
+    description: 'Product totals, MF categories, and issuer sales.',
     filterProfile: 'fullReceipt'
   },
   'mis-transactions': {
     title: 'Detailed Transaction MIS',
     description: 'Line-level receipts with optional grouping by product, AMC, branch, or RM.',
-    filterProfile: 'fullReceipt'
-  },
-  'product-sales': {
-    title: 'Product-wise Sales',
-    description: 'Applications and amounts grouped by product category.',
     filterProfile: 'fullReceipt'
   },
   'product-detail': {
@@ -42,11 +37,6 @@ export const REPORT_META = {
     description: 'All product categories grouped by scheme and type, including FD cumulative type.',
     filterProfile: 'fullReceipt'
   },
-  'mf-category': {
-    title: 'Category-wise Mutual Fund',
-    description: 'MF totals grouped by scheme category.',
-    filterProfile: 'fullReceipt'
-  },
   'mf-fund': {
     title: 'Fund-wise Mutual Fund',
     description: 'MF totals grouped by scheme or fund name.',
@@ -54,7 +44,7 @@ export const REPORT_META = {
   },
   'sip-report': {
     title: 'SIP Due / End',
-    description: 'SIP receipts with product, scheme, client, next due date, and end date.',
+    description: 'SIP receipts with product, scheme, client, period, month, and end date.',
     filterProfile: 'fullReceipt',
     defaultDateBasis: 'sip_due',
     defaultFutureMonths: 6,
@@ -75,11 +65,6 @@ export const REPORT_META = {
       ...DEFAULT_DATE_BASIS_OPTIONS
     ]
   },
-  cashflow: {
-    title: 'Cash Flow',
-    description: 'Purchase, SIP, switches, and redemptions with net flow by issuer.',
-    filterProfile: 'fullReceipt'
-  },
   'pending-receipts': {
     title: 'Pending Receipts',
     description: 'Receipts not yet completed, with days pending.',
@@ -88,17 +73,24 @@ export const REPORT_META = {
   'customer-detail': {
     title: 'Customer Detail Report',
     description:
-      'Select one or more customers to see product, category, fund, and transaction breakdowns for the filtered period.',
+      'Browse customers by branch or product, select individuals or include a whole branch, then view breakdowns for the filtered period.',
     filterProfile: 'customerDetail'
   }
+}
+
+function toLocalYmd(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 export function defaultDateRange() {
   const to = new Date()
   const from = new Date(to.getFullYear() - 2, to.getMonth(), 1)
   return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10)
+    from: toLocalYmd(from),
+    to: toLocalYmd(to)
   }
 }
 
@@ -107,8 +99,8 @@ export function defaultFutureDateRange(months = 6) {
   const to = new Date(from)
   to.setMonth(to.getMonth() + months)
   return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10)
+    from: toLocalYmd(from),
+    to: toLocalYmd(to)
   }
 }
 
@@ -122,13 +114,17 @@ export function getInitialReportFilters(slug) {
     empCodes: [],
     productCategories: [],
     schemeCategories: [],
+    issuerNames: [],
+    schemeNames: [],
     investorIds: [],
     search: '',
     groupBy: '',
     includePending: true,
     hideCc: false,
     hideSi: false,
-    viewMode: ''
+    viewMode: '',
+    customerSearch: '',
+    customerSort: 'name:asc'
   }
 }
 

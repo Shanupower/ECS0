@@ -13,6 +13,12 @@ export function filtersToReportQuery(f, { page = 1, pageSize = 25 } = {}) {
   if (Array.isArray(f.schemeCategories) && f.schemeCategories.length) {
     q.scheme_categories = f.schemeCategories.join(',')
   }
+  if (Array.isArray(f.issuerNames) && f.issuerNames.length) {
+    q.issuer_names = f.issuerNames.join(',')
+  }
+  if (Array.isArray(f.schemeNames) && f.schemeNames.length) {
+    q.scheme_names = f.schemeNames.join(',')
+  }
   if (Array.isArray(f.investorIds) && f.investorIds.length) {
     q.investor_ids = f.investorIds.join(',')
   } else if (f.search?.trim()) {
@@ -23,6 +29,27 @@ export function filtersToReportQuery(f, { page = 1, pageSize = 25 } = {}) {
   if (f.hideCc) q.hide_cc = '1'
   if (f.hideSi) q.hide_si = '1'
   return q
+}
+
+/** Customer Detail Report — paginated customer picker list. */
+export function filtersToCustomerListQuery(f, { customerPage = 1, customerPageSize = 50, skipCount = false } = {}) {
+  const q = filtersToReportQuery(f, { page: 1, pageSize: 25 })
+  delete q.page
+  delete q.page_size
+  delete q.search
+  q.customer_page = String(customerPage)
+  q.customer_page_size = String(customerPageSize)
+  if (f.customerSearch?.trim()) q.customer_search = f.customerSearch.trim()
+  if (f.customerSort?.trim()) q.customer_sort = f.customerSort.trim()
+  if (skipCount) q.skip_count = '1'
+  return q
+}
+
+export function canRunCustomerDetailReport(f) {
+  if ((f.investorIds || []).length > 0) return true
+  if ((f.branchCodes || []).length > 0) return true
+  if ((f.productCategories || []).length > 0) return true
+  return false
 }
 
 export function buildRmOptions(users = []) {
@@ -83,6 +110,56 @@ export function filterBranchOptions(options = [], query = '') {
 }
 
 export function formatBranchOptionLabel(option) {
+  if (!option) return ''
+  return option.label && option.label !== option.value ? `${option.label} (${option.value})` : option.value
+}
+
+export function buildIssuerOptions(issuers = []) {
+  const list = Array.isArray(issuers) ? issuers : []
+  const seen = new Set()
+  return list
+    .map((v) => {
+      const name = String(v ?? '').trim()
+      if (!name || seen.has(name)) return null
+      seen.add(name)
+      return { value: name, label: name, searchText: name.toLowerCase() }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export function filterIssuerOptions(options = [], query = '') {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return options
+  return (Array.isArray(options) ? options : []).filter((option) => option.searchText.includes(q))
+}
+
+export function formatIssuerOptionLabel(option) {
+  if (!option) return ''
+  return option.label && option.label !== option.value ? `${option.label} (${option.value})` : option.value
+}
+
+export function buildSchemeOptions(schemes = []) {
+  const list = Array.isArray(schemes) ? schemes : []
+  const seen = new Set()
+  return list
+    .map((v) => {
+      const name = String(v ?? '').trim()
+      if (!name || seen.has(name)) return null
+      seen.add(name)
+      return { value: name, label: name, searchText: name.toLowerCase() }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export function filterSchemeOptions(options = [], query = '') {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return options
+  return (Array.isArray(options) ? options : []).filter((option) => option.searchText.includes(q))
+}
+
+export function formatSchemeOptionLabel(option) {
   if (!option) return ''
   return option.label && option.label !== option.value ? `${option.label} (${option.value})` : option.value
 }

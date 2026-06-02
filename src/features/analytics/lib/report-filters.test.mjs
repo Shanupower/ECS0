@@ -11,7 +11,9 @@ import {
   formatBranchOptionLabel,
   formatInvestorOptionLabel,
   formatRmOptionLabel,
-  toggleListValue
+  toggleListValue,
+  canRunCustomerDetailReport,
+  filtersToCustomerListQuery
 } from './report-filters.js'
 
 const users = [
@@ -77,6 +79,8 @@ const multiQuery = filtersToReportQuery({
   empCodes: ['ECS001'],
   productCategories: ['MF', 'FD'],
   schemeCategories: ['Equity'],
+  issuerNames: ['HDFC', 'ICICI'],
+  schemeNames: ['Growth Plan'],
   investorIds: ['101', '102'],
   hideCc: true,
   hideSi: true,
@@ -87,6 +91,8 @@ assert.equal(multiQuery.branch_codes, 'BR001,BR002')
 assert.equal(multiQuery.emp_codes, 'ECS001')
 assert.equal(multiQuery.product_categories, 'MF,FD')
 assert.equal(multiQuery.scheme_categories, 'Equity')
+assert.equal(multiQuery.issuer_names, 'HDFC,ICICI')
+assert.equal(multiQuery.scheme_names, 'Growth Plan')
 assert.equal(multiQuery.investor_ids, '101,102')
 assert.equal(multiQuery.search, undefined)
 assert.equal(multiQuery.hide_cc, '1')
@@ -98,5 +104,20 @@ assert.equal(legacySearchQuery.investor_ids, undefined)
 
 assert.deepEqual(toggleListValue(['a'], 'b'), ['a', 'b'])
 assert.deepEqual(toggleListValue(['a', 'b'], 'a'), ['b'])
+
+assert.equal(canRunCustomerDetailReport({ investorIds: ['1'] }), true)
+assert.equal(canRunCustomerDetailReport({ branchCodes: ['HO'] }), true)
+assert.equal(canRunCustomerDetailReport({ productCategories: ['MF'] }), true)
+assert.equal(canRunCustomerDetailReport({}), false)
+
+const listQ = filtersToCustomerListQuery(
+  { from: '2024-01-01', branchCodes: ['HO'], customerSearch: 'Ravi', customerSort: 'pin:desc' },
+  { customerPage: 2, customerPageSize: 50 }
+)
+assert.equal(listQ.customer_page, '2')
+assert.equal(listQ.customer_page_size, '50')
+assert.equal(listQ.customer_search, 'Ravi')
+assert.equal(listQ.branch_codes, 'HO')
+assert.equal(listQ.customer_sort, 'pin:desc')
 
 console.log('[Frontend] report filter helper tests passed')

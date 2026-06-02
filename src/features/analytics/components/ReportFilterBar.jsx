@@ -18,9 +18,13 @@ import {
   filterBranchOptions,
   filterInvestorOptions,
   filterRmOptions,
+  filterIssuerOptions,
+  filterSchemeOptions,
   formatBranchOptionLabel,
   formatInvestorOptionLabel,
   formatRmOptionLabel,
+  formatIssuerOptionLabel,
+  formatSchemeOptionLabel,
   toggleListValue
 } from '../lib/report-filters.js'
 import { api } from '../../../api.js'
@@ -432,10 +436,15 @@ function InvestorMultiSelect({ value = [], selectedOptions = [], onChange, token
  *   token?: string,
  *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail',
  *   requireInvestorSelection?: boolean,
+ *   customerSearch?: string,
  *   dateBasisOptions?: Array<{ value: string, label: string }>
  *   branchOptions?: Array<{ value: string, label: string, type?: string, aliases?: string[], searchText: string }>
  *   rmOptions?: Array<{ value: string, label: string, email?: string, role?: string, searchText: string }>
  *   schemeCategoryOptions?: string[]
+ *   schemeCategoriesLoading?: boolean
+ *   appliedFrom?: string
+ *   appliedTo?: string
+ *   appliedDateBasis?: string
  * }} props
  */
 export function ReportFilterBar({
@@ -446,6 +455,8 @@ export function ReportFilterBar({
   empCodes,
   productCategories,
   schemeCategories,
+  issuerNames,
+  schemeNames,
   investorIds,
   groupBy,
   includePending,
@@ -459,21 +470,30 @@ export function ReportFilterBar({
   token,
   filterProfile = 'fullReceipt',
   requireInvestorSelection = false,
+  customerSearch = '',
   dateBasisOptions = [
     { value: 'receipt', label: 'Receipt date' },
     { value: 'transaction', label: 'Transaction date' }
   ],
   branchOptions = [],
   rmOptions = [],
-  schemeCategoryOptions = []
+  schemeCategoryOptions = [],
+  schemeCategoriesLoading = false,
+  issuerOptions = [],
+  schemeOptions = [],
+  issuerLoading = false,
+  schemeLoading = false,
+  showIssuerSchemeFilters = false,
+  appliedFrom = '',
+  appliedTo = '',
+  appliedDateBasis = ''
 }) {
   const isCustomerDetail = filterProfile === 'customerDetail'
   const showScope = filterProfile === 'fullReceipt' || isCustomerDetail
+  const showIssuerScheme = showScope && showIssuerSchemeFilters
   const showDatesAndSearch = filterProfile !== 'minimal'
   const completedOnly = includePending === false
-  const needsInvestors = requireInvestorSelection || isCustomerDetail
-  const hasInvestors = (investorIds || []).length > 0
-  const canApply = !needsInvestors || hasInvestors
+  const canApply = true
   const productCategoryRows = React.useMemo(() => {
     const rows = [...RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS]
     for (const v of productCategories || []) {
@@ -501,16 +521,28 @@ export function ReportFilterBar({
       )}
 
       {isCustomerDetail && (
-        <div>
-          <SectionLabel>Customers (required)</SectionLabel>
-          <InvestorMultiSelect
-            value={investorIds || []}
-            onChange={(investorIds) => onChange({ investorIds, search: '' })}
-            token={token}
-          />
-          {!hasInvestors && (
-            <p className="mt-2 text-xs text-[var(--dashboard-muted)]">Select at least one customer to run this report.</p>
-          )}
+        <div className="space-y-3">
+          <div>
+            <SectionLabel>Find customers</SectionLabel>
+            <Input
+              placeholder="Search name, PAN, mobile, or ID (min 2 characters)"
+              value={customerSearch || ''}
+              onChange={(e) => onChange({ customerSearch: e.target.value })}
+              className="min-h-10"
+            />
+          </div>
+          <div>
+            <SectionLabel>Also add by search</SectionLabel>
+            <InvestorMultiSelect
+              value={investorIds || []}
+              onChange={(investorIds) => onChange({ investorIds, search: '' })}
+              token={token}
+            />
+            <p className="mt-2 text-xs text-[var(--dashboard-muted)]">
+              Use branch or product filters to narrow the customer list. Select customers below, or run the report for
+              all customers in selected branches / products.
+            </p>
+          </div>
         </div>
       )}
 
@@ -579,6 +611,46 @@ export function ReportFilterBar({
                     metaKey="email"
                   />
                 </div>
+                {showIssuerScheme && (
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Issuers</label>
+                    {issuerLoading ? (
+                      <div className="text-xs text-[var(--dashboard-muted)]">Loading issuers…</div>
+                    ) : (
+                      <SearchableMultiFilterDropdown
+                        value={issuerNames || []}
+                        options={issuerOptions}
+                        onChange={(issuerNames) => onChange({ issuerNames })}
+                        filterOptions={filterIssuerOptions}
+                        formatOptionLabel={formatIssuerOptionLabel}
+                        placeholder="Search issuers"
+                        fallbackPlaceholder="Issuer names"
+                        allLabel="All issuers"
+                        emptyLabel="No matching issuer found."
+                      />
+                    )}
+                  </div>
+                )}
+                {showIssuerScheme && (
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Schemes</label>
+                    {schemeLoading ? (
+                      <div className="text-xs text-[var(--dashboard-muted)]">Loading schemes…</div>
+                    ) : (
+                      <SearchableMultiFilterDropdown
+                        value={schemeNames || []}
+                        options={schemeOptions}
+                        onChange={(schemeNames) => onChange({ schemeNames })}
+                        filterOptions={filterSchemeOptions}
+                        formatOptionLabel={formatSchemeOptionLabel}
+                        placeholder="Search schemes"
+                        fallbackPlaceholder="Scheme names"
+                        allLabel="All schemes"
+                        emptyLabel="No matching scheme found."
+                      />
+                    )}
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Products</label>
                   <ChipToggleMultiSelect
@@ -594,7 +666,11 @@ export function ReportFilterBar({
                     value={schemeCategories || []}
                     onChange={(schemeCategories) => onChange({ schemeCategories })}
                     options={schemeRows}
-                    emptyLabel="Loading scheme categories…"
+                    emptyLabel={
+                      schemeCategoriesLoading
+                        ? 'Loading scheme categories…'
+                        : 'No MF scheme categories found.'
+                    }
                   />
                 </div>
               </div>
@@ -670,13 +746,27 @@ export function ReportFilterBar({
       )}
 
       <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[var(--dashboard-border)]/60">
-        <Button type="button" onClick={onApply} disabled={!canApply}>
-          {filterProfile === 'minimal' ? 'Refresh' : 'Apply filters'}
+        <Button type="button" onClick={onApply}>
+          {filterProfile === 'minimal' ? 'Refresh' : isCustomerDetail ? 'Apply filters & load customers' : 'Apply filters'}
         </Button>
         {onReset && (
           <Button type="button" variant="secondary" onClick={onReset}>
             Reset
           </Button>
+        )}
+        {showDatesAndSearch && appliedFrom && appliedTo && (
+          <p className="text-xs text-[var(--dashboard-muted)] ml-auto">
+            Active period:{' '}
+            <span className="font-medium text-[var(--dashboard-text)] tabular-nums">
+              {appliedFrom} → {appliedTo}
+            </span>
+            {appliedDateBasis ? (
+              <span className="text-[var(--dashboard-muted)]">
+                {' '}
+                ({dateBasisOptions.find((o) => o.value === appliedDateBasis)?.label || appliedDateBasis})
+              </span>
+            ) : null}
+          </p>
         )}
       </div>
     </div>
