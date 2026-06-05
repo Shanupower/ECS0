@@ -38,7 +38,7 @@ function SectionLabel({ children }) {
 function SelectionChips({ items = [], onRemove, onClear }) {
   if (!items.length) return null
   return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
+    <div className="flex flex-wrap gap-1.5 mt-2 mb-1">
       {items.map((item) => (
         <span
           key={item.key}
@@ -105,7 +105,9 @@ function SearchableMultiFilterDropdown({
   fallbackPlaceholder,
   allLabel,
   emptyLabel,
-  metaKey = 'email'
+  metaKey = 'email',
+  showValueBadge = true,
+  disabled = false
 }) {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
@@ -130,7 +132,7 @@ function SearchableMultiFilterDropdown({
   if (!options.length) {
     return (
       <Input
-        placeholder={fallbackPlaceholder}
+        placeholder={disabled ? placeholder : fallbackPlaceholder}
         value={(value || []).join(', ')}
         onChange={(e) =>
           onChange(
@@ -140,21 +142,27 @@ function SearchableMultiFilterDropdown({
               .filter(Boolean)
           )
         }
+        disabled={disabled}
         className="min-h-10"
       />
     )
   }
 
+  const closedDisplayValue = !open && selectedOptions.length > 0 ? triggerLabel : ''
+
   return (
-    <div className="relative">
+    <div className={`relative min-w-0${disabled ? ' opacity-60 pointer-events-none' : ''}`}>
       <Input
         role="combobox"
         aria-expanded={open}
         aria-controls={listboxId}
-        placeholder={open ? placeholder : triggerLabel}
-        value={open ? query : ''}
+        placeholder={placeholder}
+        value={open ? query : closedDisplayValue}
         readOnly={!open && selectedOptions.length > 0}
+        disabled={disabled}
+        title={closedDisplayValue || undefined}
         onFocus={() => {
+          if (disabled) return
           setOpen(true)
           setQuery('')
         }}
@@ -171,7 +179,7 @@ function SearchableMultiFilterDropdown({
         onBlur={() => {
           window.setTimeout(() => setOpen(false), 150)
         }}
-        className="min-h-10 pr-16"
+        className={`min-h-10 truncate ${selectedOptions.length > 0 ? 'pr-16' : ''}`}
       />
       {selectedOptions.length > 0 && (
         <button
@@ -233,9 +241,11 @@ function SearchableMultiFilterDropdown({
                     ) : null}
                   </span>
                 </span>
-                <span className="shrink-0 rounded-md bg-[var(--dashboard-border)]/35 px-1.5 py-0.5 text-xs text-[var(--dashboard-muted)]">
-                  {option.value}
-                </span>
+                {showValueBadge && option.label !== String(option.value) ? (
+                  <span className="shrink-0 rounded-md bg-[var(--dashboard-border)]/35 px-1.5 py-0.5 text-xs text-[var(--dashboard-muted)]">
+                    {option.value}
+                  </span>
+                ) : null}
               </button>
             )
           })}
@@ -493,6 +503,7 @@ export function ReportFilterBar({
   const isCustomerDetail = filterProfile === 'customerDetail'
   const showScope = filterProfile === 'fullReceipt' || isCustomerDetail
   const showIssuerScheme = showScope && showIssuerSchemeFilters
+  const issuerSchemeRequiresProduct = showIssuerSchemeFilters && !(productCategories || []).length
   const showDatesAndSearch = filterProfile !== 'minimal'
   const completedOnly = includePending === false
   const canApply = true
@@ -532,6 +543,9 @@ export function ReportFilterBar({
               onChange={(e) => onChange({ customerSearch: e.target.value })}
               className="min-h-10"
             />
+            <p className="mt-1 text-xs text-[var(--dashboard-muted)]">
+              Type at least 2 characters — list updates automatically after Apply.
+            </p>
           </div>
           <p className="text-xs text-[var(--dashboard-muted)]">
             Use branch or product filters to narrow the customer list. Select customers below, or run the report for all
@@ -618,9 +632,11 @@ export function ReportFilterBar({
                   />
                 </div>
                 {showIssuerScheme && (
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Issuers</label>
-                    {issuerLoading ? (
+                    {issuerSchemeRequiresProduct ? (
+                      <div className="text-xs text-[var(--dashboard-muted)]">Select a product to load issuers and schemes.</div>
+                    ) : issuerLoading ? (
                       <div className="text-xs text-[var(--dashboard-muted)]">Loading issuers…</div>
                     ) : (
                       <SearchableMultiFilterDropdown
@@ -633,14 +649,18 @@ export function ReportFilterBar({
                         fallbackPlaceholder="Issuer names"
                         allLabel="All issuers"
                         emptyLabel="No matching issuer found."
+                        showValueBadge={false}
+                        disabled={issuerSchemeRequiresProduct}
                       />
                     )}
                   </div>
                 )}
                 {showIssuerScheme && (
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Schemes</label>
-                    {schemeLoading ? (
+                    {issuerSchemeRequiresProduct ? (
+                      <div className="text-xs text-[var(--dashboard-muted)]">Select a product to load issuers and schemes.</div>
+                    ) : schemeLoading ? (
                       <div className="text-xs text-[var(--dashboard-muted)]">Loading schemes…</div>
                     ) : (
                       <SearchableMultiFilterDropdown
@@ -653,6 +673,8 @@ export function ReportFilterBar({
                         fallbackPlaceholder="Scheme names"
                         allLabel="All schemes"
                         emptyLabel="No matching scheme found."
+                        showValueBadge={false}
+                        disabled={issuerSchemeRequiresProduct}
                       />
                     )}
                   </div>

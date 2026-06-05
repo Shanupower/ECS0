@@ -105,6 +105,19 @@ function ServerPager({ page, pageSize, total, onChange }) {
 
 const AGGREGATE_TOTAL_FIELDS = ['applications', 'amount', 'collection_credit', 'incentive_amount']
 
+const SERVER_PAGED_SLUGS = new Set([
+  'mis-transactions',
+  'product-detail',
+  'sip-report',
+  'fd-maturity',
+  'pending-receipts',
+  'customer-detail'
+])
+
+function isServerPaged(reportSlug, groupBy) {
+  return SERVER_PAGED_SLUGS.has(reportSlug) && !(reportSlug === 'mis-transactions' && groupBy)
+}
+
 function visibleMetricFields(fields, { hideCc, hideSi }) {
   return fields.filter((field) => {
     if (hideCc && field === 'collection_credit') return false
@@ -302,6 +315,7 @@ export default function AnalyticsReportPage() {
   const [schemeCategoriesLoading, setSchemeCategoriesLoading] = React.useState(true)
   const [issuerNames, setIssuerNames] = React.useState([])
   const [schemeNames, setSchemeNames] = React.useState([])
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = React.useState('')
   const branchOptions = React.useMemo(() => buildBranchOptions(branches), [branches])
   const rmOptions = React.useMemo(() => buildRmOptions(users), [users])
   const issuerOptions = React.useMemo(() => buildIssuerOptions(issuerNames), [issuerNames])
@@ -329,6 +343,7 @@ export default function AnalyticsReportPage() {
     setAppliedF(defaults)
     setPage(1)
     setCustomerListPage(1)
+    setDebouncedCustomerSearch('')
     setPayload(null)
     setCustomerList(null)
     setFetchNonce((n) => n + 1)
@@ -353,16 +368,20 @@ export default function AnalyticsReportPage() {
         setSchemeCategoryOptions(
           Array.isArray(filterOpts?.scheme_categories) ? filterOpts.scheme_categories : []
         )
-        setIssuerNames(Array.isArray(filterOpts?.issuer_names) ? filterOpts.issuer_names : [])
-        setSchemeNames(Array.isArray(filterOpts?.scheme_names) ? filterOpts.scheme_names : [])
+        if (slug !== 'product-detail') {
+          setIssuerNames(Array.isArray(filterOpts?.issuer_names) ? filterOpts.issuer_names : [])
+          setSchemeNames(Array.isArray(filterOpts?.scheme_names) ? filterOpts.scheme_names : [])
+        }
       })
       .catch(() => {
         if (!cancelled) {
           setUsers([])
           setBranches([])
           setSchemeCategoryOptions([])
-          setIssuerNames([])
-          setSchemeNames([])
+          if (slug !== 'product-detail') {
+            setIssuerNames([])
+            setSchemeNames([])
+          }
         }
       })
       .finally(() => {
@@ -371,16 +390,30 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, slug])
 
   React.useEffect(() => {
     if (slug !== 'product-detail' || !token) return
     let cancelled = false
     const categories = (f.productCategories || []).filter(Boolean)
-    const query =
-      categories.length > 0 ? { product_categories: categories.join(',') } : undefined
+    if (!categories.length) {
+      setIssuerNames([])
+      setSchemeNames([])
+      setF((prev) => ({
+        ...prev,
+        issuerNames: [],
+        schemeNames: []
+      }))
+      return undefined
+    }
+    const selectedIssuers = (f.issuerNames || []).filter(Boolean)
+    const selectedSchemes = (f.schemeNames || []).filter(Boolean)
+    const filterQuery = { product_categories: categories.join(',') }
+    if (selectedIssuers.length) filterQuery.issuer_names = selectedIssuers.join(',')
+    if (selectedSchemes.length) filterQuery.scheme_names = selectedSchemes.join(',')
+
     api
-      .reportsFilterOptions(token, query)
+      .reportsFilterOptions(token, filterQuery)
       .then((filterOpts) => {
         if (cancelled) return
         const nextIssuers = Array.isArray(filterOpts?.issuer_names) ? filterOpts.issuer_names : []
@@ -402,7 +435,21 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [slug, token, f.productCategories])
+  }, [slug, token, f.productCategories, f.issuerNames, f.schemeNames])
+
+  React.useEffect(() => {
+    const raw = String(f.customerSearch || '').trim()
+    const normalized = raw.length >= 2 ? raw : ''
+    const timer = window.setTimeout(() => {
+      setDebouncedCustomerSearch(normalized)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [f.customerSearch])
+
+  React.useEffect(() => {
+    if (slug !== 'customer-detail') return
+    setCustomerListPage(1)
+  }, [slug, debouncedCustomerSearch])
 
   const apply = React.useCallback(() => {
     setAppliedF(f)
@@ -427,7 +474,10 @@ export default function AnalyticsReportPage() {
       setListLoading(true)
       try {
         const skipCount = customerListPage > 1 && customerList?.total != null
-        const listQ = filtersToCustomerListQuery(appliedF, { customerPage: customerListPage, skipCount })
+        const listQ = filtersToCustomerListQuery(
+          { ...appliedF, customerSearch: debouncedCustomerSearch },
+          { customerPage: customerListPage, skipCount }
+        )
         const listData = await api.reportsCustomerDetailCustomers(token, listQ)
         if (!cancelled) {
           setCustomerList((prev) => ({
@@ -445,7 +495,7 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [token, slug, appliedF, customerListPage, fetchNonce])
+  }, [token, slug, appliedF, customerListPage, fetchNonce, debouncedCustomerSearch])
 
   React.useEffect(() => {
     if (!token || !slug) return
@@ -879,9 +929,11 @@ export default function AnalyticsReportPage() {
                 pageSize={25}
                 totalRows={txnTotalRows}
                 formatTotalValue={formatReportTotalValue}
-                manualPagination
+                manualPagination={isServerPaged(slug)}
               />
-              <ServerPager page={page} pageSize={25} total={txnTotal} onChange={setPage} />
+              {isServerPaged(slug) && (
+                <ServerPager page={page} pageSize={25} total={txnTotal} onChange={setPage} />
+              )}
             </div>
           </div>
         )}
@@ -1132,8 +1184,8 @@ export default function AnalyticsReportPage() {
         ch.accessor('branch', { header: 'Branch' }),
         ch.accessor('receipt_number', { header: 'Receipt #' }),
         ch.accessor('investor_name', { header: 'Investor' }),
-        ch.accessor('scheme_name', { header: 'Scheme' }),
         ch.accessor('issuer', { header: 'Issuer' }),
+        ch.accessor('scheme_name', { header: 'Scheme' }),
         ch.accessor('period', { header: 'Period', cell: (c) => formatReportCell(c.getValue()) }),
         ch.accessor('months', {
           header: 'Months',
@@ -1333,17 +1385,12 @@ export default function AnalyticsReportPage() {
               pageSize={25}
               totalRows={totalRows}
               formatTotalValue={formatReportTotalValue}
-              manualPagination={
-                slug === 'mis-transactions' ||
-                slug === 'product-detail' ||
-                slug === 'sip-report' ||
-                slug === 'fd-maturity' ||
-                slug === 'pending-receipts'
-              }
+              manualPagination={isServerPaged(slug, groupBy)}
             />
           )}
-          {(slug === 'mis-transactions' || slug === 'product-detail' || slug === 'sip-report' || slug === 'fd-maturity' || slug === 'pending-receipts') &&
-            !groupBy && <ServerPager page={page} pageSize={25} total={total} onChange={setPage} />}
+          {isServerPaged(slug, groupBy) && (
+            <ServerPager page={page} pageSize={25} total={total} onChange={setPage} />
+          )}
         </>
       )}
     </ReportShell>

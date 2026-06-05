@@ -24,6 +24,7 @@ export function ReportDataTable({
     getCoreRowModel: getCoreRowModel(),
     ...(manualPagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
     getSortedRowModel: getSortedRowModel(),
+    manualPagination,
     initialState: { pagination: { pageSize } }
   })
 
