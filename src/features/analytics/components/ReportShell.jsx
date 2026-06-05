@@ -15,13 +15,14 @@ export function ReportDataTable({
   data,
   pageSize = 25,
   totalRows = [],
-  formatTotalValue = (_field, value) => value
+  formatTotalValue = (_field, value) => value,
+  manualPagination = false
 }) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    ...(manualPagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
     getSortedRowModel: getSortedRowModel(),
     initialState: { pagination: { pageSize } }
   })
@@ -82,31 +83,33 @@ export function ReportDataTable({
           </table>
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--dashboard-muted)]">
-        <span>
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-        </span>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!table.getCanPreviousPage()}
-            onClick={() => table.previousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!table.getCanNextPage()}
-            onClick={() => table.nextPage()}
-          >
-            Next
-          </Button>
+      {!manualPagination && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--dashboard-muted)]">
+          <span>
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+            >
+              Next
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

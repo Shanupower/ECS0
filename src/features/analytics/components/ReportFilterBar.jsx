@@ -484,6 +484,8 @@ export function ReportFilterBar({
   issuerLoading = false,
   schemeLoading = false,
   showIssuerSchemeFilters = false,
+  showFundSearch = false,
+  fundSearch = '',
   appliedFrom = '',
   appliedTo = '',
   appliedDateBasis = ''
@@ -531,18 +533,22 @@ export function ReportFilterBar({
               className="min-h-10"
             />
           </div>
-          <div>
-            <SectionLabel>Also add by search</SectionLabel>
-            <InvestorMultiSelect
-              value={investorIds || []}
-              onChange={(investorIds) => onChange({ investorIds, search: '' })}
-              token={token}
-            />
-            <p className="mt-2 text-xs text-[var(--dashboard-muted)]">
-              Use branch or product filters to narrow the customer list. Select customers below, or run the report for
-              all customers in selected branches / products.
-            </p>
-          </div>
+          <p className="text-xs text-[var(--dashboard-muted)]">
+            Use branch or product filters to narrow the customer list. Select customers below, or run the report for all
+            customers in selected branches / products.
+          </p>
+        </div>
+      )}
+
+      {showFundSearch && (
+        <div>
+          <SectionLabel>Search funds</SectionLabel>
+          <Input
+            placeholder="Filter by fund name"
+            value={fundSearch || ''}
+            onChange={(e) => onChange({ fundSearch: e.target.value })}
+            className="min-h-10"
+          />
         </div>
       )}
 

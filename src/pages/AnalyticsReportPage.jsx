@@ -373,6 +373,37 @@ export default function AnalyticsReportPage() {
     }
   }, [token])
 
+  React.useEffect(() => {
+    if (slug !== 'product-detail' || !token) return
+    let cancelled = false
+    const categories = (f.productCategories || []).filter(Boolean)
+    const query =
+      categories.length > 0 ? { product_categories: categories.join(',') } : undefined
+    api
+      .reportsFilterOptions(token, query)
+      .then((filterOpts) => {
+        if (cancelled) return
+        const nextIssuers = Array.isArray(filterOpts?.issuer_names) ? filterOpts.issuer_names : []
+        const nextSchemes = Array.isArray(filterOpts?.scheme_names) ? filterOpts.scheme_names : []
+        setIssuerNames(nextIssuers)
+        setSchemeNames(nextSchemes)
+        setF((prev) => ({
+          ...prev,
+          issuerNames: (prev.issuerNames || []).filter((name) => nextIssuers.includes(name)),
+          schemeNames: (prev.schemeNames || []).filter((name) => nextSchemes.includes(name))
+        }))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIssuerNames([])
+          setSchemeNames([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [slug, token, f.productCategories])
+
   const apply = React.useCallback(() => {
     setAppliedF(f)
     setPage(1)
@@ -848,6 +879,7 @@ export default function AnalyticsReportPage() {
                 pageSize={25}
                 totalRows={txnTotalRows}
                 formatTotalValue={formatReportTotalValue}
+                manualPagination
               />
               <ServerPager page={page} pageSize={25} total={txnTotal} onChange={setPage} />
             </div>
@@ -1044,8 +1076,13 @@ export default function AnalyticsReportPage() {
     )
   }
 
-  const rows = payload?.rows || payload?.items || []
-  const total = payload?.total ?? rows.length
+  const rawRows = payload?.rows || payload?.items || []
+  const fundQuery = String(f.fundSearch || '').trim().toLowerCase()
+  const rows =
+    slug === 'mf-fund' && fundQuery
+      ? rawRows.filter((row) => String(row.fund_name || '').toLowerCase().includes(fundQuery))
+      : rawRows
+  const total = payload?.total ?? rawRows.length
   const groupBy = payload?.group_by
 
   const ch = createColumnHelper()
@@ -1096,6 +1133,7 @@ export default function AnalyticsReportPage() {
         ch.accessor('receipt_number', { header: 'Receipt #' }),
         ch.accessor('investor_name', { header: 'Investor' }),
         ch.accessor('scheme_name', { header: 'Scheme' }),
+        ch.accessor('issuer', { header: 'Issuer' }),
         ch.accessor('period', { header: 'Period', cell: (c) => formatReportCell(c.getValue()) }),
         ch.accessor('months', {
           header: 'Months',
@@ -1118,7 +1156,8 @@ export default function AnalyticsReportPage() {
         }),
         ch.accessor('application_number', { header: 'Application #' }),
         ch.accessor('emp_code', { header: 'RM' }),
-        ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) })
+        ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
+        ch.accessor('status', { header: 'Status' })
       ]
     }
   } else if (slug === 'mf-fund') {
@@ -1168,7 +1207,7 @@ export default function AnalyticsReportPage() {
     ]
   } else if (slug === 'pending-receipts') {
     columns = [
-      ch.accessor('receipt_id', { header: 'Receipt ID' }),
+      ch.accessor('receipt_number', { header: 'Receipt #' }),
       ch.accessor('client_name', { header: 'Client' }),
       ch.accessor('product_type', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
@@ -1192,8 +1231,8 @@ export default function AnalyticsReportPage() {
       ch.accessor('frequency', { header: 'Frequency' }),
       ch.accessor('period', { header: 'Period', cell: (c) => formatReportCell(c.getValue()) }),
       ch.accessor('months', { header: 'Month', cell: (c) => formatReportCell(c.getValue()) }),
-      ch.accessor('start_date', { header: 'Start' }),
-      ch.accessor('end_date', { header: 'End' }),
+      ch.accessor('start_date', { header: 'Start', cell: (c) => formatReportDate(c.getValue()) }),
+      ch.accessor('end_date', { header: 'End', cell: (c) => formatReportDate(c.getValue()) }),
       ch.accessor('branch_code', { header: 'Branch Code' }),
       ch.accessor('emp_code', { header: 'RM' }),
       ch.accessor('status', { header: 'Status' })
@@ -1252,6 +1291,8 @@ export default function AnalyticsReportPage() {
           showGroupBy={slug === 'mis-transactions'}
           showIncludePending={slug !== 'pending-receipts'}
             showIssuerSchemeFilters={slug === 'product-detail'}
+            showFundSearch={slug === 'mf-fund'}
+            fundSearch={f.fundSearch}
             issuerOptions={issuerOptions}
             schemeOptions={schemeOptions}
             issuerLoading={schemeCategoriesLoading}
@@ -1292,6 +1333,13 @@ export default function AnalyticsReportPage() {
               pageSize={25}
               totalRows={totalRows}
               formatTotalValue={formatReportTotalValue}
+              manualPagination={
+                slug === 'mis-transactions' ||
+                slug === 'product-detail' ||
+                slug === 'sip-report' ||
+                slug === 'fd-maturity' ||
+                slug === 'pending-receipts'
+              }
             />
           )}
           {(slug === 'mis-transactions' || slug === 'product-detail' || slug === 'sip-report' || slug === 'fd-maturity' || slug === 'pending-receipts') &&

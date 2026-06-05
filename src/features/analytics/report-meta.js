@@ -87,7 +87,7 @@ function toLocalYmd(date) {
 
 export function defaultDateRange() {
   const to = new Date()
-  const from = new Date(to.getFullYear() - 2, to.getMonth(), 1)
+  const from = new Date(to.getFullYear(), 0, 1)
   return {
     from: toLocalYmd(from),
     to: toLocalYmd(to)
@@ -124,7 +124,8 @@ export function getInitialReportFilters(slug) {
     hideSi: false,
     viewMode: '',
     customerSearch: '',
-    customerSort: 'name:asc'
+    customerSort: 'name:asc',
+    fundSearch: ''
   }
 }
 
