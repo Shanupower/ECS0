@@ -418,7 +418,7 @@ export default function ClientManagementPage() {
       fetchCustomers(currentPage, searchTerm)
     } catch (err) {
       const msg = err.errorType === 'duplicate_pan'
-        ? 'PAN number already exists'
+        ? 'PAN card already exists'
         : (err.detail || err.message || 'Failed to create client')
       setError(msg)
     } finally {
@@ -589,6 +589,7 @@ export default function ClientManagementPage() {
     setShowViewModal(false)
     setSelectedCustomer(null)
     setDeletingMediaId(null)
+    setError('')
     resetForm()
   }
 
@@ -673,11 +674,11 @@ export default function ClientManagementPage() {
   }, [])
 
   useEffect(() => {
-    if (error || success) {
+    if ((error || success) && !showAddModal && !showEditModal) {
       const timer = setTimeout(clearMessages, 5000)
       return () => clearTimeout(timer)
     }
-  }, [error, success])
+  }, [error, success, showAddModal, showEditModal])
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -1098,6 +1099,7 @@ export default function ClientManagementPage() {
           onClose={closeModals}
           loading={loading}
           error={error}
+          onClearError={() => setError('')}
           pincodeLoading={pincodeLoading}
           pincodeSuggestions={pincodeSuggestions}
           showPincodeDropdown={showPincodeDropdown}
@@ -1121,6 +1123,7 @@ export default function ClientManagementPage() {
           onClose={closeModals}
           loading={loading}
           error={error}
+          onClearError={() => setError('')}
           pincodeLoading={pincodeLoading}
           pincodeSuggestions={pincodeSuggestions}
           showPincodeDropdown={showPincodeDropdown}
@@ -1158,6 +1161,7 @@ function CustomerModal({
   onClose, 
   loading,
   error = '',
+  onClearError,
   pincodeLoading, 
   pincodeSuggestions, 
   showPincodeDropdown, 
@@ -1177,6 +1181,7 @@ function CustomerModal({
 
   const handleChange = (e) => {
     const { name, value } = e.target
+    if (name === 'pan' && onClearError) onClearError()
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -1205,12 +1210,6 @@ function CustomerModal({
         </div>
         
         <form onSubmit={onSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start">
-              <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
-            </div>
-          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">
@@ -1253,7 +1252,10 @@ function CustomerModal({
                 type="text"
                 name="pan"
                 value={formData.pan}
-                onChange={(e) => setFormData(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))}
+                onChange={(e) => {
+                  if (onClearError) onClearError()
+                  setFormData(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))
+                }}
                 pattern={getPattern('pan')}
                 maxLength="10"
                 title={getTitle('pan')}
@@ -1902,7 +1904,14 @@ function CustomerModal({
             )}
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="pt-4 border-t border-[var(--dashboard-border)] space-y-3">
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                <FiAlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            <div className="flex justify-end space-x-3">
             <button
               type="button"
               onClick={onClose}
@@ -1917,6 +1926,7 @@ function CustomerModal({
             >
               {loading ? 'Saving...' : 'Save'}
             </button>
+            </div>
           </div>
         </form>
       </div>

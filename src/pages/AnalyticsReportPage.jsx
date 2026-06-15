@@ -1238,7 +1238,11 @@ export default function AnalyticsReportPage() {
         }),
         ch.accessor('sip_start_date', { header: 'SIP Start', cell: (c) => formatReportDate(c.getValue()) }),
         ch.accessor('sip_end_date', { header: 'SIP End', cell: (c) => formatReportDate(c.getValue()) }),
-        ch.accessor('fd_maturity_date', { header: 'FD Maturity', cell: (c) => formatReportDate(c.getValue()) }),
+        ch.accessor((row) => row.maturity_date ?? row.fd_maturity_date, {
+          id: 'maturity_date',
+          header: 'Maturity date',
+          cell: (c) => formatReportDate(c.getValue())
+        }),
         ch.accessor('fd_tenure', { header: 'FD Tenure', cell: (c) => formatReportCell(c.getValue()) }),
         ch.accessor('transaction_type', { header: 'Txn type' }),
         ch.accessor('investment_amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),

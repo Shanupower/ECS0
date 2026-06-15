@@ -404,8 +404,8 @@ export default function DashboardPage() {
       ]
 
   const allBranchesTargetSummary = useMemo(() => {
-    if (!branchStats?.branches?.length) return null
-    const branches = branchStats.branches
+    if (!branchStats) return null
+    const branches = Array.isArray(branchStats.branches) ? branchStats.branches : []
     const monthlySum =
       branchStats.total_monthly_target != null && branchStats.total_monthly_target !== ''
         ? toSafeNumber(branchStats.total_monthly_target)

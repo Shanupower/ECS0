@@ -440,7 +440,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     // Reset to page 1 when any filter changes
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max])
+  }, [filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max, viewScope])
 
   // Clear URL search params once after reading (dashboard click-filter) so address bar stays clean
   useEffect(() => {
@@ -452,7 +452,7 @@ export default function TransactionsPage() {
     loadReceipts()
     loadSummary()
     loadDrafts()
-  }, [token, filters.from, filters.to, dateBasis, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
+  }, [token, filters.from, filters.to, dateBasis, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page, viewScope])
 
   // Check for success/error messages from receipt creation
   useEffect(() => {

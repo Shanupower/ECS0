@@ -190,12 +190,48 @@ export function DailyTimelineWidget({ dailyStats, formatCurrency, formatDate }) 
 
 export function BranchPerformanceWidget({
   allBranchesTargetSummary,
+  targetLoading,
   dateRange,
   formatCurrency,
   scaleMonthlyTargetToDateRange,
   toSafeNumber,
   openBranchBreakdown
 }) {
+  if (targetLoading) {
+    return (
+      <Card
+        padding="lg"
+        hover
+        className="dashboard-widget-card dashboard-widget-branch-performance animate-dashboard-widget h-full min-h-0 flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center mb-4">
+          <FiMapPin className="w-5 h-5 text-[var(--accent)] mr-2" />
+          <h3 className="text-title font-semibold text-[var(--text)]">Branch Performance Overview</h3>
+        </div>
+        <div className="text-center py-12 text-[var(--text-muted)]">Loading branch performance…</div>
+      </Card>
+    )
+  }
+
+  if (!allBranchesTargetSummary) {
+    return (
+      <Card
+        padding="lg"
+        hover
+        className="dashboard-widget-card dashboard-widget-branch-performance animate-dashboard-widget h-full min-h-0 flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center mb-4">
+          <FiMapPin className="w-5 h-5 text-[var(--accent)] mr-2" />
+          <h3 className="text-title font-semibold text-[var(--text)]">Branch Performance Overview</h3>
+        </div>
+        <div className="text-center py-12 text-[var(--text-muted)]">
+          <FiMapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No branch data available for this period.</p>
+        </div>
+      </Card>
+    )
+  }
+
   const { branches, totalTarget, totalCc, overallPct } = allBranchesTargetSummary
   return (
     <Card
