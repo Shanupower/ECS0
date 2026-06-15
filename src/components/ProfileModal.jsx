@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import { FiUser, FiMail, FiPhone, FiLock, FiX, FiAlertCircle } from 'react-icons/fi'
+import { FiUser, FiMail, FiPhone, FiLock, FiX, FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi'
 import { Modal } from './ui/Modal'
 
 export default function ProfileModal({ isOpen, onClose }) {
@@ -20,6 +20,9 @@ export default function ProfileModal({ isOpen, onClose }) {
   const [impEmpCode, setImpEmpCode] = useState('')
   const [impError, setImpError] = useState('')
   const [impLoading, setImpLoading] = useState(false)
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   useEffect(() => {
     if (isOpen && user) {
@@ -183,37 +186,70 @@ export default function ProfileModal({ isOpen, onClose }) {
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">Current password</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="Current password"
-                  autoComplete="current-password"
-                />
+                <div className="relative">
+                  <input
+                    type={showCurrent ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full min-h-11 pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="Current password"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrent(v => !v)}
+                    className="absolute inset-y-0 right-0 min-w-11 pr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
+                    aria-label={showCurrent ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showCurrent ? <FiEyeOff className="h-4 w-4" /> : <FiEye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">New password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="At least 8 characters (uppercase, lowercase, number)"
-                  autoComplete="new-password"
-                  minLength={8}
-                />
+                <div className="relative">
+                  <input
+                    type={showNew ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full min-h-11 pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="At least 8 characters (uppercase, lowercase, number)"
+                    autoComplete="new-password"
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNew(v => !v)}
+                    className="absolute inset-y-0 right-0 min-w-11 pr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
+                    aria-label={showNew ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showNew ? <FiEyeOff className="h-4 w-4" /> : <FiEye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-dark-300 mb-1">Confirm new password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="Confirm new password"
-                  autoComplete="new-password"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full min-h-11 pl-3 pr-10 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(v => !v)}
+                    className="absolute inset-y-0 right-0 min-w-11 pr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-dark-300 dark:hover:text-white focus:outline-none"
+                    aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showConfirm ? <FiEyeOff className="h-4 w-4" /> : <FiEye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               {passwordError && (
                 <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">

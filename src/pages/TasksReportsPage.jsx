@@ -180,7 +180,7 @@ export default function TasksReportsPage() {
             <tbody>
               {(data?.by_branch || []).map((r) => (
                 <tr key={r.branch || 'none'} className="border-t border-[var(--stroke)]">
-                  <td className="py-1 pr-2 text-[var(--text-primary)]">{r.branch || '—'}</td>
+                  <td className="py-1 pr-2 text-[var(--text-primary)]">{r.branch_name || r.branch || '—'}</td>
                   <td className="py-1 pr-2 text-[var(--text-primary)]">{r.total}</td>
                   <td className="py-1 pr-2 text-[var(--text-primary)]">{r.open}</td>
                   <td className="py-1 pr-2 text-emerald-600">{r.completed}</td>

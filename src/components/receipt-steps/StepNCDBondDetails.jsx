@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
+import { blockWheelOnNumberInput } from '../../utils/blockWheelOnNumberInput.js'
 
 export default function StepNCDBondDetails({ onBack, onNext, token, issuer, scheme, initialData }) {
   const todayYyyyMmDd = new Date().toISOString().split('T')[0]
@@ -20,25 +21,18 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
     setTenureMonths((prev) => (prev === '' ? String(scheme.tenure_months) : prev))
   }, [scheme?.scheme_id, scheme?.tenure_months])
 
-  // Determine if it's NCD or Bond based on issuer type
   const isNCD = issuer?.type === 'NCD' || issuer?.type?.toUpperCase() === 'NCD'
   const unitLabel = isNCD ? 'NCDs' : 'Bonds'
+  const amountLocked = !!(scheme?.face_value && numberOfUnits && parseFloat(numberOfUnits) > 0)
 
-  // Bidirectional sync: units <-> amount (vice versa) when face_value is available
   const handleUnitsChange = (e) => {
     const val = e.target.value
     setNumberOfUnits(val)
     if (scheme?.face_value && val) {
       const amount = parseFloat(val) * scheme.face_value
       setInvestmentAmount(amount.toString())
-    }
-  }
-  const handleAmountChange = (e) => {
-    const val = e.target.value
-    setInvestmentAmount(val)
-    if (scheme?.face_value && val) {
-      const units = Math.floor(parseFloat(val) / scheme.face_value)
-      setNumberOfUnits(units > 0 ? units.toString() : '')
+    } else if (!val) {
+      setInvestmentAmount('')
     }
   }
 
@@ -74,22 +68,19 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
 
   const canProceed = () => {
     if (!transactionType || !transactionDate || !applicationNumber) return false
-    
+
     if (transactionType === 'Purchase') {
-      // For purchase, need either units or amount
       if (!numberOfUnits && !investmentAmount) return false
       if (numberOfUnits && parseFloat(numberOfUnits) <= 0) return false
       if (investmentAmount && parseFloat(investmentAmount) <= 0) return false
-      
-      // Check min investment if specified
+
       if (scheme?.min_investment && investmentAmount && parseFloat(investmentAmount) < scheme.min_investment) {
         return false
       }
     } else if (transactionType === 'Redemption') {
-      // For redemption, need units
       if (!numberOfUnits || parseFloat(numberOfUnits) <= 0) return false
     }
-    
+
     return true
   }
 
@@ -99,7 +90,6 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Enter transaction details</p>
 
       <div className="space-y-6">
-        {/* Transaction Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Transaction Type <span className="text-red-500">*</span>
@@ -114,7 +104,6 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           </select>
         </div>
 
-        {/* Transaction Date */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Transaction Date <span className="text-red-500">*</span>
@@ -128,7 +117,6 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           />
         </div>
 
-        {/* Tenure (months) — stored on receipt for PDF/history */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Tenure (months)
@@ -139,12 +127,12 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
             step={1}
             value={tenureMonths}
             onChange={(e) => setTenureMonths(e.target.value)}
+            onWheel={blockWheelOnNumberInput}
             placeholder="e.g. 36"
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
-        {/* Application Number */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Application Number <span className="text-red-500">*</span>
@@ -159,7 +147,6 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           />
         </div>
 
-        {/* Number of Units */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Number of {unitLabel} {transactionType === 'Redemption' && <span className="text-red-500">*</span>}
@@ -173,6 +160,7 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
             type="number"
             value={numberOfUnits}
             onChange={handleUnitsChange}
+            onWheel={blockWheelOnNumberInput}
             placeholder={`Enter number of ${unitLabel.toLowerCase()}`}
             min="0"
             step="1"
@@ -186,34 +174,36 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           )}
         </div>
 
-        {/* Investment Amount */}
         {transactionType === 'Purchase' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Investment Amount (₹) <span className="text-red-500">*</span>
+              {amountLocked && (
+                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Auto-calculated from units × face value)</span>
+              )}
             </label>
             <input
               type="number"
               value={investmentAmount}
-              onChange={handleAmountChange}
+              readOnly={amountLocked}
+              onChange={amountLocked ? undefined : (e) => setInvestmentAmount(e.target.value)}
+              onWheel={blockWheelOnNumberInput}
               placeholder="Enter investment amount"
               min={scheme?.min_investment || 0}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                amountLocked
+                  ? 'bg-gray-50 dark:bg-gray-900/50 cursor-not-allowed'
+                  : 'bg-white dark:bg-gray-800'
+              }`}
             />
             {scheme?.min_investment && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Min Investment: ₹{scheme.min_investment.toLocaleString()}
               </p>
             )}
-            {scheme?.face_value && investmentAmount && numberOfUnits && (
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                Calculated {unitLabel}: {Math.floor(parseFloat(investmentAmount) / scheme.face_value)}
-              </p>
-            )}
           </div>
         )}
 
-        {/* Scheme Details Card */}
         <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border-2 border-blue-300 dark:border-blue-700">
           <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Scheme Details</h4>
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -266,7 +256,6 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
           </div>
         </div>
 
-        {/* TDS / Form 15G/15H */}
         <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">TDS Information</span>
@@ -299,4 +288,3 @@ export default function StepNCDBondDetails({ onBack, onNext, token, issuer, sche
     </div>
   )
 }
-

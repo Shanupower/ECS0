@@ -27,6 +27,7 @@ import {
   formatSchemeOptionLabel,
   toggleListValue
 } from '../lib/report-filters.js'
+import { RECEIPT_ERROR_TYPE_OPTIONS } from '../report-meta.js'
 import { api } from '../../../api.js'
 
 function SectionLabel({ children }) {
@@ -455,6 +456,7 @@ function InvestorMultiSelect({ value = [], selectedOptions = [], onChange, token
  *   appliedFrom?: string
  *   appliedTo?: string
  *   appliedDateBasis?: string
+ *   allowedFilters?: string[]
  * }} props
  */
 export function ReportFilterBar({
@@ -496,12 +498,18 @@ export function ReportFilterBar({
   showIssuerSchemeFilters = false,
   showFundSearch = false,
   fundSearch = '',
+  showErrorTypeFilter = false,
+  errorTypes = [],
   appliedFrom = '',
   appliedTo = '',
-  appliedDateBasis = ''
+  appliedDateBasis = '',
+  allowedFilters
 }) {
   const isCustomerDetail = filterProfile === 'customerDetail'
-  const showScope = filterProfile === 'fullReceipt' || isCustomerDetail
+  const canBranchFilter = !allowedFilters || allowedFilters.includes('branch_codes')
+  const canEmpFilter = !allowedFilters || allowedFilters.includes('emp_codes')
+  const showScope =
+    (filterProfile === 'fullReceipt' || isCustomerDetail) && (canBranchFilter || canEmpFilter)
   const showIssuerScheme = showScope && showIssuerSchemeFilters
   const issuerSchemeRequiresProduct = showIssuerSchemeFilters && !(productCategories || []).length
   const showDatesAndSearch = filterProfile !== 'minimal'
@@ -600,7 +608,8 @@ export function ReportFilterBar({
           {showScope && (
             <div>
               <SectionLabel>Scope</SectionLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={`grid grid-cols-1 ${canBranchFilter && canEmpFilter ? 'sm:grid-cols-2' : ''} gap-3`}>
+                {canBranchFilter && (
                 <div>
                   <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Branches</label>
                   <SearchableMultiFilterDropdown
@@ -616,6 +625,8 @@ export function ReportFilterBar({
                     metaKey="type"
                   />
                 </div>
+                )}
+                {canEmpFilter && (
                 <div>
                   <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Employees</label>
                   <SearchableMultiFilterDropdown
@@ -631,6 +642,7 @@ export function ReportFilterBar({
                     metaKey="email"
                   />
                 </div>
+                )}
                 {showIssuerScheme && (
                   <div className="min-w-0">
                     <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Issuers</label>
@@ -738,6 +750,21 @@ export function ReportFilterBar({
           </div>
           )}
         </>
+      )}
+
+      {showErrorTypeFilter && (
+        <div>
+          <SectionLabel>Error types</SectionLabel>
+          <ChipToggleMultiSelect
+            value={errorTypes || []}
+            onChange={(next) => onChange({ errorTypes: next })}
+            options={RECEIPT_ERROR_TYPE_OPTIONS}
+            emptyLabel="No error types configured."
+          />
+          <p className="mt-2 text-xs text-[var(--dashboard-muted)]">
+            Leave empty to show all error types. Select one or more to narrow the report.
+          </p>
+        </div>
       )}
 
       {showIncludePending && showScope && (

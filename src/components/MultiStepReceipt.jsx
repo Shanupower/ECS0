@@ -1017,7 +1017,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create customer')
+        throw new Error(errorData.detail || errorData.error || 'Failed to create customer')
       }
       
       const result = await response.json()
@@ -2929,7 +2929,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
               ...base,
               ...cleanNormalized,
               product_category: 'INS',
-              investment_amount: insuranceAmount
+              investment_amount: insuranceAmount,
+              txn_type: cleanNormalized.txnType || cleanNormalized.txn_type || 'Fresh'
             }
             setFinalData(merged)
             setStep(7)

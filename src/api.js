@@ -227,6 +227,8 @@ export const api={
 
   // Tasks endpoints (redesigned)
   listTasks:(t,q)=>req('/api/tasks',{token:t,query:q}),
+  getApprovalsQueue:(t)=>req('/api/approvals/queue',{token:t}),
+  getApprovalsSummary:(t)=>req('/api/approvals/summary',{token:t}),
   searchTasks:(t,body)=>req('/api/tasks/search',{method:'POST',token:t,json:body}),
   getTasksStats:(t)=>req('/api/tasks/stats',{token:t}),
   getMyTasks:(t)=>req('/api/tasks/my',{token:t}),
@@ -585,6 +587,7 @@ export const api={
   reportsSipReport:(t,q)=>req('/api/reports/sip-report',{token:t,query:q}),
   reportsFdMaturity:(t,q)=>req('/api/reports/fd-maturity',{token:t,query:q}),
   reportsPendingReceipts:(t,q)=>req('/api/reports/pending-receipts',{token:t,query:q}),
+  reportsReceiptErrors:(t,q)=>req('/api/reports/receipt-errors',{token:t,query:q}),
   reportsCustomerDetail:(t,q)=>req('/api/reports/customer-detail',{token:t,query:q}),
   reportsCustomerDetailCustomers:(t,q)=>req('/api/reports/customer-detail/customers',{token:t,query:q}),
   reportsCustomerDetailCustomerIds:(t,q)=>req('/api/reports/customer-detail/customers',{token:t,query:{...q,ids_only:'1'}})

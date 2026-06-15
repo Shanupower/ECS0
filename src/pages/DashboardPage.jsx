@@ -5,7 +5,6 @@ import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
 import { Card, Button, SegmentedControl, Switch, Skeleton } from '../components/ui'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
-import DashboardWidgetGrid from '../features/dashboard/DashboardWidgetGrid.jsx'
 import DashboardStaticLayout from '../features/dashboard/DashboardStaticLayout.jsx'
 import { renderDashboardWidget } from '../features/dashboard/widgets/index.jsx'
 import {
@@ -14,10 +13,6 @@ import {
   migrateWidgetIds,
   defaultWidgetIdsForRole,
   defaultDashboardPrefs,
-  layoutForUser,
-  filterLayout,
-  buildDesignedLayout,
-  ensureLayoutForWidgets,
   isWidgetAllowed
 } from '../features/dashboard/dashboard-layout.js'
 import { scaleMonthlyTargetToDateRange, toSafeNumber } from '../features/dashboard/dashboard-utils.js'
@@ -28,7 +23,6 @@ import {
   FiAlertCircle,
   FiSettings,
   FiX,
-  FiMove,
   FiRotateCcw
 } from 'react-icons/fi'
 
@@ -53,9 +47,7 @@ export default function DashboardPage() {
   const [error, setError] = useState('')
   const [showCustomizeModal, setShowCustomizeModal] = useState(false)
   const [customizeSelection, setCustomizeSelection] = useState([])
-  const [editLayout, setEditLayout] = useState(false)
   const [resettingDashboard, setResettingDashboard] = useState(false)
-  const [layoutDraft, setLayoutDraft] = useState({ lg: [] })
   const [showBranchBreakdownModal, setShowBranchBreakdownModal] = useState(false)
   const [branchBreakdownLoading, setBranchBreakdownLoading] = useState(false)
   const [branchBreakdownError, setBranchBreakdownError] = useState('')
@@ -84,7 +76,6 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin'
   const isEmployee = user?.role === 'employee'
   const isBranchManager = user?.role === 'manager' || user?.role === 'branch'
-  const dashboardEditableLayout = cfg?.feature_flags?.dashboard_editable_layout !== false
   const defaultPrefsOptions = useMemo(
     () => ({ includePendingApprovals: approvalFlagOn }),
     [approvalFlagOn]
@@ -425,19 +416,6 @@ export default function DashboardPage() {
     return { branches, totalTarget, totalCc, overallPct, monthlySum }
   }, [branchStats, dateRange.from, dateRange.to])
 
-  useEffect(() => {
-    if (!user) return
-    const base = layoutForUser(user, isAdmin, defaultPrefsOptions)
-    const allowed = (migrateWidgetIds(
-      user?.dashboard_widgets != null && Array.isArray(user.dashboard_widgets)
-        ? user.dashboard_widgets
-        : defaultWidgetIdsForRole(isAdmin, defaultPrefsOptions)
-    ) || defaultWidgetIdsForRole(isAdmin, defaultPrefsOptions)).filter((id) =>
-      isWidgetAllowed(id, { isAdmin, viewMode, approvalFlagOn })
-    )
-    setLayoutDraft(ensureLayoutForWidgets(base, allowed, isAdmin))
-  }, [user?.dashboard_widgets, user?.dashboard_layout, isAdmin, viewMode, approvalFlagOn, defaultPrefsOptions])
-
   const widgetCtx = useMemo(() => ({
     summary,
     isAdmin,
@@ -478,67 +456,18 @@ export default function DashboardPage() {
     return effectiveWidgetIds.filter((id) => isWidgetAllowed(id, widgetCtx))
   }, [effectiveWidgetIds, widgetCtx, summary])
 
-  const gridLayout = useMemo(
-    () => ensureLayoutForWidgets(layoutDraft, activeWidgetIds, isAdmin),
-    [layoutDraft, activeWidgetIds, isAdmin]
-  )
-
-  useEffect(() => {
-    if (!summary || editLayout) return
-    setLayoutDraft((prev) => ensureLayoutForWidgets(prev, activeWidgetIds, isAdmin))
-  }, [summary, activeWidgetIds, editLayout, isAdmin])
-
-  useEffect(() => {
-    if (!dashboardEditableLayout && editLayout) {
-      setEditLayout(false)
-    }
-  }, [dashboardEditableLayout, editLayout])
-
-  const handleSaveLayout = async () => {
-    try {
-      const visible = effectiveWidgetIds
-      const layoutToSave = ensureLayoutForWidgets(
-        filterLayout(layoutDraft, activeWidgetIds),
-        activeWidgetIds,
-        isAdmin
-      )
-      await api.updateMyProfile(token, {
-        dashboard_widgets: visible,
-        dashboard_layout: layoutToSave
-      })
-      await refreshUser()
-      setEditLayout(false)
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const handleStartEditLayout = () => {
-    setLayoutDraft(ensureLayoutForWidgets(layoutDraft, activeWidgetIds, isAdmin))
-    setEditLayout(true)
-  }
-
-  const handleCancelEditLayout = () => {
-    const base = layoutForUser(user, isAdmin, defaultPrefsOptions)
-    setLayoutDraft(ensureLayoutForWidgets(base, activeWidgetIds, isAdmin))
-    setEditLayout(false)
-  }
-
   const handleResetDashboard = async () => {
     const confirmed = window.confirm(
-      'Reset your dashboard to the default widgets and layout? Your current arrangement will be replaced.'
+      'Reset your dashboard to the default widgets? Your current selection will be replaced.'
     )
     if (!confirmed) return
     setResettingDashboard(true)
     try {
       const defaults = defaultDashboardPrefs(isAdmin, defaultPrefsOptions)
       await api.updateMyProfile(token, {
-        dashboard_widgets: defaults.dashboard_widgets,
-        dashboard_layout: defaults.dashboard_layout
+        dashboard_widgets: defaults.dashboard_widgets
       })
-      setLayoutDraft(defaults.dashboard_layout)
       setCustomizeSelection([...defaults.dashboard_widgets])
-      setEditLayout(false)
       setShowCustomizeModal(false)
       await refreshUser()
     } catch (err) {
@@ -558,40 +487,11 @@ export default function DashboardPage() {
           </h1>
           <p className="text-helper mt-1">
             {isEmployee
-              ? (dashboardEditableLayout
-                  ? 'Your personal dashboard — customize widgets and layout; saved to your account only.'
-                  : 'Your personal dashboard — customize widgets; layout follows the fixed company dashboard.')
-              : (dashboardEditableLayout
-                  ? 'Overview of financial transactions. Customize widgets and layout; each user has their own saved dashboard.'
-                  : 'Overview of financial transactions. Customize widgets; layout follows the fixed company dashboard.')}
+              ? 'Your personal dashboard — customize widgets; saved to your account only.'
+              : 'Overview of financial transactions. Customize widgets; each user has their own saved dashboard.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {dashboardEditableLayout && editLayout ? (
-            <>
-              <Button
-                variant="secondary"
-                icon={<FiRotateCcw className="w-4 h-4" />}
-                onClick={handleResetDashboard}
-                disabled={resettingDashboard}
-              >
-                Reset to default
-              </Button>
-              <Button variant="secondary" onClick={handleCancelEditLayout} disabled={resettingDashboard}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveLayout} disabled={resettingDashboard}>Done</Button>
-            </>
-          ) : dashboardEditableLayout ? (
-            <Button
-              variant="secondary"
-              icon={<FiMove className="w-4 h-4" />}
-              onClick={handleStartEditLayout}
-              disabled={loading || !summary}
-            >
-              Edit layout
-            </Button>
-          ) : null}
           <Button
             variant="secondary"
             icon={<FiSettings className="w-4 h-4" />}
@@ -635,9 +535,7 @@ export default function DashboardPage() {
                     Customize dashboard
                   </h2>
                   <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                    {dashboardEditableLayout
-                      ? 'Choose widgets for your dashboard. Layout is saved to your account only — not shared with other users.'
-                      : 'Choose widgets for your dashboard. Layout follows the fixed company dashboard.'}
+                    Choose widgets for your dashboard. Layout follows the fixed company dashboard.
                   </p>
                 </div>
               </div>
@@ -690,16 +588,14 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--stroke)] bg-[var(--card-hover)]/30 px-6 py-4">
-              {dashboardEditableLayout ? (
-                <Button
-                  variant="secondary"
-                  icon={<FiRotateCcw className="w-4 h-4" />}
-                  onClick={handleResetDashboard}
-                  disabled={resettingDashboard}
-                >
-                  Reset to default
-                </Button>
-              ) : <span />}
+              <Button
+                variant="secondary"
+                icon={<FiRotateCcw className="w-4 h-4" />}
+                onClick={handleResetDashboard}
+                disabled={resettingDashboard}
+              >
+                Reset to default
+              </Button>
               <div className="flex gap-3">
               <Button variant="secondary" onClick={() => setShowCustomizeModal(false)} disabled={resettingDashboard}>
                 Cancel
@@ -709,16 +605,7 @@ export default function DashboardPage() {
                 onClick={async () => {
                   try {
                     const migrated = migrateWidgetIds(customizeSelection)
-                    if (dashboardEditableLayout) {
-                      const nextLayout = buildDesignedLayout(migrated, isAdmin)
-                      await api.updateMyProfile(token, {
-                        dashboard_widgets: migrated,
-                        dashboard_layout: nextLayout
-                      })
-                      setLayoutDraft(nextLayout)
-                    } else {
-                      await api.updateMyProfile(token, { dashboard_widgets: migrated })
-                    }
+                    await api.updateMyProfile(token, { dashboard_widgets: migrated })
                     await refreshUser()
                     setShowCustomizeModal(false)
                   } catch (err) {
@@ -841,44 +728,10 @@ export default function DashboardPage() {
 
       {!loading && !error && summary && (
         <div className={DASHBOARD_STACK}>
-          {dashboardEditableLayout && editLayout && (
-            <div className="sticky top-0 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-muted)]/50 backdrop-blur-sm px-4 py-3">
-              <p className="text-sm text-[var(--accent)] font-medium">
-                Drag widgets to rearrange, then tap Done. Layout is saved to your account only.
-              </p>
-              <div className="flex flex-wrap gap-2 shrink-0">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<FiRotateCcw className="w-3.5 h-3.5" />}
-                  onClick={handleResetDashboard}
-                  disabled={resettingDashboard}
-                >
-                  Reset
-                </Button>
-                <Button variant="secondary" size="sm" onClick={handleCancelEditLayout} disabled={resettingDashboard}>
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleSaveLayout} disabled={resettingDashboard}>Done</Button>
-              </div>
-            </div>
-          )}
-
-          {dashboardEditableLayout ? (
-            <DashboardWidgetGrid
-              layout={gridLayout}
-              editMode={editLayout}
-              onLayoutChange={setLayoutDraft}
-              widgetIds={activeWidgetIds}
-              isAdmin={isAdmin}
-              renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
-            />
-          ) : (
-            <DashboardStaticLayout
-              widgetIds={activeWidgetIds}
-              renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
-            />
-          )}
+          <DashboardStaticLayout
+            widgetIds={activeWidgetIds}
+            renderWidget={(id) => renderDashboardWidget(id, widgetCtx)}
+          />
         </div>
       )}
 

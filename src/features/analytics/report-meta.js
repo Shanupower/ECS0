@@ -75,8 +75,27 @@ export const REPORT_META = {
     description:
       'Browse customers by branch or product, select individuals or include a whole branch, then view breakdowns for the filtered period.',
     filterProfile: 'customerDetail'
+  },
+  'receipt-errors': {
+    title: 'Duplicate / Error Report',
+    description:
+      'Duplicate transactions, receipt numbers, and data-quality issues (missing PAN, mobile, reference, invalid amount).',
+    filterProfile: 'fullReceipt'
   }
 }
+
+export const RECEIPT_ERROR_TYPE_OPTIONS = [
+  { value: 'duplicate_transaction', label: 'Duplicate transaction' },
+  { value: 'duplicate_receipt_number', label: 'Duplicate receipt #' },
+  { value: 'missing_pan', label: 'Missing PAN' },
+  { value: 'missing_mobile', label: 'Missing mobile' },
+  { value: 'blank_reference', label: 'Blank reference' },
+  { value: 'invalid_amount', label: 'Invalid amount' }
+]
+
+export const RECEIPT_ERROR_TYPE_LABELS = Object.fromEntries(
+  RECEIPT_ERROR_TYPE_OPTIONS.map((opt) => [opt.value, opt.label])
+)
 
 function toLocalYmd(date) {
   const y = date.getFullYear()
@@ -104,7 +123,7 @@ export function defaultFutureDateRange(months = 6) {
   }
 }
 
-export function getInitialReportFilters(slug) {
+export function getInitialReportFilters(slug, { viewMode = '' } = {}) {
   const meta = getReportMeta(slug)
   const dateRange = meta.defaultFutureMonths ? defaultFutureDateRange(meta.defaultFutureMonths) : defaultDateRange()
   return {
@@ -122,7 +141,8 @@ export function getInitialReportFilters(slug) {
     includePending: true,
     hideCc: false,
     hideSi: false,
-    viewMode: '',
+    viewMode: viewMode || '',
+    errorTypes: [],
     customerSearch: '',
     customerSort: 'name:asc',
     fundSearch: ''

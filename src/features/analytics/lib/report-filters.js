@@ -1,12 +1,18 @@
 /** Map analytics filter state to report/export API query params. */
-export function filtersToReportQuery(f, { page = 1, pageSize = 25 } = {}) {
+export function filtersToReportQuery(f, { page = 1, pageSize = 25, allowedFilters } = {}) {
   const q = { page: String(page), page_size: String(pageSize) }
   if (f.from?.trim()) q.from = f.from.trim()
   if (f.to?.trim()) q.to = f.to.trim()
   if (f.includePending === false) q.include_pending = '0'
   if (f.dateBasis) q.date_basis = f.dateBasis
-  if (Array.isArray(f.branchCodes) && f.branchCodes.length) q.branch_codes = f.branchCodes.join(',')
-  if (Array.isArray(f.empCodes) && f.empCodes.length) q.emp_codes = f.empCodes.join(',')
+  const canBranch = !allowedFilters || allowedFilters.includes('branch_codes')
+  const canEmp = !allowedFilters || allowedFilters.includes('emp_codes')
+  if (canBranch && Array.isArray(f.branchCodes) && f.branchCodes.length) {
+    q.branch_codes = f.branchCodes.join(',')
+  }
+  if (canEmp && Array.isArray(f.empCodes) && f.empCodes.length) {
+    q.emp_codes = f.empCodes.join(',')
+  }
   if (Array.isArray(f.productCategories) && f.productCategories.length) {
     q.product_categories = f.productCategories.join(',')
   }
@@ -28,12 +34,13 @@ export function filtersToReportQuery(f, { page = 1, pageSize = 25 } = {}) {
   if (f.viewMode) q.view_mode = f.viewMode
   if (f.hideCc) q.hide_cc = '1'
   if (f.hideSi) q.hide_si = '1'
+  if (Array.isArray(f.errorTypes) && f.errorTypes.length) q.error_type = f.errorTypes.join(',')
   return q
 }
 
 /** Customer Detail Report — paginated customer picker list. */
-export function filtersToCustomerListQuery(f, { customerPage = 1, customerPageSize = 50, skipCount = false } = {}) {
-  const q = filtersToReportQuery(f, { page: 1, pageSize: 25 })
+export function filtersToCustomerListQuery(f, { customerPage = 1, customerPageSize = 50, skipCount = false, allowedFilters } = {}) {
+  const q = filtersToReportQuery(f, { page: 1, pageSize: 25, allowedFilters })
   delete q.page
   delete q.page_size
   delete q.search

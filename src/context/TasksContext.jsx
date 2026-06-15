@@ -76,6 +76,8 @@ export function TasksProvider({ children }) {
   // ------------------------------------------------------------------
   const [tasks, setTasks] = useState([])
   const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(50)
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -84,7 +86,7 @@ export function TasksProvider({ children }) {
 
   const buildQuery = useCallback((overrides = {}) => {
     const f = { ...filters, ...overrides }
-    const q = { page: '1', limit: '200' }
+    const q = { page: String(overrides.page ?? page), limit: String(pageSize) }
     if (f.status) q.status = f.status
     if (f.priority) q.priority = f.priority
     if (f.label) q.label = f.label
@@ -103,7 +105,11 @@ export function TasksProvider({ children }) {
     }
     if (f.sort) q.sort = f.sort
     return q
-  }, [filters, user])
+  }, [filters, user, page, pageSize])
+
+  useEffect(() => {
+    setPage(1)
+  }, [filters])
 
   const load = useCallback(async () => {
     if (!token) return
@@ -210,15 +216,18 @@ export function TasksProvider({ children }) {
     setTasks(prev => prev.filter(t => t._key !== id))
   }, [])
 
+  const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / pageSize)), [total, pageSize])
+
   const value = useMemo(() => ({
     filters, setFilter, resetFilters,
     tasks, total, stats, loading, error,
+    page, pageSize, totalPages, setPage,
     reload: load,
     assignableUsers,
     createTask, updateTask, bulkUpdate, deleteTask,
     applyRemoteUpdate, removeRemote,
     patchLocal
-  }), [filters, setFilter, resetFilters, tasks, total, stats, loading, error, load, assignableUsers, createTask, updateTask, bulkUpdate, deleteTask, applyRemoteUpdate, removeRemote, patchLocal])
+  }), [filters, setFilter, resetFilters, tasks, total, stats, loading, error, page, pageSize, totalPages, setPage, load, assignableUsers, createTask, updateTask, bulkUpdate, deleteTask, applyRemoteUpdate, removeRemote, patchLocal])
 
   return <TasksCtx.Provider value={value}>{children}</TasksCtx.Provider>
 }

@@ -31,7 +31,9 @@ function isValidYyyyMmDd(yyyyMmDd) {
 
 function parseDdMmYyyyToYyyyMmDd(ddMmYyyy) {
   if (!ddMmYyyy) return ''
-  const m = String(ddMmYyyy).trim().match(/^(\d{2})-(\d{2})-(\d{4})$/)
+  const trimmed = String(ddMmYyyy).trim()
+  const m = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+    || trimmed.match(/^(\d{2})(\d{2})(\d{4})$/)
   if (!m) return ''
   const day = Number(m[1])
   const month = Number(m[2]) // 1-12
@@ -101,7 +103,7 @@ export default function DatePickerInput({
   disabled,
   readOnly,
   required,
-  placeholder = 'DD-MM-YYYY',
+  placeholder = 'DD-MM-YYYY or DDMMYYYY',
   className,
   inputClassName,
   ariaLabel,

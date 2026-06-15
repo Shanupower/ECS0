@@ -417,7 +417,10 @@ export default function ClientManagementPage() {
       resetForm()
       fetchCustomers(currentPage, searchTerm)
     } catch (err) {
-      setError('Failed to create client: ' + err.message)
+      const msg = err.errorType === 'duplicate_pan'
+        ? 'PAN number already exists'
+        : (err.detail || err.message || 'Failed to create client')
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -1094,6 +1097,7 @@ export default function ClientManagementPage() {
           onSubmit={handleAddCustomer}
           onClose={closeModals}
           loading={loading}
+          error={error}
           pincodeLoading={pincodeLoading}
           pincodeSuggestions={pincodeSuggestions}
           showPincodeDropdown={showPincodeDropdown}
@@ -1116,6 +1120,7 @@ export default function ClientManagementPage() {
           onSubmit={handleEditCustomer}
           onClose={closeModals}
           loading={loading}
+          error={error}
           pincodeLoading={pincodeLoading}
           pincodeSuggestions={pincodeSuggestions}
           showPincodeDropdown={showPincodeDropdown}
@@ -1151,7 +1156,8 @@ function CustomerModal({
   setFormData, 
   onSubmit, 
   onClose, 
-  loading, 
+  loading,
+  error = '',
   pincodeLoading, 
   pincodeSuggestions, 
   showPincodeDropdown, 
@@ -1199,6 +1205,12 @@ function CustomerModal({
         </div>
         
         <form onSubmit={onSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start">
+              <FiAlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--dashboard-text)] mb-1">

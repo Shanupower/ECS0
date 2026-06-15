@@ -27,6 +27,7 @@ import AnalyticsReportPage from './pages/AnalyticsReportPage.jsx'
 import TokenExpiredModal from './components/TokenExpiredModal.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { canAccessSystemSettings } from './constants/system-settings-access.js'
+import { canAccessAnalytics } from './constants/analytics-access.js'
 
 // Page Transition Wrapper
 function PageTransition({ children }) {
@@ -50,6 +51,11 @@ function PrivateRoute({children}){
 function AdminRoute({children}){
   const {user}=useAuth()
   return user?.role === 'admin' ? children : <Navigate to="/dashboard"/>
+}
+
+function AnalyticsRoute({ children }) {
+  const { user } = useAuth()
+  return canAccessAnalytics(user?.role) ? children : <Navigate to="/dashboard" />
 }
 
 function BranchRoute({children}){
@@ -83,9 +89,9 @@ function AppContent() {
             path="analytics"
             element={
               <PageTransition>
-                <AdminRoute>
+                <AnalyticsRoute>
                   <AnalyticsDashboardPage />
-                </AdminRoute>
+                </AnalyticsRoute>
               </PageTransition>
             }
           />
@@ -93,9 +99,9 @@ function AppContent() {
             path="analytics/reports/:slug"
             element={
               <PageTransition>
-                <AdminRoute>
+                <AnalyticsRoute>
                   <AnalyticsReportPage />
-                </AdminRoute>
+                </AnalyticsRoute>
               </PageTransition>
             }
           />

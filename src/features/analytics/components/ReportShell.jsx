@@ -119,15 +119,26 @@ export function SummaryCards({ items, className }) {
   if (!items?.length) return null
   return (
     <div className={cn('grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3', className)}>
-      {items.map((it) => (
-        <div
-          key={it.label}
-          className="rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-4 shadow-card"
-        >
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--dashboard-muted)]">{it.label}</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--dashboard-text)] tabular-nums">{it.value}</p>
-        </div>
-      ))}
+      {items.map((it) => {
+        const Wrapper = it.onClick ? 'button' : 'div'
+        return (
+          <Wrapper
+            key={it.label}
+            type={it.onClick ? 'button' : undefined}
+            onClick={it.onClick}
+            className={cn(
+              'rounded-2xl border bg-[var(--dashboard-card)] p-4 shadow-card text-left w-full',
+              it.active
+                ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]/30'
+                : 'border-[var(--dashboard-border)]',
+              it.onClick && 'hover:border-[var(--accent)]/50 transition-colors cursor-pointer'
+            )}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--dashboard-muted)]">{it.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-[var(--dashboard-text)] tabular-nums">{it.value}</p>
+          </Wrapper>
+        )
+      })}
     </div>
   )
 }

@@ -6,10 +6,12 @@ import { api } from '../api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import DataExportSection from '../features/analytics/components/DataExportSection.jsx'
+import { resolveAnalyticsScope } from '../constants/analytics-access.js'
 
 export default function AnalyticsDashboardPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [reports, setReports] = React.useState([])
+  const [scope, setScope] = React.useState(() => resolveAnalyticsScope(null, user?.role))
   const [err, setErr] = React.useState('')
   const [loading, setLoading] = React.useState(true)
 
@@ -19,7 +21,10 @@ export default function AnalyticsDashboardPage() {
     ;(async () => {
       try {
         const res = await api.reportsRegistry(token)
-        if (!cancelled) setReports(Array.isArray(res.reports) ? res.reports : [])
+        if (!cancelled) {
+          setReports(Array.isArray(res.reports) ? res.reports : [])
+          setScope(resolveAnalyticsScope(res.scope, user?.role))
+        }
       } catch (e) {
         if (!cancelled) setErr(e.message || 'Failed to load reports')
       } finally {
@@ -29,10 +34,10 @@ export default function AnalyticsDashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, user?.role])
 
   const reportSections = React.useMemo(() => {
-    const order = ['Operational Reports', 'Customers Report']
+    const order = ['Operational Reports', 'Data Quality', 'Customers Report']
     const byGroup = new Map()
     for (const r of reports) {
       const group = r.group || 'Operational Reports'
@@ -58,13 +63,16 @@ export default function AnalyticsDashboardPage() {
           Operational and MIS reports with shared filters, exports, and drill-down tables. Pick a report to open the
           interactive workspace.
         </p>
+        {scope.label && (
+          <p className="mt-2 text-xs font-medium text-[var(--accent)]">{scope.label}</p>
+        )}
       </div>
       {err && (
         <div className="mb-4 rounded-xl border border-[var(--error)]/40 bg-[var(--error-muted)] px-4 py-3 text-sm text-[var(--error)]">
           {err}
         </div>
       )}
-      <DataExportSection token={token} />
+      <DataExportSection token={token} scope={scope} />
       {loading ? (
         <p className="text-sm text-[var(--dashboard-muted)]">Loading report catalog…</p>
       ) : (

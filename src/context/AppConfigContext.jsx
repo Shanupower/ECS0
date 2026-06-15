@@ -49,7 +49,6 @@ const DEFAULTS = {
   receipt_final_status_label: 'Completed',
   feature_flags: {
     receipts_approval_v2: false,
-    dashboard_editable_layout: true
   }
 }
 

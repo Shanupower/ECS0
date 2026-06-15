@@ -24,6 +24,7 @@ import {
 import { cn } from '../../utils/cn'
 import { useAppConfig } from '../../context/AppConfigContext'
 import { canAccessSystemSettings } from '../../constants/system-settings-access.js'
+import { canAccessAnalytics } from '../../constants/analytics-access.js'
 
 const SIDEBAR_WIDTH = 240
 const SIDEBAR_COLLAPSED_WIDTH = 64
@@ -33,10 +34,11 @@ function getNavGroups(role, pendingIssuesCount, tasksReminderCount, approvalFlag
   const isAdmin = role === 'admin'
   const isManager = role === 'manager'
   const isEmployee = role === 'employee'
+  const showAnalytics = canAccessAnalytics(role)
 
   const main = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    ...(isAdmin ? [{ to: '/analytics', label: 'Business Analytics', icon: LineChart }] : []),
+    ...(showAnalytics ? [{ to: '/analytics', label: 'Business Analytics', icon: LineChart }] : []),
     { to: '/receipts', label: 'Create Receipt', icon: FileText },
     { to: '/transactions', label: 'Transactions', icon: History },
   ]

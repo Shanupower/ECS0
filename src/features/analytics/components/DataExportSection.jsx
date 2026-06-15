@@ -10,11 +10,17 @@ import { useToast } from '../../../components/ui/Toast.jsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/Card.jsx'
 import { Button } from '../../../components/ui/Button.jsx'
 
+import { resolveAnalyticsScope } from '../../../constants/analytics-access.js'
+
 const EXPORT_PAGE_SIZE = 50000
 
-export default function DataExportSection({ token }) {
+export default function DataExportSection({ token, scope: scopeProp }) {
   const toast = useToast()
-  const defaults = React.useMemo(() => getInitialReportFilters(), [])
+  const scope = React.useMemo(() => resolveAnalyticsScope(scopeProp, ''), [scopeProp])
+  const defaults = React.useMemo(
+    () => getInitialReportFilters(undefined, { viewMode: scope.viewMode }),
+    [scope.viewMode]
+  )
   const [f, setF] = React.useState(defaults)
   const [exporting, setExporting] = React.useState(null)
   const [users, setUsers] = React.useState([])
@@ -24,7 +30,11 @@ export default function DataExportSection({ token }) {
   const rmOptions = React.useMemo(() => buildRmOptions(users), [users])
 
   const patchFilters = (patch) => setF((prev) => ({ ...prev, ...patch }))
-  const resetFilters = () => setF(getInitialReportFilters())
+  const resetFilters = () => setF(getInitialReportFilters(undefined, { viewMode: scope.viewMode }))
+
+  React.useEffect(() => {
+    setF(getInitialReportFilters(undefined, { viewMode: scope.viewMode }))
+  }, [scope.viewMode])
 
   React.useEffect(() => {
     if (!token) return
@@ -66,7 +76,8 @@ export default function DataExportSection({ token }) {
     }
   }
 
-  const misQuery = () => filtersToReportQuery(f, { page: 1, pageSize: EXPORT_PAGE_SIZE })
+  const misQuery = () =>
+    filtersToReportQuery(f, { page: 1, pageSize: EXPORT_PAGE_SIZE, allowedFilters: scope.allowedFilters })
 
   const exportMisCsv = () =>
     runExport('mis-csv', () => downloadReportFile(token, 'mis-transactions', misQuery(), 'csv'))
@@ -103,6 +114,7 @@ export default function DataExportSection({ token }) {
           rmOptions={rmOptions}
           schemeCategoryOptions={schemeCategoryOptions}
           showIncludePending
+          allowedFilters={scope.allowedFilters}
         />
 
         <div className="flex flex-wrap items-center gap-3">
