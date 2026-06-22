@@ -12,6 +12,14 @@ const customerMeta = getReportMeta('customer-detail')
 assert.equal(customerMeta.title, 'Customer Detail Report')
 assert.equal(customerMeta.filterProfile, 'customerDetail')
 
+const paymentMeta = getReportMeta('payment-mode')
+assert.equal(paymentMeta.title, 'Payment Mode for Receipts')
+assert.equal(paymentMeta.filterProfile, 'fullReceipt')
+
+const loginMeta = getReportMeta('user-login')
+assert.equal(loginMeta.filterProfile, 'adminUsers')
+assert.deepEqual(loginMeta.roles, ['admin'])
+
 const { from, to } = defaultDateRange()
 const year = new Date().getFullYear()
 assert.equal(from, `${year}-01-01`)

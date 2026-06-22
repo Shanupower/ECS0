@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
@@ -20,7 +20,7 @@ import {
 } from '../features/analytics/lib/report-filters.js'
 import { buildReportTotalRows, formatReportTotalValue, sumNumericFields } from '../features/analytics/lib/report-totals.js'
 import { RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS } from '../data/receipt_product_categories.js'
-import { resolveAnalyticsScope } from '../constants/analytics-access.js'
+import { resolveAnalyticsScope, canAccessReport } from '../constants/analytics-access.js'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 function formatMoney(n) {
@@ -113,7 +113,10 @@ const SERVER_PAGED_SLUGS = new Set([
   'fd-maturity',
   'pending-receipts',
   'receipt-errors',
-  'customer-detail'
+  'customer-detail',
+  'payment-mode',
+  'user-login',
+  'user-role-access'
 ])
 
 function isServerPaged(reportSlug, groupBy) {
@@ -149,6 +152,9 @@ function getReportTotalFields(slug, groupBy) {
   if (slug === 'receipt-errors') return ['amount']
   if (slug === 'sip-report') return ['sip_amount', 'collection_credit', 'incentive_amount']
   if (slug === 'fd-maturity') return ['amount', 'maturity_amount', 'collection_credit', 'incentive_amount']
+  if (slug === 'payment-mode') return ['amount', 'collection_credit', 'incentive_amount']
+  if (slug === 'user-login') return []
+  if (slug === 'user-role-access') return []
   return []
 }
 
@@ -297,16 +303,20 @@ function CustomerDetailBreakdown({ customer, hideCc, hideSi }) {
 
 export default function AnalyticsReportPage() {
   const { slug } = useParams()
+  const navigate = useNavigate()
   const { token, user } = useAuth()
   const meta = React.useMemo(() => getReportMeta(slug), [slug])
+  const isAdminReport = meta.filterProfile === 'adminUsers'
   const [scope, setScope] = React.useState(() => resolveAnalyticsScope(null, user?.role))
   const defaults = React.useMemo(
     () => getInitialReportFilters(slug, { viewMode: scope.viewMode }),
     [slug, scope.viewMode]
   )
   const queryOpts = React.useMemo(
-    () => ({ allowedFilters: scope.allowedFilters }),
-    [scope.allowedFilters]
+    () => ({
+      allowedFilters: isAdminReport ? ['branch_codes', 'emp_codes'] : scope.allowedFilters
+    }),
+    [isAdminReport, scope.allowedFilters]
   )
   const [f, setF] = React.useState(defaults)
   /** Filters sent to report APIs — updated on Apply, Reset, and initial load. */
@@ -348,6 +358,12 @@ export default function AnalyticsReportPage() {
     setPage(1)
     setCustomerListPage(1)
   }
+
+  React.useEffect(() => {
+    if (!canAccessReport(user?.role, meta)) {
+      navigate('/analytics', { replace: true })
+    }
+  }, [user?.role, meta, navigate])
 
   React.useEffect(() => {
     if (!token) return
@@ -599,6 +615,15 @@ export default function AnalyticsReportPage() {
             break
           case 'customer-detail':
             data = await api.reportsCustomerDetail(token, q)
+            break
+          case 'payment-mode':
+            data = await api.reportsPaymentMode(token, q)
+            break
+          case 'user-login':
+            data = await api.reportsUserLogin(token, q)
+            break
+          case 'user-role-access':
+            data = await api.reportsUserRoleAccess(token, q)
             break
           default:
             throw new Error('Unknown report')
@@ -1397,6 +1422,63 @@ export default function AnalyticsReportPage() {
       ch.accessor('branch_code', { header: 'Branch Code' }),
       ch.accessor('emp_code', { header: 'RM' })
     ]
+  } else if (slug === 'payment-mode') {
+    columns = [
+      ch.accessor('date', { header: 'Date', cell: (c) => formatReportDate(c.getValue()) }),
+      ch.accessor('receipt_number', { header: 'Receipt #' }),
+      ch.accessor('client_name', { header: 'Client' }),
+      ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
+      ch.accessor('payment_mode', { header: 'Payment mode' }),
+      ch.accessor('channel', { header: 'Channel' }),
+      ch.accessor('instrument_type', { header: 'Instrument' }),
+      ch.accessor('instrument_no', { header: 'Instrument #' }),
+      ch.accessor('reference_no', { header: 'Reference' }),
+      ch.accessor('amount', { header: 'Amount', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('collection_credit', { header: 'CC', cell: (c) => formatMoney(c.getValue()) }),
+      ch.accessor('incentive_amount', {
+        header: 'SI',
+        cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
+      }),
+      ch.accessor('branch_code', { header: 'Branch' }),
+      ch.accessor('emp_code', { header: 'RM' }),
+      ch.accessor('status', { header: 'Status' })
+    ]
+  } else if (slug === 'user-login') {
+    columns = [
+      ch.accessor('login_at', { header: 'Login at', cell: (c) => formatReportDate(c.getValue()) }),
+      ch.accessor('emp_code', { header: 'Employee code' }),
+      ch.accessor('user_name', { header: 'Name' }),
+      ch.accessor('role', { header: 'Role' }),
+      ch.accessor('branch', { header: 'Branch' }),
+      ch.accessor('login_type', { header: 'Type' }),
+      ch.accessor('ip_address', { header: 'IP address' }),
+      ch.accessor('user_agent', {
+        header: 'User agent',
+        cell: (c) => {
+          const v = c.getValue()
+          if (!v) return '—'
+          return (
+            <span className="block max-w-[280px] truncate" title={String(v)}>
+              {String(v)}
+            </span>
+          )
+        }
+      })
+    ]
+  } else if (slug === 'user-role-access') {
+    columns = [
+      ch.accessor('emp_code', { header: 'Employee code' }),
+      ch.accessor('name', { header: 'Name' }),
+      ch.accessor('role', { header: 'Role' }),
+      ch.accessor('branch', { header: 'Branch' }),
+      ch.accessor('is_active', { header: 'Active', cell: (c) => (c.getValue() ? 'Yes' : 'No') }),
+      ch.accessor('last_login_at', { header: 'Last login', cell: (c) => formatReportDate(c.getValue()) }),
+      ch.accessor('default_report_scope', { header: 'Report scope' }),
+      ch.accessor('allowed_report_filters', { header: 'Allowed filters' }),
+      ch.accessor('analytics_access', { header: 'Analytics', cell: (c) => (c.getValue() ? 'Yes' : 'No') }),
+      ch.accessor('service_income_visible', { header: 'SI visible', cell: (c) => (c.getValue() ? 'Yes' : 'No') }),
+      ch.accessor('user_management', { header: 'User management' })
+    ]
   }
   columns = hideSensitiveColumns(columns, { hideCc, hideSi })
 
@@ -1454,7 +1536,12 @@ export default function AnalyticsReportPage() {
             schemeOptions={schemeOptions}
             issuerLoading={schemeCategoriesLoading}
             schemeLoading={schemeCategoriesLoading}
-            allowedFilters={scope.allowedFilters}
+            allowedFilters={isAdminReport ? ['branch_codes', 'emp_codes'] : scope.allowedFilters}
+            reportSlug={slug}
+            roleFilters={f.roleFilters}
+            activeOnly={f.activeOnly}
+            includeImpersonation={f.includeImpersonation}
+            search={f.search}
         />
       }
       actions={
@@ -1484,6 +1571,76 @@ export default function AnalyticsReportPage() {
       {loading && <p className="text-sm text-[var(--dashboard-muted)]">Loading…</p>}
       {!loading && slug !== 'mis-summary' && (
         <>
+          {slug === 'payment-mode' && (payload?.summary || []).length > 0 && (
+            <div className="space-y-2 mb-6">
+              <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">Payment mode summary</h3>
+              <div className="overflow-x-auto rounded-2xl border border-[var(--dashboard-border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--dashboard-border)]/20 text-left text-[var(--dashboard-muted)]">
+                    <tr>
+                      <th className="px-4 py-2">Payment mode</th>
+                      <th className="px-4 py-2">Applications</th>
+                      <th className="px-4 py-2">Amount</th>
+                      {!hideCc && <th className="px-4 py-2">CC</th>}
+                      {!hideSi && <th className="px-4 py-2">SI</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(payload.summary || []).map((r) => (
+                      <tr key={r.payment_mode} className="border-t border-[var(--dashboard-border)]/60">
+                        <td className="px-4 py-2">{r.payment_mode || '—'}</td>
+                        <td className="px-4 py-2 tabular-nums">{r.applications}</td>
+                        <td className="px-4 py-2 tabular-nums">{formatMoney(r.amount)}</td>
+                        {!hideCc && <td className="px-4 py-2 tabular-nums">{formatMoney(r.collection_credit)}</td>}
+                        {!hideSi && (
+                          <td className="px-4 py-2 tabular-nums">
+                            {r.incentive_amount == null ? '—' : formatMoney(r.incentive_amount)}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <AggregateTotalFooter rows={payload.summary || []} fields={aggregateTotalFields} />
+                </table>
+              </div>
+            </div>
+          )}
+          {slug === 'user-role-access' && (
+            <div className="space-y-6 mb-6">
+              {(payload?.role_summary || []).length > 0 && (
+                <MetricTable
+                  title="Users by role"
+                  headers={['Role', 'Users', 'Active']}
+                  rows={payload.role_summary}
+                  renderRow={(r) => (
+                    <>
+                      <td className="px-3 py-2 capitalize">{r.role || '—'}</td>
+                      <td className="px-3 py-2 tabular-nums">{r.user_count}</td>
+                      <td className="px-3 py-2 tabular-nums">{r.active_count}</td>
+                    </>
+                  )}
+                />
+              )}
+              {(payload?.role_matrix || []).length > 0 && (
+                <MetricTable
+                  title="Role capability matrix"
+                  headers={['Role', 'Analytics', 'Report scope', 'Filters', 'SI visible', 'User management', 'Task reports']}
+                  rows={payload.role_matrix}
+                  renderRow={(r) => (
+                    <>
+                      <td className="px-3 py-2 capitalize">{r.role}</td>
+                      <td className="px-3 py-2">{r.analytics_access ? 'Yes' : 'No'}</td>
+                      <td className="px-3 py-2">{r.default_report_scope}</td>
+                      <td className="px-3 py-2">{r.allowed_report_filters}</td>
+                      <td className="px-3 py-2">{r.service_income_visible ? 'Yes' : 'No'}</td>
+                      <td className="px-3 py-2">{r.user_management}</td>
+                      <td className="px-3 py-2">{r.task_reports ? 'Yes' : 'No'}</td>
+                    </>
+                  )}
+                />
+              )}
+            </div>
+          )}
           {columns.length > 0 && (
             <ReportDataTable
               columns={columns}

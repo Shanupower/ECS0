@@ -38,3 +38,13 @@ export function resolveAnalyticsScope(scope, role) {
 export function canUseReportFilter(allowedFilters, filterKey) {
   return (allowedFilters || []).includes(filterKey)
 }
+
+/** Whether the role may open a report (checks optional report.roles from registry/meta). */
+export function canAccessReport(role, report) {
+  const r = String(role || '').trim()
+  const required = report?.roles
+  if (Array.isArray(required) && required.length > 0) {
+    return required.includes(r)
+  }
+  return canAccessAnalytics(r)
+}

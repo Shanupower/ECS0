@@ -3,7 +3,7 @@
  * Aligns titles/descriptions with backend REPORT_REGISTRY (routes/reports.js).
  */
 
-/** @typedef {'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail'} ReportFilterProfile */
+/** @typedef {'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail' | 'adminUsers'} ReportFilterProfile */
 
 /**
  * @typedef {{ label: string, value: string }} DateBasisOption
@@ -81,8 +81,32 @@ export const REPORT_META = {
     description:
       'Duplicate transactions, receipt numbers, and data-quality issues (missing PAN, mobile, reference, invalid amount).',
     filterProfile: 'fullReceipt'
+  },
+  'payment-mode': {
+    title: 'Payment Mode for Receipts',
+    description: 'Receipt totals and detail grouped by payment mode (Online, Offline, Others).',
+    filterProfile: 'fullReceipt'
+  },
+  'user-login': {
+    title: 'User Login Report',
+    description: 'Login history with employee, branch, role, IP address, and session type.',
+    filterProfile: 'adminUsers',
+    roles: ['admin']
+  },
+  'user-role-access': {
+    title: 'User Role & Access Report',
+    description: 'Users with role, branch, analytics scope, and access capabilities.',
+    filterProfile: 'adminUsers',
+    roles: ['admin']
   }
 }
+
+export const USER_ROLE_FILTER_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'branch', label: 'Branch' },
+  { value: 'employee', label: 'Employee' }
+]
 
 export const RECEIPT_ERROR_TYPE_OPTIONS = [
   { value: 'duplicate_transaction', label: 'Duplicate transaction' },
@@ -145,7 +169,10 @@ export function getInitialReportFilters(slug, { viewMode = '' } = {}) {
     errorTypes: [],
     customerSearch: '',
     customerSort: 'name:asc',
-    fundSearch: ''
+    fundSearch: '',
+    roleFilters: [],
+    activeOnly: false,
+    includeImpersonation: false
   }
 }
 

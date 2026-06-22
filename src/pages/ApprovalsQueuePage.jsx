@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useAppConfig } from '../context/AppConfigContext'
 import { api } from '../api'
 import { Card, Button, Badge, EmptyState, Skeleton } from '../components/ui'
+import DatePickerInput from '../components/ui/DatePickerInput.jsx'
 import { canAccessSystemSettings } from '../constants/system-settings-access.js'
 
 function formatAmount(value) {
@@ -14,12 +15,20 @@ function formatAmount(value) {
   return `₹${n.toLocaleString('en-IN')}`
 }
 
+function formatDateForInput(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export default function ApprovalsQueuePage() {
   const { token, user } = useAuth()
   const cfg = useAppConfig()
   const navigate = useNavigate()
   const approvalFlagOn = !!cfg?.feature_flags?.receipts_approval_v2
   const isAdmin = user?.role === 'admin'
+  const currentYear = new Date().getFullYear()
 
   const [tasks, setTasks] = useState([])
   const [summary, setSummary] = useState(null)
@@ -29,14 +38,59 @@ export default function ApprovalsQueuePage() {
   const [search, setSearch] = useState('')
   const [showAllTeams, setShowAllTeams] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
+  const [dateRange, setDateRange] = useState({
+    from: `${currentYear}-01-01`,
+    to: `${currentYear}-12-31`
+  })
+
+  const datePresets = useMemo(() => [
+    {
+      label: 'This month',
+      getValue: () => {
+        const d = new Date()
+        return {
+          from: formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 1)),
+          to: formatDateForInput(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+        }
+      }
+    },
+    {
+      label: 'Last month',
+      getValue: () => {
+        const d = new Date()
+        return {
+          from: formatDateForInput(new Date(d.getFullYear(), d.getMonth() - 1, 1)),
+          to: formatDateForInput(new Date(d.getFullYear(), d.getMonth(), 0))
+        }
+      }
+    },
+    {
+      label: 'Last 6 months',
+      getValue: () => {
+        const today = new Date()
+        const d = new Date(today)
+        d.setMonth(d.getMonth() - 6)
+        return { from: formatDateForInput(d), to: formatDateForInput(today) }
+      }
+    },
+    {
+      label: 'YTD',
+      getValue: () => ({ from: `${currentYear}-01-01`, to: `${currentYear}-12-31` })
+    }
+  ], [currentYear])
+
+  const dateQuery = useMemo(
+    () => ({ from: dateRange.from, to: dateRange.to }),
+    [dateRange.from, dateRange.to]
+  )
 
   const load = async () => {
     if (!token) return
     setLoading(true); setError('')
     try {
       const [queueRes, summaryRes, teamsList] = await Promise.all([
-        api.getApprovalsQueue(token),
-        api.getApprovalsSummary(token).catch(() => null),
+        api.getApprovalsQueue(token, dateQuery),
+        api.getApprovalsSummary(token, dateQuery).catch(() => null),
         api.listTeams(token).catch(() => [])
       ])
       const items = Array.isArray(queueRes?.items) ? queueRes.items : []
@@ -48,7 +102,7 @@ export default function ApprovalsQueuePage() {
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() /* eslint-disable-next-line */ }, [token])
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [token, dateRange.from, dateRange.to])
 
   const myId = user?.id ?? user?._key ?? user?.sub ?? null
   const myEmp = user?.emp_code ?? null
@@ -89,6 +143,7 @@ export default function ApprovalsQueuePage() {
         t.title?.toLowerCase().includes(q) ||
         t.description?.toLowerCase().includes(q) ||
         t.receipt_id?.toLowerCase().includes(q) ||
+        t.receipt_no?.toLowerCase().includes(q) ||
         t.scheme_name?.toLowerCase().includes(q) ||
         t.branch_name?.toLowerCase().includes(q)
       )
@@ -112,6 +167,7 @@ export default function ApprovalsQueuePage() {
   }, [teams])
 
   const statusCards = summary?.status_cards || {}
+  const completedCount = statusCards.completed_in_range ?? statusCards.completed_last_7_days ?? 0
 
   if (!approvalFlagOn) {
     const canOpenSettings = canAccessSystemSettings(user)
@@ -140,12 +196,45 @@ export default function ApprovalsQueuePage() {
         </div>
       </div>
 
+      <Card padding="md" className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">From</label>
+            <DatePickerInput
+              value={dateRange.from}
+              onChange={(v) => setDateRange((prev) => ({ ...prev, from: v }))}
+              className="w-full"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">To</label>
+            <DatePickerInput
+              value={dateRange.to}
+              onChange={(v) => setDateRange((prev) => ({ ...prev, to: v }))}
+              className="w-full"
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {datePresets.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setDateRange(preset.getValue())}
+              className="px-3 py-1.5 text-xs rounded-full border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] transition-colors"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </Card>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { key: '', label: 'Pending', value: statusCards.pending_on_my_teams ?? filtered.length, tone: 'open' },
           { key: 'overdue', label: 'Overdue', value: statusCards.overdue ?? 0, tone: 'in_progress' },
           { key: 'in_review', label: 'In review', value: statusCards.in_review ?? 0, tone: 'resolved' },
-          { key: 'completed', label: 'Completed (7d)', value: statusCards.completed_last_7_days ?? 0, tone: 'resolved' }
+          { key: 'completed', label: 'Completed', value: completedCount, tone: 'resolved' }
         ].map((card) => (
           <Card
             key={card.key || 'all'}
@@ -196,7 +285,7 @@ export default function ApprovalsQueuePage() {
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
           <input
             className="w-full pl-9 pr-3 py-2 rounded-input border border-[var(--stroke)] bg-[var(--card-bg-opaque)] text-body text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
-            placeholder="Search by receipt, scheme, branch, or title…"
+            placeholder="Search by receipt number, scheme, branch, or title…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -236,6 +325,7 @@ export default function ApprovalsQueuePage() {
             const team = task.team_id ? teamById[String(task.team_id)] : null
             const overdue = task.due_date && new Date(task.due_date).getTime() < Date.now()
             const mine = isAssignedToMe(task)
+            const receiptLabel = task.receipt_no || task.receipt_id
             return (
               <Card key={task._key || task.id} padding="md" className="flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-[var(--card-hover)] transition-colors cursor-pointer"
                 onClick={() => task.receipt_id && navigate(`/receipts/${task.receipt_id}`)}
@@ -264,7 +354,7 @@ export default function ApprovalsQueuePage() {
                   </div>
                   <div className="text-xs text-[var(--text-secondary)] mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                     {task.due_date && <span className="flex items-center gap-1"><FiClock /> Due {new Date(task.due_date).toLocaleDateString()}</span>}
-                    {task.receipt_id && <span>Receipt: <b className="text-[var(--text-primary)]">{task.receipt_id}</b></span>}
+                    {receiptLabel && <span>Receipt: <b className="text-[var(--text-primary)]">{receiptLabel}</b></span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

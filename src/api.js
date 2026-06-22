@@ -227,8 +227,8 @@ export const api={
 
   // Tasks endpoints (redesigned)
   listTasks:(t,q)=>req('/api/tasks',{token:t,query:q}),
-  getApprovalsQueue:(t)=>req('/api/approvals/queue',{token:t}),
-  getApprovalsSummary:(t)=>req('/api/approvals/summary',{token:t}),
+  getApprovalsQueue:(t,q)=>req('/api/approvals/queue',{token:t,query:q}),
+  getApprovalsSummary:(t,q)=>req('/api/approvals/summary',{token:t,query:q}),
   searchTasks:(t,body)=>req('/api/tasks/search',{method:'POST',token:t,json:body}),
   getTasksStats:(t)=>req('/api/tasks/stats',{token:t}),
   getMyTasks:(t)=>req('/api/tasks/my',{token:t}),
@@ -307,6 +307,18 @@ export const api={
     const headers = { ...authHeaders(t) }
     if (masterKey) headers['X-Master-Key'] = masterKey
     return fetch(`${BASE}/api/export/customers`, { method: 'GET', headers }).then(async res => {
+      if (!res.ok) {
+        if (res.status === 401 && tokenExpirationCallback) tokenExpirationCallback()
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || err.error || res.statusText)
+      }
+      return res.blob()
+    })
+  },
+  exportCustomersTemplate:(t,masterKey)=>{
+    const headers = { ...authHeaders(t) }
+    if (masterKey) headers['X-Master-Key'] = masterKey
+    return fetch(`${BASE}/api/export/customers/template`, { method: 'GET', headers }).then(async res => {
       if (!res.ok) {
         if (res.status === 401 && tokenExpirationCallback) tokenExpirationCallback()
         const err = await res.json().catch(() => ({}))
@@ -590,5 +602,8 @@ export const api={
   reportsReceiptErrors:(t,q)=>req('/api/reports/receipt-errors',{token:t,query:q}),
   reportsCustomerDetail:(t,q)=>req('/api/reports/customer-detail',{token:t,query:q}),
   reportsCustomerDetailCustomers:(t,q)=>req('/api/reports/customer-detail/customers',{token:t,query:q}),
-  reportsCustomerDetailCustomerIds:(t,q)=>req('/api/reports/customer-detail/customers',{token:t,query:{...q,ids_only:'1'}})
+  reportsCustomerDetailCustomerIds:(t,q)=>req('/api/reports/customer-detail/customers',{token:t,query:{...q,ids_only:'1'}}),
+  reportsPaymentMode:(t,q)=>req('/api/reports/payment-mode',{token:t,query:q}),
+  reportsUserLogin:(t,q)=>req('/api/reports/user-login',{token:t,query:q}),
+  reportsUserRoleAccess:(t,q)=>req('/api/reports/user-role-access',{token:t,query:q})
 }

@@ -35,6 +35,9 @@ export function filtersToReportQuery(f, { page = 1, pageSize = 25, allowedFilter
   if (f.hideCc) q.hide_cc = '1'
   if (f.hideSi) q.hide_si = '1'
   if (Array.isArray(f.errorTypes) && f.errorTypes.length) q.error_type = f.errorTypes.join(',')
+  if (Array.isArray(f.roleFilters) && f.roleFilters.length) q.roles = f.roleFilters.join(',')
+  if (f.activeOnly) q.active_only = '1'
+  if (f.includeImpersonation) q.include_impersonation = '1'
   return q
 }
 

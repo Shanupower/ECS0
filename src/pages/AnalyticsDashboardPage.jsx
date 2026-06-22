@@ -37,7 +37,7 @@ export default function AnalyticsDashboardPage() {
   }, [token, user?.role])
 
   const reportSections = React.useMemo(() => {
-    const order = ['Operational Reports', 'Data Quality', 'Customers Report']
+    const order = ['Operational Reports', 'Data Quality', 'Customers Report', 'Administration']
     const byGroup = new Map()
     for (const r of reports) {
       const group = r.group || 'Operational Reports'

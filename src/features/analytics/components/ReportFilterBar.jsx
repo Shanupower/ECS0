@@ -27,7 +27,7 @@ import {
   formatSchemeOptionLabel,
   toggleListValue
 } from '../lib/report-filters.js'
-import { RECEIPT_ERROR_TYPE_OPTIONS } from '../report-meta.js'
+import { RECEIPT_ERROR_TYPE_OPTIONS, USER_ROLE_FILTER_OPTIONS } from '../report-meta.js'
 import { api } from '../../../api.js'
 
 function SectionLabel({ children }) {
@@ -445,7 +445,7 @@ function InvestorMultiSelect({ value = [], selectedOptions = [], onChange, token
  *   showGroupBy?: boolean,
  *   showIncludePending?: boolean,
  *   token?: string,
- *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail',
+ *   filterProfile?: 'fullReceipt' | 'datesSearch' | 'minimal' | 'customerDetail' | 'adminUsers',
  *   requireInvestorSelection?: boolean,
  *   customerSearch?: string,
  *   dateBasisOptions?: Array<{ value: string, label: string }>
@@ -503,16 +503,23 @@ export function ReportFilterBar({
   appliedFrom = '',
   appliedTo = '',
   appliedDateBasis = '',
-  allowedFilters
+  allowedFilters,
+  reportSlug = '',
+  roleFilters = [],
+  activeOnly = false,
+  includeImpersonation = false,
+  search = ''
 }) {
   const isCustomerDetail = filterProfile === 'customerDetail'
-  const canBranchFilter = !allowedFilters || allowedFilters.includes('branch_codes')
-  const canEmpFilter = !allowedFilters || allowedFilters.includes('emp_codes')
+  const isAdminUsers = filterProfile === 'adminUsers'
+  const canBranchFilter = !allowedFilters || allowedFilters.includes('branch_codes') || isAdminUsers
+  const canEmpFilter = !allowedFilters || allowedFilters.includes('emp_codes') || isAdminUsers
   const showScope =
-    (filterProfile === 'fullReceipt' || isCustomerDetail) && (canBranchFilter || canEmpFilter)
-  const showIssuerScheme = showScope && showIssuerSchemeFilters
+    ((filterProfile === 'fullReceipt' || isCustomerDetail) && (canBranchFilter || canEmpFilter)) ||
+    isAdminUsers
+  const showIssuerScheme = showScope && showIssuerSchemeFilters && !isAdminUsers
   const issuerSchemeRequiresProduct = showIssuerSchemeFilters && !(productCategories || []).length
-  const showDatesAndSearch = filterProfile !== 'minimal'
+  const showDatesAndSearch = filterProfile !== 'minimal' && (!isAdminUsers || reportSlug === 'user-login')
   const completedOnly = includePending === false
   const canApply = true
   const productCategoryRows = React.useMemo(() => {
@@ -717,7 +724,7 @@ export function ReportFilterBar({
             </div>
           )}
 
-          {!isCustomerDetail && (
+          {!isCustomerDetail && !isAdminUsers && (
           <div>
             <SectionLabel>Search</SectionLabel>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
@@ -749,6 +756,95 @@ export function ReportFilterBar({
             </div>
           </div>
           )}
+        </>
+      )}
+
+      {isAdminUsers && (
+        <>
+          <div>
+            <SectionLabel>Search users</SectionLabel>
+            <Input
+              placeholder="Search name, employee code, or email"
+              value={search || ''}
+              onChange={(e) => onChange({ search: e.target.value })}
+              className="min-h-10"
+            />
+          </div>
+          {showScope && (
+            <div>
+              <SectionLabel>Scope</SectionLabel>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Branches</label>
+                  <SearchableMultiFilterDropdown
+                    value={branchCodes || []}
+                    options={branchOptions}
+                    onChange={(branchCodes) => onChange({ branchCodes })}
+                    filterOptions={filterBranchOptions}
+                    formatOptionLabel={formatBranchOptionLabel}
+                    placeholder="Search branches"
+                    fallbackPlaceholder="Branch codes"
+                    allLabel="All branches"
+                    emptyLabel="No matching branch found."
+                    metaKey="type"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--dashboard-muted)] mb-1">Employees</label>
+                  <SearchableMultiFilterDropdown
+                    value={empCodes || []}
+                    options={rmOptions}
+                    onChange={(empCodes) => onChange({ empCodes })}
+                    filterOptions={filterRmOptions}
+                    formatOptionLabel={formatRmOptionLabel}
+                    placeholder="Search employees"
+                    fallbackPlaceholder="Emp codes"
+                    allLabel="All employees"
+                    emptyLabel="No matching employee found."
+                    metaKey="email"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <div>
+            <SectionLabel>Roles</SectionLabel>
+            <ChipToggleMultiSelect
+              value={roleFilters || []}
+              onChange={(roleFilters) => onChange({ roleFilters })}
+              options={USER_ROLE_FILTER_OPTIONS}
+              emptyLabel="No roles configured."
+            />
+          </div>
+          <div>
+            <SectionLabel>Options</SectionLabel>
+            <div className="grid gap-3 md:grid-cols-2">
+              {reportSlug === 'user-role-access' && (
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="active-only"
+                    checked={!!activeOnly}
+                    onCheckedChange={(checked) => onChange({ activeOnly: checked })}
+                  />
+                  <label htmlFor="active-only" className="text-sm font-medium text-[var(--dashboard-text)] cursor-pointer">
+                    Active users only
+                  </label>
+                </div>
+              )}
+              {reportSlug === 'user-login' && (
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="include-impersonation"
+                    checked={!!includeImpersonation}
+                    onCheckedChange={(checked) => onChange({ includeImpersonation: checked })}
+                  />
+                  <label htmlFor="include-impersonation" className="text-sm font-medium text-[var(--dashboard-text)] cursor-pointer">
+                    Include impersonation logins
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
 

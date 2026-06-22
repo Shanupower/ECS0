@@ -642,6 +642,29 @@ export default function ClientManagementPage() {
     }
   }
 
+  const handleDownloadTemplate = async () => {
+    if (!masterKey.trim()) {
+      setError('Master key is required to download the template.')
+      return
+    }
+    setExportImportLoading(true)
+    setError('')
+    try {
+      const blob = await api.exportCustomersTemplate(token, masterKey.trim())
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'customers_import_template.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+      setSuccess('Sample template downloaded.')
+    } catch (err) {
+      setError(err.message || 'Template download failed.')
+    } finally {
+      setExportImportLoading(false)
+    }
+  }
+
   const handleImportCustomers = async () => {
     if (!masterKey.trim()) {
       setError('Master key is required for import.')
@@ -778,7 +801,10 @@ export default function ClientManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={() => setShowImportModal(false)}>
           <div className="bg-[var(--dashboard-card)] rounded-xl shadow-xl max-w-sm w-full p-6 border border-[var(--dashboard-border)]" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-[var(--dashboard-text)] mb-2">Import Customers</h3>
-            <p className="text-sm text-[var(--dashboard-muted)] mb-4">Upload a CSV with columns: Name, PAN, and optionally Investor ID, Email, Mobile, Address1, City, State, Pin, Branch(es).</p>
+            <p className="text-sm text-[var(--dashboard-muted)] mb-4">
+              Upload a CSV matching the export format: Name and PAN required; optional Investor ID, Email, Mobile,
+              Date of Birth (YYYY-MM-DD), Address1–3, City, State, Pin, and Branch(es) as branch names (semicolon-separated).
+            </p>
             <input
               type="password"
               value={masterKey}
@@ -786,6 +812,14 @@ export default function ClientManagementPage() {
               placeholder="Master key"
               className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] mb-3"
             />
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={exportImportLoading || !masterKey.trim()}
+              className="w-full mb-3 py-2 border border-[var(--dashboard-border)] rounded-lg text-sm font-medium text-[var(--dashboard-text)] hover:bg-[var(--dashboard-border)]/50 disabled:opacity-50"
+            >
+              {exportImportLoading ? 'Downloading…' : 'Download sample template'}
+            </button>
             <input
               type="file"
               accept=".csv"
