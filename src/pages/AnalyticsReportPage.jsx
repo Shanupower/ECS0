@@ -79,6 +79,15 @@ function formatReportCell(value) {
   return String(value)
 }
 
+function normalizeReportSlug(value) {
+  // `/analytics/reports/:slug` should match backend registry IDs exactly, but
+  // route params can be inconsistently cased or include whitespace.
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-')
+}
+
 function ServerPager({ page, pageSize, total, onChange }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   return (
@@ -303,14 +312,15 @@ function CustomerDetailBreakdown({ customer, hideCc, hideSi }) {
 
 export default function AnalyticsReportPage() {
   const { slug } = useParams()
+  const reportSlug = React.useMemo(() => normalizeReportSlug(slug), [slug])
   const navigate = useNavigate()
   const { token, user } = useAuth()
-  const meta = React.useMemo(() => getReportMeta(slug), [slug])
+  const meta = React.useMemo(() => getReportMeta(reportSlug), [reportSlug])
   const isAdminReport = meta.filterProfile === 'adminUsers'
   const [scope, setScope] = React.useState(() => resolveAnalyticsScope(null, user?.role))
   const defaults = React.useMemo(
-    () => getInitialReportFilters(slug, { viewMode: scope.viewMode }),
-    [slug, scope.viewMode]
+    () => getInitialReportFilters(reportSlug, { viewMode: scope.viewMode }),
+    [reportSlug, scope.viewMode]
   )
   const queryOpts = React.useMemo(
     () => ({
@@ -408,7 +418,7 @@ export default function AnalyticsReportPage() {
         setSchemeCategoryOptions(
           Array.isArray(filterOpts?.scheme_categories) ? filterOpts.scheme_categories : []
         )
-        if (slug !== 'product-detail') {
+        if (reportSlug !== 'product-detail') {
           setIssuerNames(Array.isArray(filterOpts?.issuer_names) ? filterOpts.issuer_names : [])
           setSchemeNames(Array.isArray(filterOpts?.scheme_names) ? filterOpts.scheme_names : [])
         }
@@ -418,7 +428,7 @@ export default function AnalyticsReportPage() {
           setUsers([])
           setBranches([])
           setSchemeCategoryOptions([])
-          if (slug !== 'product-detail') {
+          if (reportSlug !== 'product-detail') {
             setIssuerNames([])
             setSchemeNames([])
           }
@@ -430,10 +440,10 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [token, slug])
+  }, [token, reportSlug])
 
   React.useEffect(() => {
-    if (slug !== 'product-detail' || !token) return
+    if (reportSlug !== 'product-detail' || !token) return
     let cancelled = false
     const categories = (f.productCategories || []).filter(Boolean)
     if (!categories.length) {
@@ -475,7 +485,7 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [slug, token, f.productCategories, f.issuerNames, f.schemeNames])
+  }, [reportSlug, token, f.productCategories, f.issuerNames, f.schemeNames])
 
   React.useEffect(() => {
     const raw = String(f.customerSearch || '').trim()
@@ -487,9 +497,9 @@ export default function AnalyticsReportPage() {
   }, [f.customerSearch])
 
   React.useEffect(() => {
-    if (slug !== 'customer-detail') return
+    if (reportSlug !== 'customer-detail') return
     setCustomerListPage(1)
-  }, [slug, debouncedCustomerSearch])
+  }, [reportSlug, debouncedCustomerSearch])
 
   const apply = React.useCallback(() => {
     setAppliedF(f)
@@ -511,16 +521,16 @@ export default function AnalyticsReportPage() {
   )
 
   const resetFilters = React.useCallback(() => {
-    const init = getInitialReportFilters(slug, { viewMode: scope.viewMode })
+    const init = getInitialReportFilters(reportSlug, { viewMode: scope.viewMode })
     setF(init)
     setAppliedF(init)
     setPage(1)
     setCustomerListPage(1)
     setFetchNonce((n) => n + 1)
-  }, [slug, scope.viewMode])
+  }, [reportSlug, scope.viewMode])
 
   React.useEffect(() => {
-    if (!token || !slug || slug !== 'customer-detail' || fetchNonce < 1) return
+    if (!token || !reportSlug || reportSlug !== 'customer-detail' || fetchNonce < 1) return
     let cancelled = false
     ;(async () => {
       setListLoading(true)
@@ -547,11 +557,11 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [token, slug, appliedF, customerListPage, fetchNonce, debouncedCustomerSearch])
+  }, [token, reportSlug, appliedF, customerListPage, fetchNonce, debouncedCustomerSearch])
 
   React.useEffect(() => {
-    if (!token || !slug) return
-    if (slug === 'customer-detail') {
+    if (!token || !reportSlug) return
+    if (reportSlug === 'customer-detail') {
       if (fetchNonce < 1) return
       let cancelled = false
       ;(async () => {
@@ -582,7 +592,7 @@ export default function AnalyticsReportPage() {
       try {
         const q = filtersToReportQuery(appliedF, { page, pageSize: 25, ...queryOpts })
         let data
-        switch (slug) {
+        switch (reportSlug) {
           case 'mis-summary':
             data = await api.reportsMisSummary(token, q)
             break
@@ -638,14 +648,14 @@ export default function AnalyticsReportPage() {
     return () => {
       cancelled = true
     }
-  }, [token, slug, appliedF, page, fetchNonce])
+  }, [token, reportSlug, appliedF, page, fetchNonce])
 
   const exportReport = (format) => {
-    if (slug === 'customer-detail' && !canRunCustomerDetailReport(appliedF)) {
+    if (reportSlug === 'customer-detail' && !canRunCustomerDetailReport(appliedF)) {
       return Promise.reject(new Error('Select customers or choose branch / product filters'))
     }
     const q = filtersToReportQuery(appliedF, { page: 1, pageSize: 50000, ...queryOpts })
-    return downloadReportFile(token, slug, q, format)
+    return downloadReportFile(token, reportSlug, q, format)
   }
 
   const toggleCustomerSelection = (investorId) => {
@@ -734,7 +744,7 @@ export default function AnalyticsReportPage() {
     [f.investorIds]
   )
 
-  if (slug === 'customer-detail') {
+  if (reportSlug === 'customer-detail') {
     const txnRows = payload?.transactions?.rows || []
     const txnTotal = payload?.transactions?.total ?? 0
     const txnTotals = payload?.transactions?.totals
@@ -994,9 +1004,9 @@ export default function AnalyticsReportPage() {
                 pageSize={25}
                 totalRows={txnTotalRows}
                 formatTotalValue={formatReportTotalValue}
-                manualPagination={isServerPaged(slug)}
+                manualPagination={isServerPaged(reportSlug)}
               />
-              {isServerPaged(slug) && (
+              {isServerPaged(reportSlug) && (
                 <ServerPager page={page} pageSize={25} total={txnTotal} onChange={setPage} />
               )}
             </div>
@@ -1006,7 +1016,7 @@ export default function AnalyticsReportPage() {
     )
   }
 
-  if (slug === 'mis-summary') {
+  if (reportSlug === 'mis-summary') {
     const chartData = (payload?.product_summary || []).map((r) => ({
       name: formatProductCategory(r.product_type),
       amount: Number(r.amount) || 0
@@ -1197,7 +1207,7 @@ export default function AnalyticsReportPage() {
   const rawRows = payload?.rows || payload?.items || []
   const fundQuery = String(f.fundSearch || '').trim().toLowerCase()
   const rows =
-    slug === 'mf-fund' && fundQuery
+    reportSlug === 'mf-fund' && fundQuery
       ? rawRows.filter((row) => String(row.fund_name || '').toLowerCase().includes(fundQuery))
       : rawRows
   const total = payload?.total ?? rawRows.length
@@ -1205,7 +1215,7 @@ export default function AnalyticsReportPage() {
 
   const ch = createColumnHelper()
   let columns = []
-  if (slug === 'mis-transactions') {
+  if (reportSlug === 'mis-transactions') {
     if (groupBy) {
       columns = groupBy === 'rm'
         ? [
@@ -1282,7 +1292,7 @@ export default function AnalyticsReportPage() {
         ch.accessor('status', { header: 'Status' })
       ]
     }
-  } else if (slug === 'mf-fund') {
+  } else if (reportSlug === 'mf-fund') {
     columns = [
       ch.accessor('fund_name', { header: 'Fund' }),
       ch.accessor('applications', { header: 'Applications' }),
@@ -1293,7 +1303,7 @@ export default function AnalyticsReportPage() {
         cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
       })
     ]
-  } else if (slug === 'product-detail') {
+  } else if (reportSlug === 'product-detail') {
     columns = [
       ch.accessor('date', { header: 'Date' }),
       ch.accessor('receipt_number', { header: 'Receipt #' }),
@@ -1313,7 +1323,7 @@ export default function AnalyticsReportPage() {
       ch.accessor('emp_code', { header: 'RM' }),
       ch.accessor('status', { header: 'Status' })
     ]
-  } else if (slug === 'category-summary') {
+  } else if (reportSlug === 'category-summary') {
     columns = [
       ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
       ch.accessor('issuer_name', { header: 'Issuer' }),
@@ -1327,7 +1337,7 @@ export default function AnalyticsReportPage() {
         cell: (c) => (c.getValue() == null ? '—' : formatMoney(c.getValue()))
       })
     ]
-  } else if (slug === 'pending-receipts') {
+  } else if (reportSlug === 'pending-receipts') {
     columns = [
       ch.accessor('receipt_number', { header: 'Receipt #' }),
       ch.accessor('client_name', { header: 'Client' }),
@@ -1337,7 +1347,7 @@ export default function AnalyticsReportPage() {
       ch.accessor('assigned_to', { header: 'Assigned' }),
       ch.accessor('days_pending', { header: 'Days pending' })
     ]
-  } else if (slug === 'receipt-errors') {
+  } else if (reportSlug === 'receipt-errors') {
     columns = [
       ch.accessor('receipt_number', { header: 'Receipt #' }),
       ch.accessor('date', { header: 'Date', cell: (c) => formatReportDate(c.getValue()) }),
@@ -1377,7 +1387,7 @@ export default function AnalyticsReportPage() {
         }
       })
     ]
-  } else if (slug === 'sip-report') {
+  } else if (reportSlug === 'sip-report') {
     columns = [
       ch.accessor('date', { header: 'Receipt Date' }),
       ch.accessor('product_category', { header: 'Product', cell: (c) => formatProductCategory(c.getValue()) }),
@@ -1399,7 +1409,7 @@ export default function AnalyticsReportPage() {
       ch.accessor('emp_code', { header: 'RM' }),
       ch.accessor('status', { header: 'Status' })
     ]
-  } else if (slug === 'fd-maturity') {
+  } else if (reportSlug === 'fd-maturity') {
     columns = [
       ch.accessor('receipt_date', { header: 'Receipt Date' }),
       ch.accessor('maturity_date', { header: 'Maturity Date' }),
@@ -1422,7 +1432,7 @@ export default function AnalyticsReportPage() {
       ch.accessor('branch_code', { header: 'Branch Code' }),
       ch.accessor('emp_code', { header: 'RM' })
     ]
-  } else if (slug === 'payment-mode') {
+  } else if (reportSlug === 'payment-mode') {
     columns = [
       ch.accessor('date', { header: 'Date', cell: (c) => formatReportDate(c.getValue()) }),
       ch.accessor('receipt_number', { header: 'Receipt #' }),
@@ -1443,7 +1453,7 @@ export default function AnalyticsReportPage() {
       ch.accessor('emp_code', { header: 'RM' }),
       ch.accessor('status', { header: 'Status' })
     ]
-  } else if (slug === 'user-login') {
+  } else if (reportSlug === 'user-login') {
     columns = [
       ch.accessor('login_at', { header: 'Login at', cell: (c) => formatReportDate(c.getValue()) }),
       ch.accessor('emp_code', { header: 'Employee code' }),
@@ -1465,7 +1475,7 @@ export default function AnalyticsReportPage() {
         }
       })
     ]
-  } else if (slug === 'user-role-access') {
+  } else if (reportSlug === 'user-role-access') {
     columns = [
       ch.accessor('emp_code', { header: 'Employee code' }),
       ch.accessor('name', { header: 'Name' }),
@@ -1485,13 +1495,13 @@ export default function AnalyticsReportPage() {
   const totalRows = payload
     ? buildReportTotalRows({
         rows,
-        fields: visibleMetricFields(getReportTotalFields(slug, groupBy), { hideCc, hideSi }),
+        fields: visibleMetricFields(getReportTotalFields(reportSlug, groupBy), { hideCc, hideSi }),
         filteredTotals: payload.totals
       })
     : []
 
   const receiptErrorSummaryCards =
-    slug === 'receipt-errors' && payload?.summary
+    reportSlug === 'receipt-errors' && payload?.summary
       ? [
           {
             label: 'Receipts with issues',
@@ -1525,19 +1535,19 @@ export default function AnalyticsReportPage() {
           rmOptions={rmOptions}
           schemeCategoryOptions={schemeCategoryOptions}
           schemeCategoriesLoading={schemeCategoriesLoading}
-          showGroupBy={slug === 'mis-transactions'}
-          showIncludePending={slug !== 'pending-receipts'}
-          showErrorTypeFilter={slug === 'receipt-errors'}
+          showGroupBy={reportSlug === 'mis-transactions'}
+          showIncludePending={reportSlug !== 'pending-receipts'}
+          showErrorTypeFilter={reportSlug === 'receipt-errors'}
           errorTypes={f.errorTypes}
-            showIssuerSchemeFilters={slug === 'product-detail'}
-            showFundSearch={slug === 'mf-fund'}
+            showIssuerSchemeFilters={reportSlug === 'product-detail'}
+            showFundSearch={reportSlug === 'mf-fund'}
             fundSearch={f.fundSearch}
             issuerOptions={issuerOptions}
             schemeOptions={schemeOptions}
             issuerLoading={schemeCategoriesLoading}
             schemeLoading={schemeCategoriesLoading}
             allowedFilters={isAdminReport ? ['branch_codes', 'emp_codes'] : scope.allowedFilters}
-            reportSlug={slug}
+            reportSlug={reportSlug}
             roleFilters={f.roleFilters}
             activeOnly={f.activeOnly}
             includeImpersonation={f.includeImpersonation}
@@ -1555,7 +1565,7 @@ export default function AnalyticsReportPage() {
           <Button type="button" variant="secondary" onClick={() => exportReport('xlsx').catch((e) => setErr(e.message))}>
             Export Excel
           </Button>
-          {slug === 'mis-transactions' && (
+          {reportSlug === 'mis-transactions' && (
             <Button type="button" variant="secondary" onClick={() => exportReport('pdf').catch((e) => setErr(e.message))}>
               Export PDF
             </Button>
@@ -1569,9 +1579,9 @@ export default function AnalyticsReportPage() {
         </div>
       )}
       {loading && <p className="text-sm text-[var(--dashboard-muted)]">Loading…</p>}
-      {!loading && slug !== 'mis-summary' && (
+      {!loading && reportSlug !== 'mis-summary' && (
         <>
-          {slug === 'payment-mode' && (payload?.summary || []).length > 0 && (
+          {reportSlug === 'payment-mode' && (payload?.summary || []).length > 0 && (
             <div className="space-y-2 mb-6">
               <h3 className="text-sm font-semibold text-[var(--dashboard-text)]">Payment mode summary</h3>
               <div className="overflow-x-auto rounded-2xl border border-[var(--dashboard-border)]">
@@ -1605,7 +1615,7 @@ export default function AnalyticsReportPage() {
               </div>
             </div>
           )}
-          {slug === 'user-role-access' && (
+          {reportSlug === 'user-role-access' && (
             <div className="space-y-6 mb-6">
               {(payload?.role_summary || []).length > 0 && (
                 <MetricTable
@@ -1648,10 +1658,10 @@ export default function AnalyticsReportPage() {
               pageSize={25}
               totalRows={totalRows}
               formatTotalValue={formatReportTotalValue}
-              manualPagination={isServerPaged(slug, groupBy)}
+              manualPagination={isServerPaged(reportSlug, groupBy)}
             />
           )}
-          {isServerPaged(slug, groupBy) && (
+          {isServerPaged(reportSlug, groupBy) && (
             <ServerPager page={page} pageSize={25} total={total} onChange={setPage} />
           )}
         </>
