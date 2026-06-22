@@ -32,6 +32,7 @@ function TasksPageInner() {
   const [params, setParams] = useSearchParams()
   const {
     filters, setFilter, tasks, total, stats, loading, error, reload,
+    page, totalPages, setPage,
     assignableUsers, createTask, updateTask, bulkUpdate, deleteTask
   } = useTasks()
 
@@ -486,6 +487,32 @@ function TasksPageInner() {
           />
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 py-4 border-t border-[var(--stroke)]">
+          <p className="text-sm text-[var(--text-muted)]">
+            Page {page} of {totalPages} ({total} total)
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              className="px-3 py-1.5 text-sm rounded-md border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              className="px-3 py-1.5 text-sm rounded-md border border-[var(--stroke)] text-[var(--text-secondary)] hover:bg-[var(--card-hover)] disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Inline edit popovers */}
       {activePopover?.kind === 'status' && activePopoverTask && (

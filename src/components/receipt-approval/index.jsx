@@ -14,10 +14,45 @@ function formatTs(ts) {
   try { return new Date(ts).toLocaleString() } catch { return String(ts) }
 }
 
-function userLabel(u) {
-  if (!u) return 'System'
-  if (typeof u === 'string') return u
-  return u.name || u.emp_code || u.email || u.sub || 'User'
+function formatActorDisplay(actor) {
+  if (!actor) return 'System'
+  if (typeof actor === 'string') return actor
+  const name = actor.name || actor.actor_name || null
+  const code = actor.emp_code || actor.actor_emp_code || null
+  if (name && code) return `${name} (${code})`
+  if (name) return name
+  if (code) return code
+  if (actor.email) return actor.email
+  if (actor.sub || actor.actor_id) return `User ${actor.sub || actor.actor_id}`
+  return 'System'
+}
+
+function historyEnteredByLabel(ev) {
+  if (ev.entered_by) return formatActorDisplay(ev.entered_by)
+  return formatActorDisplay({
+    name: ev.actor_name,
+    emp_code: ev.actor_emp_code,
+    sub: ev.actor_id
+  })
+}
+
+function historyClosedByLabel(ev) {
+  if (ev.exited_by) return formatActorDisplay(ev.exited_by)
+  if (ev.closed_by_name || ev.closed_by_emp_code || ev.closed_by_id) {
+    return formatActorDisplay({
+      name: ev.closed_by_name,
+      emp_code: ev.closed_by_emp_code,
+      sub: ev.closed_by_id
+    })
+  }
+  if (ev.exited_at) {
+    return formatActorDisplay({
+      name: ev.actor_name,
+      emp_code: ev.actor_emp_code,
+      sub: ev.actor_id
+    })
+  }
+  return 'System'
 }
 
 function formatBytes(n) {
@@ -602,8 +637,8 @@ export function HistoryTimeline({ history, emptyMessage = 'No approval activity 
                     )}
                   </div>
                   <div className="text-xs text-[var(--text-muted)] mt-0.5">
-                    Entered {formatTs(ev.entered_at)} by {userLabel(ev.entered_by)}
-                    {ev.exited_at && <> · Closed {formatTs(ev.exited_at)} by {userLabel(ev.exited_by)}</>}
+                    Entered {formatTs(ev.entered_at)} by {historyEnteredByLabel(ev)}
+                    {ev.exited_at && <> · Closed {formatTs(ev.exited_at)} by {historyClosedByLabel(ev)}</>}
                   </div>
                   {ev.comment && (
                     <div className="mt-1 text-sm text-[var(--text-primary)] bg-[var(--card-hover)] rounded p-2 flex gap-2">

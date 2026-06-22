@@ -89,6 +89,7 @@ export default function CustomersTab({
       .sort((a, b) => b.value - a.value)
       .slice(0, 10)
   }, [customers])
+  const topSegmentChartHeight = Math.max(220, topSegments.length * 34)
 
   const portfolioMix = useMemo(() => {
     const byCust = new Map()
@@ -226,11 +227,11 @@ export default function CustomersTab({
           {topSegments.length === 0 ? (
             <EmptyState icon={FiBriefcase} message="No customer segmentation" />
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={topSegmentChartHeight}>
               <BarChart data={topSegments} layout="vertical" margin={{ top: 4, right: 8, left: 60, bottom: 0 }}>
                 <CartesianGrid stroke="var(--stroke)" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" stroke="var(--text-muted)" tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} width={90} />
+                <YAxis type="category" dataKey="name" stroke="var(--text-muted)" tick={{ fontSize: 10 }} width={90} interval={0} />
                 <RTooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
                 <Bar dataKey="value" fill={PALETTE[1]} radius={[0, 6, 6, 0]} />
               </BarChart>

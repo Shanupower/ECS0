@@ -10,13 +10,21 @@ import {
 import { Button } from '../../../components/ui/Button.jsx'
 import { cn } from '../../../utils/cn'
 
-export function ReportDataTable({ columns, data, pageSize = 25 }) {
+export function ReportDataTable({
+  columns,
+  data,
+  pageSize = 25,
+  totalRows = [],
+  formatTotalValue = (_field, value) => value,
+  manualPagination = false
+}) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    ...(manualPagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
     getSortedRowModel: getSortedRowModel(),
+    manualPagination,
     initialState: { pagination: { pageSize } }
   })
 
@@ -50,34 +58,59 @@ export function ReportDataTable({ columns, data, pageSize = 25 }) {
                 </tr>
               ))}
             </tbody>
+            {totalRows.length > 0 && (
+              <tfoot className="border-t-2 border-[var(--dashboard-border)] bg-[var(--dashboard-border)]/15">
+                {totalRows.map((totalRow) => (
+                  <tr key={totalRow.label}>
+                    {table.getVisibleLeafColumns().map((column, index) => {
+                      const hasValue = Object.prototype.hasOwnProperty.call(totalRow.values, column.id)
+                      return (
+                        <td
+                          key={column.id}
+                          className="px-4 py-3 font-semibold text-[var(--dashboard-text)] whitespace-nowrap tabular-nums"
+                        >
+                          {index === 0
+                            ? totalRow.label
+                            : hasValue
+                              ? formatTotalValue(column.id, totalRow.values[column.id])
+                              : ''}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--dashboard-muted)]">
-        <span>
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-        </span>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!table.getCanPreviousPage()}
-            onClick={() => table.previousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!table.getCanNextPage()}
-            onClick={() => table.nextPage()}
-          >
-            Next
-          </Button>
+      {!manualPagination && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--dashboard-muted)]">
+          <span>
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+            >
+              Next
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -86,15 +119,26 @@ export function SummaryCards({ items, className }) {
   if (!items?.length) return null
   return (
     <div className={cn('grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3', className)}>
-      {items.map((it) => (
-        <div
-          key={it.label}
-          className="rounded-2xl border border-[var(--dashboard-border)] bg-[var(--dashboard-card)] p-4 shadow-card"
-        >
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--dashboard-muted)]">{it.label}</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--dashboard-text)] tabular-nums">{it.value}</p>
-        </div>
-      ))}
+      {items.map((it) => {
+        const Wrapper = it.onClick ? 'button' : 'div'
+        return (
+          <Wrapper
+            key={it.label}
+            type={it.onClick ? 'button' : undefined}
+            onClick={it.onClick}
+            className={cn(
+              'rounded-2xl border bg-[var(--dashboard-card)] p-4 shadow-card text-left w-full',
+              it.active
+                ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]/30'
+                : 'border-[var(--dashboard-border)]',
+              it.onClick && 'hover:border-[var(--accent)]/50 transition-colors cursor-pointer'
+            )}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--dashboard-muted)]">{it.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-[var(--dashboard-text)] tabular-nums">{it.value}</p>
+          </Wrapper>
+        )
+      })}
     </div>
   )
 }

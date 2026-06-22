@@ -318,8 +318,8 @@ const INTAKE_PRODUCT_ROWS = [
   { key: 'FD', label: 'Fixed Deposit' },
   { key: 'GOVT_FD', label: 'Government Schemes' },
   { key: 'INS', label: 'Insurance' },
-  { key: 'BOND', label: 'Bonds (BOND)' },
-  { key: 'NCD', label: 'Bonds/NCD (NCD)' },
+  { key: 'BOND', label: 'Bonds' },
+  { key: 'NCD', label: 'NCD' },
   { key: 'MISC', label: 'Misc Services' }
 ]
 

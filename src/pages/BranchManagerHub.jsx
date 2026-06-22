@@ -20,6 +20,8 @@ import { SkeletonChart } from '../components/branch-hub/ChartCard'
 // rather than only the most-recent 200 receipts. Hard upper bound prevents runaway.
 const RECEIPT_PAGE_SIZE = 200
 const RECEIPT_PAGE_CAP = 25 // up to 5,000 receipts per filter
+const CUSTOMER_PAGE_SIZE = 200
+const CUSTOMER_PAGE_CAP = 50 // up to 10,000 customers per scope
 
 async function fetchAllReceiptsPaged(fetchPage) {
   const all = []
@@ -34,6 +36,28 @@ async function fetchAllReceiptsPaged(fetchPage) {
     if (Array.isArray(items) && items.length) all.push(...items)
     const total = Number(res?.total ?? 0)
     if (!Array.isArray(items) || items.length < RECEIPT_PAGE_SIZE) break
+    if (total && all.length >= total) break
+  }
+  return all
+}
+
+async function fetchAllCustomersPaged(token, queryBase = {}) {
+  const all = []
+  for (let page = 1; page <= CUSTOMER_PAGE_CAP; page++) {
+    let res
+    try {
+      res = await api.listCustomers(token, {
+        ...queryBase,
+        size: String(CUSTOMER_PAGE_SIZE),
+        page: String(page),
+      })
+    } catch {
+      break
+    }
+    const items = res?.items ?? res?.data ?? (Array.isArray(res) ? res : [])
+    if (Array.isArray(items) && items.length) all.push(...items)
+    const total = Number(res?.total ?? 0)
+    if (!Array.isArray(items) || items.length < CUSTOMER_PAGE_SIZE) break
     if (total && all.length >= total) break
   }
   return all
@@ -230,7 +254,7 @@ export default function BranchManagerHub() {
           api.getStatsByCategory(token, q).catch(() => []),
           api.getMonthlyCcSi(token, q).catch(() => []),
           api.listLeads(token).catch(() => []),
-          api.listCustomers(token, { size: '200' }).catch(() => []),
+          fetchAllCustomersPaged(token).then((items) => ({ items })).catch(() => ({ items: [] })),
           api.getInvestorLocations(token, q).catch(() => null),
           api.getBranchQueueMetrics(token, { stale_days: '14' }).catch(() => null),
           api.listTasks(token, { limit: '8', status: 'backlog,todo,in_progress,in_review,blocked', page: '1' }).catch(() => ({ items: [], total: 0 })),
@@ -338,12 +362,9 @@ export default function BranchManagerHub() {
         api
           .listLeads(token, isAdmin && bc ? { branch_code: bc } : undefined)
           .catch(() => []),
-        api
-          .listCustomers(token, {
-            size: '200',
-            ...(isAdmin && bc ? { branch_key: bc } : {})
-          })
-          .catch(() => []),
+        fetchAllCustomersPaged(token, {
+          ...(isAdmin && bc ? { branch_key: bc } : {}),
+        }).then((items) => ({ items })).catch(() => ({ items: [] })),
         api.getInvestorLocations(token, { ...q, branch_code: bc }).catch(() => null),
         api.getBranchQueueMetrics(token, { branch_code: bc, stale_days: '14' }).catch(() => null),
         api.listTasks(token, { limit: '8', status: 'backlog,todo,in_progress,in_review,blocked', page: '1' }).catch(() => ({ items: [], total: 0 })),
@@ -623,6 +644,7 @@ export default function BranchManagerHub() {
                   onEditTarget={startEditTarget}
                   networkMode={networkMode}
                   branchBreakdown={branchBreakdown}
+                  dateRange={{ from: filters.from, to: filters.to }}
                 />
               )}
               {activeTab === 'receipts' && (
@@ -634,6 +656,7 @@ export default function BranchManagerHub() {
                   leads={leads}
                   customers={customers}
                   branchStats={branchStats}
+                  branches={branches}
                 />
               )}
               {activeTab === 'performance' && (

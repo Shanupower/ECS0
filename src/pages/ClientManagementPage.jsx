@@ -417,7 +417,10 @@ export default function ClientManagementPage() {
       resetForm()
       fetchCustomers(currentPage, searchTerm)
     } catch (err) {
-      setError('Failed to create client: ' + err.message)
+      const msg = err.errorType === 'duplicate_pan'
+        ? 'PAN card already exists'
+        : (err.detail || err.message || 'Failed to create client')
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -586,6 +589,7 @@ export default function ClientManagementPage() {
     setShowViewModal(false)
     setSelectedCustomer(null)
     setDeletingMediaId(null)
+    setError('')
     resetForm()
   }
 
@@ -638,6 +642,29 @@ export default function ClientManagementPage() {
     }
   }
 
+  const handleDownloadTemplate = async () => {
+    if (!masterKey.trim()) {
+      setError('Master key is required to download the template.')
+      return
+    }
+    setExportImportLoading(true)
+    setError('')
+    try {
+      const blob = await api.exportCustomersTemplate(token, masterKey.trim())
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'customers_import_template.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+      setSuccess('Sample template downloaded.')
+    } catch (err) {
+      setError(err.message || 'Template download failed.')
+    } finally {
+      setExportImportLoading(false)
+    }
+  }
+
   const handleImportCustomers = async () => {
     if (!masterKey.trim()) {
       setError('Master key is required for import.')
@@ -670,11 +697,11 @@ export default function ClientManagementPage() {
   }, [])
 
   useEffect(() => {
-    if (error || success) {
+    if ((error || success) && !showAddModal && !showEditModal) {
       const timer = setTimeout(clearMessages, 5000)
       return () => clearTimeout(timer)
     }
-  }, [error, success])
+  }, [error, success, showAddModal, showEditModal])
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -774,7 +801,10 @@ export default function ClientManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/70" onClick={() => setShowImportModal(false)}>
           <div className="bg-[var(--dashboard-card)] rounded-xl shadow-xl max-w-sm w-full p-6 border border-[var(--dashboard-border)]" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-[var(--dashboard-text)] mb-2">Import Customers</h3>
-            <p className="text-sm text-[var(--dashboard-muted)] mb-4">Upload a CSV with columns: Name, PAN, and optionally Investor ID, Email, Mobile, Address1, City, State, Pin, Branch(es).</p>
+            <p className="text-sm text-[var(--dashboard-muted)] mb-4">
+              Upload a CSV matching the export format: Name and PAN required; optional Investor ID, Email, Mobile,
+              Date of Birth (YYYY-MM-DD), Address1–3, City, State, Pin, and Branch(es) as branch names (semicolon-separated).
+            </p>
             <input
               type="password"
               value={masterKey}
@@ -782,6 +812,14 @@ export default function ClientManagementPage() {
               placeholder="Master key"
               className="w-full px-3 py-2 border border-[var(--dashboard-border)] rounded-lg bg-[var(--dashboard-card)] text-[var(--dashboard-text)] mb-3"
             />
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={exportImportLoading || !masterKey.trim()}
+              className="w-full mb-3 py-2 border border-[var(--dashboard-border)] rounded-lg text-sm font-medium text-[var(--dashboard-text)] hover:bg-[var(--dashboard-border)]/50 disabled:opacity-50"
+            >
+              {exportImportLoading ? 'Downloading…' : 'Download sample template'}
+            </button>
             <input
               type="file"
               accept=".csv"
@@ -1094,6 +1132,8 @@ export default function ClientManagementPage() {
           onSubmit={handleAddCustomer}
           onClose={closeModals}
           loading={loading}
+          error={error}
+          onClearError={() => setError('')}
           pincodeLoading={pincodeLoading}
           pincodeSuggestions={pincodeSuggestions}
           showPincodeDropdown={showPincodeDropdown}
@@ -1116,6 +1156,8 @@ export default function ClientManagementPage() {
           onSubmit={handleEditCustomer}
           onClose={closeModals}
           loading={loading}
+          error={error}
+          onClearError={() => setError('')}
           pincodeLoading={pincodeLoading}
           pincodeSuggestions={pincodeSuggestions}
           showPincodeDropdown={showPincodeDropdown}
@@ -1151,7 +1193,9 @@ function CustomerModal({
   setFormData, 
   onSubmit, 
   onClose, 
-  loading, 
+  loading,
+  error = '',
+  onClearError,
   pincodeLoading, 
   pincodeSuggestions, 
   showPincodeDropdown, 
@@ -1171,6 +1215,7 @@ function CustomerModal({
 
   const handleChange = (e) => {
     const { name, value } = e.target
+    if (name === 'pan' && onClearError) onClearError()
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -1241,7 +1286,10 @@ function CustomerModal({
                 type="text"
                 name="pan"
                 value={formData.pan}
-                onChange={(e) => setFormData(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))}
+                onChange={(e) => {
+                  if (onClearError) onClearError()
+                  setFormData(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))
+                }}
                 pattern={getPattern('pan')}
                 maxLength="10"
                 title={getTitle('pan')}
@@ -1890,7 +1938,14 @@ function CustomerModal({
             )}
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="pt-4 border-t border-[var(--dashboard-border)] space-y-3">
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                <FiAlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            <div className="flex justify-end space-x-3">
             <button
               type="button"
               onClick={onClose}
@@ -1905,6 +1960,7 @@ function CustomerModal({
             >
               {loading ? 'Saving...' : 'Save'}
             </button>
+            </div>
           </div>
         </form>
       </div>

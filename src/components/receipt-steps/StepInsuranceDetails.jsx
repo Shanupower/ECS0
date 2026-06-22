@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import SearchableSelect from '../SearchableSelect.jsx'
 import { api } from '../../api'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
+import { blockWheelOnNumberInput } from '../../utils/blockWheelOnNumberInput.js'
 
 /** General or Health: same simple form (Date of Issue, Policy Period years, auto Renewal Date, Policy No, Premium) */
 const isSimpleInsuranceForm = (product) => {
@@ -280,6 +281,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   inputMode="numeric"
                   value={policyPeriod}
                   onChange={e => setPolicyPeriod(e.target.value)}
+                  onWheel={blockWheelOnNumberInput}
                   placeholder="No. of years"
                   className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -312,6 +314,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   inputMode="decimal"
                   value={premiumAmount}
                   onChange={e => setPremiumAmount(e.target.value)}
+                  onWheel={blockWheelOnNumberInput}
                   className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -356,6 +359,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   inputMode="decimal"
                   value={premiumAmount}
                   onChange={e => setPremiumAmount(e.target.value)}
+                  onWheel={blockWheelOnNumberInput}
                   className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -366,6 +370,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   inputMode="decimal"
                   value={sumAssured}
                   onChange={e => setSumAssured(e.target.value)}
+                  onWheel={blockWheelOnNumberInput}
                   className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -376,6 +381,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                   inputMode="numeric"
                   value={term}
                   onChange={e => setTerm(e.target.value)}
+                  onWheel={blockWheelOnNumberInput}
                   className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -413,6 +419,7 @@ export default function StepInsuranceDetails({ onBack, onNext, token, issuer, pr
                     min={1}
                     value={premiumPayTermOther || premiumPayTerm}
                     onChange={e => { setPremiumPayTermOther(e.target.value); setPremiumPayTerm(e.target.value) }}
+                    onWheel={blockWheelOnNumberInput}
                     placeholder="Years"
                     className="mt-2 w-full px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />

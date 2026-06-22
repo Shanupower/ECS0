@@ -3,25 +3,7 @@ import { FiRefreshCw, FiDownload, FiBarChart2, FiAlertOctagon, FiUser } from 're
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
-
-function toCsv(rows, cols) {
-  const header = cols.map(c => c.label).join(',')
-  const body = rows.map(r => cols.map(c => {
-    const v = r[c.key]
-    if (v == null) return ''
-    const s = typeof v === 'string' ? v.replace(/"/g, '""') : String(v)
-    return /[",\n]/.test(s) ? `"${s}"` : s
-  }).join(','))
-  return [header, ...body].join('\n')
-}
-
-function downloadBlob(content, filename, mime = 'text/csv') {
-  const blob = new Blob([content], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
-}
+import { downloadBlob, rowsFromObjects, rowsToCsv } from '../features/analytics/lib/report-download.js'
 
 export default function TasksReportsPage() {
   const { token } = useAuth()
@@ -59,13 +41,30 @@ export default function TasksReportsPage() {
   const exportCsv = () => {
     if (!data) return
     const cols = [{ key: 'day', label: 'Day' }, { key: 'count', label: 'Completed' }]
-    downloadBlob(toCsv(data.completion_by_day || [], cols), `tasks-completion-${from}-to-${to}.csv`)
+    const { headers, dataRows } = rowsFromObjects(data.completion_by_day || [], cols)
+    const csv = rowsToCsv(headers, dataRows, {
+      reportTitle: 'Tasks Completion Trend',
+      from,
+      to
+    })
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `tasks-completion-${from}-to-${to}.csv`)
   }
 
   const exportWorkload = () => {
     if (!data) return
-    const cols = [{ key: 'assignee', label: 'Assignee' }, { key: 'total', label: 'Open' }, { key: 'overdue', label: 'Overdue' }, { key: 'sla_breached', label: 'SLA breached' }]
-    downloadBlob(toCsv(data.workload || [], cols), `tasks-workload-${to}.csv`)
+    const cols = [
+      { key: 'assignee', label: 'Assignee' },
+      { key: 'total', label: 'Open' },
+      { key: 'overdue', label: 'Overdue' },
+      { key: 'sla_breached', label: 'SLA breached' }
+    ]
+    const { headers, dataRows } = rowsFromObjects(data.workload || [], cols)
+    const csv = rowsToCsv(headers, dataRows, {
+      reportTitle: 'Tasks Workload',
+      from,
+      to
+    })
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `tasks-workload-${from}-to-${to}.csv`)
   }
 
   return (
@@ -181,7 +180,7 @@ export default function TasksReportsPage() {
             <tbody>
               {(data?.by_branch || []).map((r) => (
                 <tr key={r.branch || 'none'} className="border-t border-[var(--stroke)]">
-                  <td className="py-1 pr-2 text-[var(--text-primary)]">{r.branch || '—'}</td>
+                  <td className="py-1 pr-2 text-[var(--text-primary)]">{r.branch_name || r.branch || '—'}</td>
                   <td className="py-1 pr-2 text-[var(--text-primary)]">{r.total}</td>
                   <td className="py-1 pr-2 text-[var(--text-primary)]">{r.open}</td>
                   <td className="py-1 pr-2 text-emerald-600">{r.completed}</td>

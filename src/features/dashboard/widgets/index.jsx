@@ -91,6 +91,7 @@ export function renderDashboardWidget(widgetId, ctx) {
       return (
         <BranchPerformanceWidget
           allBranchesTargetSummary={ctx.allBranchesTargetSummary}
+          targetLoading={ctx.targetLoading}
           dateRange={ctx.dateRange}
           formatCurrency={ctx.formatCurrency}
           scaleMonthlyTargetToDateRange={ctx.scaleMonthlyTargetToDateRange}

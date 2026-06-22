@@ -9,7 +9,7 @@ function StepProductType({ onBack, onNext, presetsByType = {}, usePreset = true,
     { value: 'MF', label: 'Mutual Funds', Icon: FiTrendingUp, enabled: true },
     { value: 'INS', label: 'Insurance', Icon: FiShield, enabled: true },
     { value: 'FD', label: 'Fixed Deposit', Icon: FaRupeeSign, enabled: true, iconClass: 'font-extralight' },
-    { value: 'BOND', label: 'Bonds/NCD', Icon: FiPieChart, enabled: true },
+    { value: 'BOND', label: 'Bonds', Icon: FiPieChart, enabled: true },
     { value: 'GOVT_FD', label: 'Government Schemes', Icon: FiAward, enabled: true },
     { value: 'MISC', label: 'Misc Services', Icon: FiTool, enabled: true }
   ]

@@ -56,11 +56,12 @@ export default function TransactionsPage() {
   const [scopeTouched, setScopeTouched] = useState(false)
   const [dateBasis, setDateBasis] = useState('receipt') // 'receipt' | 'transaction'
   const [filters, setFilters] = useState(() => {
-    const y = new Date().getFullYear()
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const params = new URLSearchParams(window.location.search)
     return {
-      from: `${y}-01-01`,
-      to: `${y}-12-31`,
+      from: todayStr,
+      to: todayStr,
       category: params.get('category') || '',
     status: params.get('status') || '',
     txn_type: '',
@@ -439,7 +440,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     // Reset to page 1 when any filter changes
     setPagination(prev => ({ ...prev, page: 1 }))
-  }, [filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max])
+  }, [filters.from, filters.to, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, filters.amount_min, filters.amount_max, viewScope])
 
   // Clear URL search params once after reading (dashboard click-filter) so address bar stays clean
   useEffect(() => {
@@ -451,7 +452,7 @@ export default function TransactionsPage() {
     loadReceipts()
     loadSummary()
     loadDrafts()
-  }, [token, filters.from, filters.to, dateBasis, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page])
+  }, [token, filters.from, filters.to, dateBasis, filters.category, filters.status, filters.txn_type, filters.emp_code, filters.branch_code, filters.search, filters.sort, pagination.page, viewScope])
 
   // Check for success/error messages from receipt creation
   useEffect(() => {
@@ -518,18 +519,32 @@ export default function TransactionsPage() {
     checkForMessages()
   }, [])
 
+  const receiptHasBonus = (receipt) =>
+    Number(receipt?.additional_cc || 0) !== 0 || Number(receipt?.additional_si || 0) !== 0
+
+  const canAddBonus = (receipt) => isAdmin && !receipt?.deleted_at && !receiptHasBonus(receipt)
+
   const handleAddBonus = (receipt) => {
+    if (!canAddBonus(receipt)) {
+      toast.error('Bonus points cannot be changed once added.')
+      return
+    }
     setSelectedReceipt(receipt)
-    setBonusData({
-      additional_cc: receipt.additional_cc || 0,
-      additional_si: receipt.additional_si || 0
-    })
+    setBonusData({ additional_cc: 0, additional_si: 0 })
     setShowBonusModal(true)
   }
 
   const handleSaveBonus = async () => {
     if (!selectedReceipt || !token) return
-    
+    if (!canAddBonus(selectedReceipt)) {
+      toast.error('Bonus points cannot be changed once added.')
+      return
+    }
+    if (Number(bonusData.additional_cc || 0) === 0 && Number(bonusData.additional_si || 0) === 0) {
+      toast.error('Enter at least one bonus amount.')
+      return
+    }
+
     try {
       await api.updateReceiptBonus(token, selectedReceipt._key || selectedReceipt.id, bonusData)
       setShowBonusModal(false)
@@ -551,9 +566,18 @@ export default function TransactionsPage() {
     }, 300) // Small delay to allow modal close animation
   }
 
+  const getReceiptStatus = (receipt) => receipt?.status || receipt?.transaction_status || 'Pending'
+
+  const canDeleteReceipt = (receipt) => !receipt?.deleted_at && getReceiptStatus(receipt) !== 'Completed'
+
   const handleDelete = async (receiptId, reason = 'deleted by user') => {
+    const receipt = receipts.find((r) => (r._key || r.id) === receiptId)
+    if (receipt && !canDeleteReceipt(receipt)) {
+      toast.error('Completed receipts cannot be deleted.')
+      return
+    }
     if (!confirm('Are you sure you want to delete this receipt?')) return
-    
+
     try {
       await api.deleteReceipt(token, receiptId, reason)
       await loadReceipts() // Reload the list
@@ -998,8 +1022,8 @@ export default function TransactionsPage() {
           document.body.removeChild(link)
           setTimeout(() => window.URL.revokeObjectURL(url), 1000)
         } else {
-          const csvText = await res.text()
-          const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
+          const buf = await res.arrayBuffer()
+          const blob = new Blob([buf], { type: 'text/csv;charset=utf-8;' })
           const url = window.URL.createObjectURL(blob)
           const link = document.createElement('a')
           link.href = url
@@ -1489,7 +1513,7 @@ export default function TransactionsPage() {
               if (filters.from === halfYearRange.from && filters.to === halfYearRange.to) return 'halfyear'
               const yearStart = `${today.getFullYear()}-01-01`
               if (filters.from === yearStart && filters.to === todayStr) return 'year'
-              return 'today'
+              return ''
             })()}
             onChange={(value) => {
               const range = getQuickRange(value)
@@ -1768,12 +1792,15 @@ export default function TransactionsPage() {
                           )}
                         </div>
                       )}
-                      {isAdmin && (
-                        <div>
-                          <span className="text-gray-500 dark:text-gray-400">Employee</span>
-                          <p className="font-medium text-gray-900 dark:text-white truncate">{receipt.employee_name || receipt.employeeName}</p>
-                        </div>
-                      )}
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Branch</span>
+                        <p className="font-medium text-gray-900 dark:text-white truncate">{receipt.branch || '—'}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Employee</span>
+                        <p className="font-medium text-gray-900 dark:text-white truncate">{receipt.employee_name || receipt.employeeName || '—'}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{receipt.emp_code || receipt.empCode || '—'}</p>
+                      </div>
                     </div>
 
                     {/* Investor Info */}
@@ -1852,7 +1879,7 @@ export default function TransactionsPage() {
                         <FiEye className="w-3.5 h-3.5 mr-1.5" />
                         View Details
                       </button>
-                      {isAdmin && (
+                      {canAddBonus(receipt) && (
                         <button
                           onClick={() => handleAddBonus(receipt)}
                           className="inline-flex items-center justify-center px-3 py-2 border border-orange-300 dark:border-orange-600 text-xs font-medium rounded-lg text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
@@ -1888,7 +1915,8 @@ export default function TransactionsPage() {
                           </button>
                         </>
                       )}
-                      {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) && (
+                      {(isAdmin || (receipt.emp_code || receipt.empCode) === user?.emp_code) &&
+                        (receipt.deleted_at || canDeleteReceipt(receipt)) && (
                         <button
                           onClick={() => (receipt.deleted_at ? handleRestore(receipt._key || receipt.id) : handleDelete(receipt._key || receipt.id))}
                           className="inline-flex items-center justify-center px-3 py-2 border border-red-300 dark:border-red-600 text-xs font-medium rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 min-w-[calc(50%-0.25rem)] sm:min-w-0 flex-1 sm:flex-none"
@@ -1921,20 +1949,10 @@ export default function TransactionsPage() {
                   <th className="px-2 py-3 text-center text-table-header w-[35px]"></th>
                   <th className="px-3 py-3 text-left text-table-header">Receipt #</th>
                   <th className="px-3 py-3 text-left text-table-header">Investor / Product</th>
-                  {isAdmin ? (
-                    <>
-                      <th className="px-3 py-3 text-left text-table-header">Employee</th>
-                      <th className="px-3 py-3 text-left text-table-header">Branch</th>
-                      <th className="px-3 py-3 text-left text-table-header">Date</th>
-                      <th className="px-3 py-3 text-right text-table-header">Amount</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="px-3 py-3 text-left text-table-header">Branch</th>
-                      <th className="px-3 py-3 text-left text-table-header">Date</th>
-                      <th className="px-3 py-3 text-right text-table-header">Amount</th>
-                    </>
-                  )}
+                  <th className="px-3 py-3 text-left text-table-header">Employee</th>
+                  <th className="px-3 py-3 text-left text-table-header">Branch</th>
+                  <th className="px-3 py-3 text-left text-table-header">Date</th>
+                  <th className="px-3 py-3 text-right text-table-header">Amount</th>
                 </tr>
               </thead>
               <tbody className="bg-[var(--canvas)] divide-y divide-[var(--stroke)]">
@@ -2018,49 +2036,27 @@ export default function TransactionsPage() {
                             </div>
                           </div>
                         </td>
-                        {isAdmin ? (
-                          <>
-                            <td className="px-3 py-3">
-                              <div>
-                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate" title={receipt.employee_name || receipt.employeeName}>
-                                  {receipt.employee_name || receipt.employeeName}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.emp_code || receipt.empCode}</div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              <div>
-                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{receipt.branch || '—'}</div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatDate(receipt.date)}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-dark-400">
-                                {getReceiptProductCategoryLabel(receipt)}
-                              </div>
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-3 py-3">
-                              <div>
-                                <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{receipt.branch || '—'}</div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatDate(receipt.date)}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-dark-400">
-                                {getReceiptProductCategoryLabel(receipt)}
-                              </div>
+                        <td className="px-3 py-3">
+                          <div>
+                            <div className="font-medium text-sm text-gray-900 dark:text-white truncate" title={receipt.employee_name || receipt.employeeName}>
+                              {receipt.employee_name || receipt.employeeName || '—'}
                             </div>
-                            </td>
-                          </>
-                        )}
+                            <div className="text-xs text-gray-500 dark:text-dark-400 truncate">{receipt.emp_code || receipt.empCode || '—'}</div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div>
+                            <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{receipt.branch || '—'}</div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {formatDate(receipt.date)}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-dark-400">
+                            {getReceiptProductCategoryLabel(receipt)}
+                          </div>
+                        </td>
                         <td className="px-3 py-3">
                           <div className="text-right">
                             <div className="text-base font-bold text-gray-900 dark:text-white">
@@ -2073,7 +2069,7 @@ export default function TransactionsPage() {
                       {/* Expanded Row */}
                       {isExpanded && (
                         <tr className="bg-[var(--card-hover)]/50 border-l-4 border-[var(--accent)]">
-                          <td colSpan={isAdmin ? 7 : 6} className="px-4 py-4">
+                          <td colSpan={7} className="px-4 py-4">
                             <div className="w-full flex flex-col gap-3 mb-4">
                               <div className="text-label text-[var(--text-muted)] uppercase tracking-wider">Receipt details</div>
                               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
@@ -2123,6 +2119,18 @@ export default function TransactionsPage() {
                                       <span className="text-gray-500 dark:text-gray-400">STP to</span>
                                       <p className="font-medium text-gray-900 dark:text-white">{receipt.stp_target_scheme_name || '—'}</p>
                                     </div>
+                                    {receipt.stp_frequency && (
+                                      <div>
+                                        <span className="text-gray-500 dark:text-gray-400">STP frequency</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{receipt.stp_frequency}</p>
+                                      </div>
+                                    )}
+                                    {receipt.stp_start_date && (
+                                      <div>
+                                        <span className="text-gray-500 dark:text-gray-400">STP start date</span>
+                                        <p className="font-medium text-gray-900 dark:text-white">{formatDate(receipt.stp_start_date)}</p>
+                                      </div>
+                                    )}
                                   </>
                                 )}
                                 {receipt.product_category === 'INS' && (
@@ -2299,7 +2307,7 @@ export default function TransactionsPage() {
                                     </button>
                                   </>
                                 )}
-                                {isAdmin && !receipt.deleted_at && (
+                                {canAddBonus(receipt) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -2311,25 +2319,27 @@ export default function TransactionsPage() {
                                     Bonus
                                   </button>
                                 )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    receipt.deleted_at ? handleRestore(receiptId) : handleDelete(receiptId)
-                                  }}
-                                  className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all hover:shadow-sm"
-                                >
-                                  {receipt.deleted_at ? (
-                                    <>
-                                      <FiRotateCw className="w-3.5 h-3.5 mr-1.5" />
-                                      Restore
-                                    </>
-                                  ) : (
-                                    <>
-                                      <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
-                                      Delete
-                                    </>
-                                  )}
-                                </button>
+                                {(receipt.deleted_at || canDeleteReceipt(receipt)) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      receipt.deleted_at ? handleRestore(receiptId) : handleDelete(receiptId)
+                                    }}
+                                    className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-600 text-xs font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all hover:shadow-sm"
+                                  >
+                                    {receipt.deleted_at ? (
+                                      <>
+                                        <FiRotateCw className="w-3.5 h-3.5 mr-1.5" />
+                                        Restore
+                                      </>
+                                    ) : (
+                                      <>
+                                        <FiTrash2 className="w-3.5 h-3.5 mr-1.5" />
+                                        Delete
+                                      </>
+                                    )}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </td>

@@ -542,7 +542,7 @@ function StepHeader({ step, productType }) {
   )
 }
 
-const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds/NCD', GOVT_FD: 'Government Schemes', MISC: 'Misc Services', NCD: 'Bonds/NCD' }
+const PRODUCT_TYPE_LABELS = { MF: 'Mutual Funds', INS: 'Insurance', FD: 'Fixed Deposit', BOND: 'Bonds', GOVT_FD: 'Government Schemes', MISC: 'Misc Services', NCD: 'NCD' }
 
 function isBondNcdProductType(productType) {
   return productType === 'BOND' || productType === 'NCD'
@@ -780,6 +780,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
     date_of_birth: ''
   })
   const [isCreating, setIsCreating] = useState(false)
+  const [createCustomerError, setCreateCustomerError] = useState('')
   
   // Pincode lookup states
   const [pincodeLoading, setPincodeLoading] = useState(false)
@@ -923,6 +924,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
     setPincodeSuggestions([])
     setShowPincodeDropdown(false)
     setMediaFiles([])
+    setCreateCustomerError('')
   }
 
   // Fetch full customer details when clicked (minors: use search result; majors: fetch from API)
@@ -983,10 +985,10 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
   }, [selected])
 
   const handleCreateCustomer = async () => {
-    // Validate form
+    setCreateCustomerError('')
     const validation = validateCustomerForm(newCustomer)
     if (!validation.valid) {
-      toast.error('Please fix the following errors:\n\n' + validation.errors.join('\n'))
+      setCreateCustomerError(validation.errors.join('. '))
       return
     }
     
@@ -1017,7 +1019,11 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create customer')
+        const msg = errorData.error === 'duplicate_pan'
+          ? 'PAN card already exists'
+          : (errorData.detail || errorData.error || 'Failed to create customer')
+        setCreateCustomerError(msg)
+        return
       }
       
       const result = await response.json()
@@ -1050,7 +1056,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
       }
       
     } catch (err) {
-      toast.error('Failed to create customer: ' + err.message)
+      setCreateCustomerError(err.message || 'Failed to create customer')
     } finally {
       setIsCreating(false)
     }
@@ -1181,7 +1187,14 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
         <Button
           variant="secondary"
           icon={<FiPlus className="w-4 h-4" />}
-          onClick={() => setShowCreateForm(!showCreateForm)}
+          onClick={() => {
+            if (showCreateForm) {
+              resetCustomerForm()
+            } else {
+              setCreateCustomerError('')
+            }
+            setShowCreateForm(!showCreateForm)
+          }}
         >
           {showCreateForm ? 'Cancel' : 'Create new customer'}
         </Button>
@@ -1226,7 +1239,10 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                 <input
                   type="text"
                   value={newCustomer.pan}
-                  onChange={e => setNewCustomer(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))}
+                  onChange={e => {
+                    setCreateCustomerError('')
+                    setNewCustomer(prev => ({ ...prev, pan: e.target.value.toUpperCase() }))
+                  }}
                   placeholder="ABCDE1234F"
                   pattern={getPattern('pan')}
                   maxLength="10"
@@ -1445,7 +1461,14 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
               )}
             </div>
             
-            <div className="flex gap-3 pt-2">
+            <div className="pt-3 border-t border-[var(--dashboard-border)] space-y-3">
+              {createCustomerError && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                  <FiAlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-800 dark:text-red-300">{createCustomerError}</p>
+                </div>
+              )}
+              <div className="flex gap-3">
               <button
                 onClick={handleCreateCustomer}
                 disabled={isCreating || !newCustomer.name.trim()}
@@ -1463,6 +1486,7 @@ function StepInvestor({ onBack, onFound, token, user, recentInvestors = [] }) {
                 <FiX className="w-4 h-4 mr-2" />
                 Cancel
               </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2929,7 +2953,8 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
               ...base,
               ...cleanNormalized,
               product_category: 'INS',
-              investment_amount: insuranceAmount
+              investment_amount: insuranceAmount,
+              txn_type: cleanNormalized.txnType || cleanNormalized.txn_type || 'Fresh'
             }
             setFinalData(merged)
             setStep(7)

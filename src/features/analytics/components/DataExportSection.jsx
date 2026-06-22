@@ -3,22 +3,66 @@ import { Link } from 'react-router-dom'
 import { Download, ExternalLink, Loader2 } from 'lucide-react'
 import { ReportFilterBar } from './ReportFilterBar.jsx'
 import { getInitialReportFilters } from '../report-meta.js'
-import { filtersToReportQuery } from '../lib/report-filters.js'
+import { buildBranchOptions, buildRmOptions, filtersToReportQuery } from '../lib/report-filters.js'
 import { downloadExportFile, downloadReportFile } from '../lib/report-download.js'
+import { api } from '../../../api.js'
 import { useToast } from '../../../components/ui/Toast.jsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/Card.jsx'
 import { Button } from '../../../components/ui/Button.jsx'
 
+import { resolveAnalyticsScope } from '../../../constants/analytics-access.js'
+
 const EXPORT_PAGE_SIZE = 50000
 
-export default function DataExportSection({ token }) {
+export default function DataExportSection({ token, scope: scopeProp }) {
   const toast = useToast()
-  const defaults = React.useMemo(() => getInitialReportFilters(), [])
+  const scope = React.useMemo(() => resolveAnalyticsScope(scopeProp, ''), [scopeProp])
+  const defaults = React.useMemo(
+    () => getInitialReportFilters(undefined, { viewMode: scope.viewMode }),
+    [scope.viewMode]
+  )
   const [f, setF] = React.useState(defaults)
   const [exporting, setExporting] = React.useState(null)
+  const [users, setUsers] = React.useState([])
+  const [branches, setBranches] = React.useState([])
+  const [schemeCategoryOptions, setSchemeCategoryOptions] = React.useState([])
+  const branchOptions = React.useMemo(() => buildBranchOptions(branches), [branches])
+  const rmOptions = React.useMemo(() => buildRmOptions(users), [users])
 
   const patchFilters = (patch) => setF((prev) => ({ ...prev, ...patch }))
-  const resetFilters = () => setF(getInitialReportFilters())
+  const resetFilters = () => setF(getInitialReportFilters(undefined, { viewMode: scope.viewMode }))
+
+  React.useEffect(() => {
+    setF(getInitialReportFilters(undefined, { viewMode: scope.viewMode }))
+  }, [scope.viewMode])
+
+  React.useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    Promise.all([
+      api.listUsers(token).catch(() => []),
+      api.listBranches(token, { includeInactive: '1' }).catch(() => []),
+      api.reportsFilterOptions(token).catch(() => ({ scheme_categories: [] }))
+    ])
+      .then(([usersRes, branchesRes, filterOpts]) => {
+        if (cancelled) return
+        setUsers(Array.isArray(usersRes) ? usersRes : usersRes?.items || [])
+        setBranches(Array.isArray(branchesRes) ? branchesRes : branchesRes?.items || [])
+        setSchemeCategoryOptions(
+          Array.isArray(filterOpts?.scheme_categories) ? filterOpts.scheme_categories : []
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsers([])
+          setBranches([])
+          setSchemeCategoryOptions([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token])
 
   const runExport = async (key, fn) => {
     if (!token) return
@@ -32,13 +76,17 @@ export default function DataExportSection({ token }) {
     }
   }
 
-  const misQuery = () => filtersToReportQuery(f, { page: 1, pageSize: EXPORT_PAGE_SIZE })
+  const misQuery = () =>
+    filtersToReportQuery(f, { page: 1, pageSize: EXPORT_PAGE_SIZE, allowedFilters: scope.allowedFilters })
 
   const exportMisCsv = () =>
     runExport('mis-csv', () => downloadReportFile(token, 'mis-transactions', misQuery(), 'csv'))
 
   const exportMisXlsx = () =>
     runExport('mis-xlsx', () => downloadReportFile(token, 'mis-transactions', misQuery(), 'xlsx'))
+
+  const exportMisPdf = () =>
+    runExport('mis-pdf', () => downloadReportFile(token, 'mis-transactions', misQuery(), 'pdf'))
 
   const exportUsers = () => runExport('users', () => downloadExportFile(token, 'users'))
   const exportBranches = () => runExport('branches', () => downloadExportFile(token, 'branches'))
@@ -60,8 +108,13 @@ export default function DataExportSection({ token }) {
           onChange={patchFilters}
           onApply={() => {}}
           onReset={resetFilters}
+          token={token}
           filterProfile="fullReceipt"
+          branchOptions={branchOptions}
+          rmOptions={rmOptions}
+          schemeCategoryOptions={schemeCategoryOptions}
           showIncludePending
+          allowedFilters={scope.allowedFilters}
         />
 
         <div className="flex flex-wrap items-center gap-3">
@@ -80,6 +133,14 @@ export default function DataExportSection({ token }) {
               <Download className="h-4 w-4" aria-hidden />
             )}
             Download Excel
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={exportMisPdf}>
+            {exporting === 'mis-pdf' ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden />
+            )}
+            Download PDF
           </Button>
           <Button variant="outline" asChild className="ml-auto sm:ml-0">
             <Link to="/analytics/reports/mis-transactions">

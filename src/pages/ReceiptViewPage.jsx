@@ -1206,6 +1206,36 @@ export default function ReceiptViewPage() {
                 </div>
               )}
 
+              {/* STP Details */}
+              {(transformedReceipt.stp_frequency || transformedReceipt.stp_start_date || transformedReceipt.stp_amount) && (
+                <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
+                    STP Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {transformedReceipt.stp_frequency && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Frequency</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{transformedReceipt.stp_frequency}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.stp_start_date && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatDateDisplay(transformedReceipt.stp_start_date)}</div>
+                      </div>
+                    )}
+                    {transformedReceipt.stp_amount != null && transformedReceipt.stp_amount !== '' && (
+                      <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">STP Amount</div>
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">₹{Number(transformedReceipt.stp_amount).toLocaleString('en-IN')}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Payment / Transaction details (Online, Offline, Others) – show when any payment data exists */}
               {(transformedReceipt.entryMode || transformedReceipt.channel || transformedReceipt.referenceNo || transformedReceipt.bankName || transformedReceipt.bankBranch || transformedReceipt.notes || transformedReceipt.instrumentType || transformedReceipt.instrumentNo || transformedReceipt.txnDate) && (
                 <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">

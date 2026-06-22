@@ -434,7 +434,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               <div className="bg-[var(--card-bg)] rounded-card p-4">
                 <div className="text-helper text-[var(--text-muted)]">Transaction</div>
                 <div className="text-body font-semibold text-[var(--text-primary)]">
-                  {data.product_category === 'MF' ? (mfTxnTypeSafe || 'Fresh') : (data.txn_type || data.transaction_type || 'Fresh')}
+                  {data.product_category === 'MF' ? (mfTxnTypeSafe || 'Fresh') : (data.txn_type || data.txnType || data.transaction_type || 'Fresh')}
                 </div>
               </div>
               

@@ -8,9 +8,9 @@ export const DONUT_COLORS = [
 export const CATEGORY_LABELS = {
   MF: 'MF',
   FD: 'FD',
-  BOND: 'BOND',
+  BOND: 'Bonds',
   INS: 'Insurance',
-  NCD: 'Bonds/NCD',
+  NCD: 'NCD',
   GOVT_FD: 'Government Schemes',
   MISC: 'Misc'
 }

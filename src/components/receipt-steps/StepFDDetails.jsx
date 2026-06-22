@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { api } from '../../api'
 import DatePickerInput from '../ui/DatePickerInput.jsx'
 import { findMatchingFdSlab, getEffectiveBonusesBps } from '../../utils/fdSlabMatch.js'
+import { blockWheelOnNumberInput } from '../../utils/blockWheelOnNumberInput.js'
 
 export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, isGovtScheme = false, initialData }) {
   const todayYyyyMmDd = new Date().toISOString().split('T')[0]
@@ -70,6 +71,15 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
       setPayoutFrequency('On Maturity')
     }
   }, [fullScheme?.is_cumulative])
+
+  // Auto-select first payout frequency for non-cumulative schemes
+  useEffect(() => {
+    if (!fullScheme || fullScheme.is_cumulative) return
+    const freqs = fullScheme.payout_frequency_type
+    if (!payoutFrequency && Array.isArray(freqs) && freqs.length > 0) {
+      setPayoutFrequency(freqs[0])
+    }
+  }, [fullScheme?.is_cumulative, fullScheme?.payout_frequency_type, fullScheme?.scheme_id, payoutFrequency])
 
   // Reset renewal investment fields when switching from Renewal to Fresh
   useEffect(() => {
@@ -439,6 +449,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
             type="number"
             value={principalAmount}
             onChange={(e) => setPrincipalAmount(e.target.value)}
+            onWheel={blockWheelOnNumberInput}
             placeholder={isGovtScheme ? 'Enter deposit amount' : 'Enter deposit amount'}
             min={(scheme?.min_amount || issuer?.min_deposit_amount) ?? 0}
             max={issuer?.max_deposit_amount || undefined}
@@ -448,6 +459,37 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
             Min: ₹{((scheme?.min_amount || issuer?.min_deposit_amount) ?? 0).toLocaleString()}
             {issuer?.max_deposit_amount && <> | Max: ₹{issuer.max_deposit_amount.toLocaleString()}</>}
           </p>
+        </div>
+
+        {/* Payout Frequency */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Payout Frequency <span className="text-red-500">*</span>
+            {scheme?.is_cumulative && (
+              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Fixed for Cumulative)</span>
+            )}
+          </label>
+          <select
+            value={payoutFrequency}
+            onChange={(e) => {
+              setPayoutFrequency(e.target.value)
+              setTenureValue('')
+            }}
+            disabled={scheme?.is_cumulative}
+            className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
+              scheme?.is_cumulative ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
+          >
+            <option value="">Select frequency...</option>
+            {scheme?.payout_frequency_type?.map(freq => (
+              <option key={freq} value={freq}>{freq}</option>
+            ))}
+          </select>
+          {scheme?.is_cumulative && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Cumulative schemes payout only at maturity
+            </p>
+          )}
         </div>
 
         {/* Tenure */}
@@ -535,6 +577,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
             type="number"
             value={tenureValue}
             onChange={(e) => setTenureValue(e.target.value)}
+            onWheel={blockWheelOnNumberInput}
             placeholder={isGovtScheme ? 'Enter scheme tenure' : 'Enter tenure'}
             min={1}
             className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
@@ -596,34 +639,6 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                 ⚠️ {rateError}
               </p>
             </div>
-          )}
-        </div>
-
-        {/* Payout Frequency */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Payout Frequency <span className="text-red-500">*</span>
-            {scheme?.is_cumulative && (
-              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Fixed for Cumulative)</span>
-            )}
-          </label>
-          <select
-            value={payoutFrequency}
-            onChange={(e) => setPayoutFrequency(e.target.value)}
-            disabled={scheme?.is_cumulative}
-            className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent ${
-              scheme?.is_cumulative ? 'opacity-60 cursor-not-allowed' : ''
-            }`}
-          >
-            <option value="">Select frequency...</option>
-            {scheme?.payout_frequency_type?.map(freq => (
-              <option key={freq} value={freq}>{freq}</option>
-            ))}
-          </select>
-          {scheme?.is_cumulative && (
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              Cumulative schemes payout only at maturity
-            </p>
           )}
         </div>
 
@@ -716,6 +731,7 @@ export default function StepFDDetails({ onBack, onNext, token, issuer, scheme, i
                   type="number"
                   value={renewalAdditionalAmount}
                   onChange={(e) => setRenewalAdditionalAmount(e.target.value)}
+                  onWheel={blockWheelOnNumberInput}
                   placeholder={`Enter ${renewalInvestmentType === 'increased' ? 'additional' : 'withdrawal'} amount`}
                   min="0"
                   step="0.01"
