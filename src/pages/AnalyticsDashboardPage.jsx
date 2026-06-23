@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button.jsx'
 import DataExportSection from '../features/analytics/components/DataExportSection.jsx'
 import { resolveAnalyticsScope } from '../constants/analytics-access.js'
+import { isKnownReportSlug, normalizeReportSlug } from '../features/analytics/report-slugs.js'
 
 export default function AnalyticsDashboardPage() {
   const { token, user } = useAuth()
@@ -83,7 +84,10 @@ export default function AnalyticsDashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {section.items.map((r) => {
                   const Icon = Lucide[r.icon] || Lucide.FileBarChart
-                  const slug = r.id || r.path?.split('/').pop()
+                  const slug = normalizeReportSlug(
+                    r.id || (r.path ? String(r.path).split('/').filter(Boolean).pop() : '')
+                  )
+                  if (!isKnownReportSlug(slug)) return null
                   return (
                     <Card
                       key={r.id}

@@ -21,6 +21,12 @@ import {
 import { buildReportTotalRows, formatReportTotalValue, sumNumericFields } from '../features/analytics/lib/report-totals.js'
 import { RECEIPT_PRODUCT_CATEGORY_FILTER_OPTIONS } from '../data/receipt_product_categories.js'
 import { resolveAnalyticsScope, canAccessReport } from '../constants/analytics-access.js'
+import {
+  fetchReportBySlug,
+  isKnownReportSlug,
+  normalizeReportSlug,
+  resolveReportSlug
+} from '../features/analytics/report-slugs.js'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 function formatMoney(n) {
@@ -77,15 +83,6 @@ function formatReportDate(value) {
 function formatReportCell(value) {
   if (value == null || value === '') return '—'
   return String(value)
-}
-
-function normalizeReportSlug(value) {
-  // `/analytics/reports/:slug` should match backend registry IDs exactly, but
-  // route params can be inconsistently cased or include whitespace.
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/_/g, '-')
 }
 
 function ServerPager({ page, pageSize, total, onChange }) {
@@ -312,7 +309,8 @@ function CustomerDetailBreakdown({ customer, hideCc, hideSi }) {
 
 export default function AnalyticsReportPage() {
   const { slug } = useParams()
-  const reportSlug = React.useMemo(() => normalizeReportSlug(slug), [slug])
+  const [registryReports, setRegistryReports] = React.useState([])
+  const reportSlug = React.useMemo(() => resolveReportSlug(slug, registryReports), [slug, registryReports])
   const navigate = useNavigate()
   const { token, user } = useAuth()
   const meta = React.useMemo(() => getReportMeta(reportSlug), [reportSlug])
@@ -380,7 +378,10 @@ export default function AnalyticsReportPage() {
     let cancelled = false
     api.reportsRegistry(token)
       .then((res) => {
-        if (!cancelled) setScope(resolveAnalyticsScope(res.scope, user?.role))
+        if (!cancelled) {
+          setScope(resolveAnalyticsScope(res.scope, user?.role))
+          setRegistryReports(Array.isArray(res.reports) ? res.reports : [])
+        }
       })
       .catch(() => {})
     return () => {
@@ -590,54 +591,13 @@ export default function AnalyticsReportPage() {
       setLoading(true)
       setErr('')
       try {
-        const q = filtersToReportQuery(appliedF, { page, pageSize: 25, ...queryOpts })
-        let data
-        switch (reportSlug) {
-          case 'mis-summary':
-            data = await api.reportsMisSummary(token, q)
-            break
-          case 'mis-transactions':
-            data = await api.reportsMisTransactions(token, q)
-            break
-          case 'product-detail':
-            data = await api.reportsProductDetail(token, q)
-            break
-          case 'category-summary':
-            data = await api.reportsCategorySummary(token, q)
-            break
-          case 'mf-fund':
-            data = await api.reportsMfFund(token, q)
-            break
-          case 'sip-report':
-            data = await api.reportsSipReport(token, q)
-            break
-          case 'fd-maturity':
-            data = await api.reportsFdMaturity(token, q)
-            break
-          case 'cashflow':
-            data = await api.reportsCashflow(token, q)
-            break
-          case 'pending-receipts':
-            data = await api.reportsPendingReceipts(token, q)
-            break
-          case 'receipt-errors':
-            data = await api.reportsReceiptErrors(token, q)
-            break
-          case 'customer-detail':
-            data = await api.reportsCustomerDetail(token, q)
-            break
-          case 'payment-mode':
-            data = await api.reportsPaymentMode(token, q)
-            break
-          case 'user-login':
-            data = await api.reportsUserLogin(token, q)
-            break
-          case 'user-role-access':
-            data = await api.reportsUserRoleAccess(token, q)
-            break
-          default:
-            throw new Error('Unknown report')
+        if (!isKnownReportSlug(reportSlug)) {
+          throw new Error(
+            `Unknown report "${normalizeReportSlug(slug) || slug}". Redeploy the frontend if this report was recently added.`
+          )
         }
+        const q = filtersToReportQuery(appliedF, { page, pageSize: 25, ...queryOpts })
+        const data = await fetchReportBySlug(token, reportSlug, q)
         if (!cancelled) setPayload(data)
       } catch (e) {
         if (!cancelled) setErr(e.message || 'Failed to load')
