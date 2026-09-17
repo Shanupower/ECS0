@@ -20,6 +20,7 @@ import TasksReportsPage from './pages/TasksReportsPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
 import PortfolioReviewPage from './pages/PortfolioReviewPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
+import CCSIRulesPage from './pages/CCSIRulesPage.jsx'
 import TeamsAdminPage from './pages/TeamsAdminPage.jsx'
 import ApprovalsQueuePage from './pages/ApprovalsQueuePage.jsx'
 import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage.jsx'
@@ -180,6 +181,14 @@ function AppContent() {
           <Route
             path="settings"
             element={<PageTransition><SettingsRoute><SystemSettingsPage /></SettingsRoute></PageTransition>}
+          />
+          <Route
+            path="settings/cc-si-rules"
+            element={<PageTransition><AdminRoute><CCSIRulesPage /></AdminRoute></PageTransition>}
+          />
+          <Route
+            path="cc-si-rules"
+            element={<PageTransition><AdminRoute><CCSIRulesPage /></AdminRoute></PageTransition>}
           />
           <Route
             path="teams"

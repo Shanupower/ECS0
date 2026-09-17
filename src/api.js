@@ -605,5 +605,18 @@ export const api={
   reportsCustomerDetailCustomerIds:(t,q)=>req('/api/reports/customer-detail/customers',{token:t,query:{...q,ids_only:'1'}}),
   reportsPaymentMode:(t,q)=>req('/api/reports/payment-mode',{token:t,query:q}),
   reportsUserLogin:(t,q)=>req('/api/reports/user-login',{token:t,query:q}),
-  reportsUserRoleAccess:(t,q)=>req('/api/reports/user-role-access',{token:t,query:q})
+  reportsUserRoleAccess:(t,q)=>req('/api/reports/user-role-access',{token:t,query:q}),
+
+  // -------------------------------------------------------------------------
+  // CC & SI Rules Engine (/api/cc-si-rules/*)
+  // -------------------------------------------------------------------------
+  getCCSIRules: (t, q) => req('/api/cc-si-rules', { token: t, query: q }),
+  createCCSIRule: (t, data) => req('/api/cc-si-rules', { method: 'POST', token: t, json: data }),
+  updateCCSIRule: (t, id, data) => req('/api/cc-si-rules/' + id, { method: 'PUT', token: t, json: data }),
+  deleteCCSIRule: (t, id) => req('/api/cc-si-rules/' + id, { method: 'DELETE', token: t }),
+  evaluateCCSIRule: (t, payload) => req('/api/cc-si-rules/evaluate', { method: 'POST', token: t, json: payload }),
+  seedDefaultCCSIRules: (t) => req('/api/cc-si-rules/seed-defaults', { method: 'POST', token: t }),
+  recalculateReceiptsCCSI: (t, payload) => req('/api/cc-si-rules/recalculate-receipts', { method: 'POST', token: t, json: payload })
 }
+
+export default api

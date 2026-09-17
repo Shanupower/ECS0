@@ -453,6 +453,7 @@ function StepFinal({ data, onBack, onSave, onSavePreset, presetPaymentMode = '',
               )}
             </div>
             )}
+
             
             {/* Insurance Details Section */}
             {data.product_category === 'INS' && (

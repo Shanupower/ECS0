@@ -16,6 +16,7 @@ import {
 import bondCategories from '../data/bond_categories.json'
 import { MF_AMC_CATEGORIES, formatMinInvestment, mergeCategoryMinimums } from '../data/mf_amc_categories'
 import DatePickerInput from '../components/ui/DatePickerInput.jsx'
+import { CCSIRulesView } from './CCSIRulesPage.jsx'
 
 /** Life insurance subcategory options for scheme management */
 const LIFE_SUBCATEGORIES = [
@@ -78,6 +79,18 @@ export default function SchemeManagementPage() {
   const [editingAMC, setEditingAMC] = useState(null)
   const [editingScheme, setEditingScheme] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tabParam = params.get('tab')
+    if (tabParam) {
+      const upper = tabParam.toUpperCase()
+      if (upper === 'CC_SI_RULES' || upper === 'CC_SI' || upper === 'CC_RULES') {
+        setActiveTab('CC_SI_RULES')
+      }
+    }
+  }, [])
+
   useEffect(() => {
     setSearchQuery('')
     setFdIssuerTypeFilter('all')
@@ -6062,9 +6075,27 @@ useEffect(() => {
             >
               Misc Services
             </button>
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('CC_SI_RULES')}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === 'CC_SI_RULES'
+                    ? 'text-gray-900 dark:text-white border-b-2 border-purple-600 font-bold'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                CC & SI Rules
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {activeTab === 'CC_SI_RULES' && isAdmin && (
+        <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--stroke)] shadow-sm p-6">
+          <CCSIRulesView />
+        </div>
+      )}
 
       {/* Error */}
       {error && (

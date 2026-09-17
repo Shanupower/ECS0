@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   UsersRound,
   Settings,
+  Percent,
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAppConfig } from '../../context/AppConfigContext'

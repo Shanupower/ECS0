@@ -570,6 +570,8 @@ export default function TransactionsPage() {
 
   const canDeleteReceipt = (receipt) => !receipt?.deleted_at && getReceiptStatus(receipt) !== 'Completed'
 
+  const canEditReceipt = (receipt) => !receipt?.deleted_at && (isAdmin || getReceiptStatus(receipt) !== 'Completed')
+
   const handleDelete = async (receiptId, reason = 'deleted by user') => {
     const receipt = receipts.find((r) => (r._key || r.id) === receiptId)
     if (receipt && !canDeleteReceipt(receipt)) {
@@ -643,6 +645,10 @@ export default function TransactionsPage() {
   }
 
   const handleEdit = (receipt) => {
+    if (!canEditReceipt(receipt)) {
+      toast.error('Completed receipts can only be edited by an Administrator.')
+      return
+    }
     setSelectedReceipt(receipt)
     // Pre-populate edit data with current receipt values (receipt is already normalized)
     const normalizeMfTxnTypeForEdit = (raw) => {
@@ -1198,6 +1204,15 @@ export default function TransactionsPage() {
         <Button variant="secondary" icon={loading ? <FiRefreshCw className="w-4 h-4 animate-spin" /> : <FiRefreshCw className="w-4 h-4" />} onClick={loadReceipts} disabled={loading}>
           Refresh
         </Button>
+        {isAdmin && (
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/settings/cc-si-rules')}
+            className="sm:inline-flex"
+          >
+            CC & SI Rules
+          </Button>
+        )}
         <div className="relative group">
           <Button
             variant="secondary"
@@ -2271,7 +2286,7 @@ export default function TransactionsPage() {
                                   <FiEye className="w-3.5 h-3.5 mr-1.5" />
                                   View Details
                                 </button>
-                                {!receipt.deleted_at && (receipt.status || receipt.transaction_status || 'Pending') === 'Pending' && (
+                                {canEditReceipt(receipt) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()

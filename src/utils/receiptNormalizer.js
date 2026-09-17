@@ -428,10 +428,23 @@ export function normalizeReceiptFields(receipt) {
     'transactionNumber'
   )
   normalized.txn_date = getValue(
+    'payment.transaction_date',
+    'onlineTransactionDate',
+    'othersTransactionDate',
     'txn_date',
     'txnDate',
+    'transaction_date',
+    'transactionDate',
     'transaction_details.txn_date',
-    'payment.transaction_date'
+    'transaction_details.date',
+    'bond_transaction_date',
+    'instrument_date',
+    'instrumentDate',
+    'chequeDate',
+    'cheque_date',
+    'sip_start_date',
+    'fd_deposit_date',
+    'insurance_date_of_issue'
   )
   normalized.bank_name = getValue(
     'bank_name',

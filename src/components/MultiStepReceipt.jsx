@@ -2094,6 +2094,13 @@ export default function MultiStepReceipt({ draftData = null, draftId = null }) {
       investment_amount: transactionData.investment_amount || transactionData.investmentAmount || null,
       txn_type: safeTxnType,
       
+      // CC & SI evaluated fields
+      cc_amount: transactionData.cc_amount ?? transactionData.collection_credit ?? null,
+      si_amount: transactionData.si_amount ?? transactionData.service_income ?? null,
+      collection_credit: transactionData.collection_credit ?? transactionData.cc_amount ?? null,
+      service_income: transactionData.service_income ?? transactionData.si_amount ?? null,
+      cc_si_rule_label: transactionData.cc_si_rule_label || null,
+      
       // Folio information
       has_existing_folio: mfSchemeSeed.hasExistingFolio || false,
       folio_number: mfSchemeSeed.folioNumber || null,

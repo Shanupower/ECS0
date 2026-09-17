@@ -133,6 +133,7 @@ export default function Layout(){
       { to: "/branches", label: "Branches", icon: FiBarChart },
       { to: "/users", label: "User Management", icon: FiUsers },
       { to: "/schemes", label: "Scheme Management", icon: FiDatabase },
+      { to: "/settings/cc-si-rules", label: "CC & SI Rules", icon: FiSettings },
       { to: "/customers", label: "Customer Management", icon: FiUserCheck },
       { to: "/issues", label: "All Issues", icon: FiAlertTriangle },
       ...(showSystemSettingsNav ? [{ to: "/settings", label: "System Settings", icon: FiSettings }] : [])

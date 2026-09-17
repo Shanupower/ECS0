@@ -58,13 +58,40 @@ export default function StepTransactionDetails({ onBack, onNext, investmentType,
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setValidationError('')
     if (!canProceed()) return
 
+    let evaluatedCC = 0
+    let evaluatedSI = 0
+    let ruleLabel = ''
+
+    if (token && amount) {
+      try {
+        const evalRes = await api.evaluateCCSIRule(token, {
+          category: 'MF',
+          txn_type: investmentType || 'SIP',
+          amount: Number(amount) || 0,
+          date: startDate || new Date().toISOString()
+        })
+        if (evalRes) {
+          evaluatedCC = evalRes.cc_amount
+          evaluatedSI = evalRes.si_amount
+          ruleLabel = evalRes.rule_label
+        }
+      } catch (e) {
+        console.warn('Live CC/SI evaluation error:', e)
+      }
+    }
+
     const transactionData = { 
       investment_amount: amount,
-      investmentAmount: amount // Also add camelCase for validation compatibility
+      investmentAmount: amount,
+      cc_amount: evaluatedCC,
+      si_amount: evaluatedSI,
+      collection_credit: evaluatedCC,
+      service_income: evaluatedSI,
+      cc_si_rule_label: ruleLabel
     }
 
     // Set mode based on investment type
