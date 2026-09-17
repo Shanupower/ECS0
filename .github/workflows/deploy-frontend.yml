@@ -2,28 +2,47 @@ name: Deploy ECS Frontend
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch: # Allow manual deployment
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy frontend to EC2 (SSH)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          export VITE_API_BASE_URL="${VITE_API_BASE_URL:-https://api.ecsfinancial.tech}"
+          echo "Building with VITE_API_BASE_URL=$VITE_API_BASE_URL"
+          npm run build
+
+      - name: Deploy static assets to EC2
         env:
           HOST: ${{ secrets.EC2_HOST }}
           USERNAME: ${{ secrets.EC2_USER }}
           KEY: ${{ secrets.EC2_SSH_KEY }}
           KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
         run: |
+          set -euo pipefail
+
           sudo apt-get update
-          sudo apt-get install -y openssh-client
+          sudo apt-get install -y openssh-client rsync
 
           mkdir -p ~/.ssh
-          # Prefer base64 secret to avoid newline/formatting issues.
           if [ -n "${KEY_B64:-}" ]; then
             printf '%s' "$KEY_B64" | tr -d '\r\n ' | base64 -d > ~/.ssh/deploy_key
           else
@@ -31,8 +50,16 @@ jobs:
           fi
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
-
-          # Validate key can be parsed (fails fast with clear error)
           ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
 
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no "$USERNAME@$HOST" "sudo -i bash -lc 'cd /root/ECS0/ && git pull && rm -rf node_modules && npm i && npm run build && rsync -av --remove-source-files /root/ECS0/dist/ /var/www/ecs-frontend/ && rm -rf /root/ECS0/dist'"
+          SSH_OPTS="-i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=120 -o TCPKeepAlive=yes"
+
+          echo "--- Sync git checkout on server (no remote build)"
+          ssh $SSH_OPTS "$USERNAME@$HOST" "sudo -i bash -lc 'cd /root/ECS0/ && git fetch origin && git checkout main && git reset --hard origin/main'"
+
+          echo "--- Upload dist/ to server"
+          ssh $SSH_OPTS "$USERNAME@$HOST" "rm -rf /tmp/ecs-frontend-deploy && mkdir -p /tmp/ecs-frontend-deploy"
+          rsync -avz --delete -e "ssh $SSH_OPTS" dist/ "$USERNAME@$HOST:/tmp/ecs-frontend-deploy/"
+          ssh $SSH_OPTS "$USERNAME@$HOST" "sudo rsync -av --delete /tmp/ecs-frontend-deploy/ /var/www/ecs-frontend/ && rm -rf /tmp/ecs-frontend-deploy"
+
+          echo "--- Deploy complete"
